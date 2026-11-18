@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 KEYWORD = "IFDirHandled"
-FIX_VERSION = "2026-11-18c"  # bump when a failure cause was fixed: lets fixable failures be retried once more
+FIX_VERSION = "2026-11-18d"  # bump when a failure cause was fixed: lets fixable failures be retried once more
 LIST_LOW_BELOW = 60
 TARGET_SUCCESS = int(os.environ.get("TARGET_SUCCESS", "20"))
 FIXABLE = {"NO_FORM", "DROPDOWN_TIMEOUT", "SIGNUP_FAILED", "CODE_NOT_RECEIVED", "OTHER"}
@@ -228,7 +228,7 @@ def reason_code(result):
     low = r.lower()
     if r.startswith(("SUBMITTED", "CONFIRMED", "DRYRUN")):
         return None, None
-    if "captcha" in low or "turnstile" in low:
+    if "captcha" in low or "turnstile" in low or "challenges.cloudflare" in low or "cloudflare /" in low or "click to reveal" in low:
         code = "CAPTCHA"
     elif "paid plan" in low or "payment" in low or "http 402" in low:
         code = "PAID"
@@ -236,7 +236,7 @@ def reason_code(result):
         code = "BADGE_REQUIRED"
     elif "phone" in low:
         code = "PHONE"
-    elif "google/github" in low or "login by google" in low:
+    elif "google/github" in low or "login by google" in low or "login with google" in low or "google below" in low:
         code = "LOGIN_GOOGLE_ONLY"
     elif "name_not_resolved" in low or "err_connection" in low or "dead" in low:
         code = "DEAD"
@@ -873,10 +873,11 @@ def fetch_verification(directory_url, since_ts, wait=90):
                 for uid in reversed(data[0].split() if data and data[0] else []):
                     typ, d = imap.uid("FETCH", uid, "(BODY.PEEK[])")
                     msg = next((email.message_from_bytes(p[1], policy=policy.default) for p in d if isinstance(p, tuple)), None)
-                    if msg is None or not sender_matches(str(msg.get("From", "")), directory_url):
+                    if msg is None:
                         continue
                     if re.search(r"subscription|newsletter", str(msg.get("Subject", "")), re.I):
                         continue  # newsletter double-opt-in, not an account
+                    sender_ok = sender_matches(str(msg.get("From", "")), directory_url)
                     try:
                         if msg["Date"].datetime.timestamp() < since_ts - 60:
                             continue
@@ -884,6 +885,10 @@ def fetch_verification(directory_url, since_ts, wait=90):
                         pass
                     body = all_mail_text(msg)
                     links = confirm_links_from_mail(body, directory_url)
+                    if not sender_ok:  # sent through a mail service: only a token-looking link on the directory's own domain counts
+                        links = [l for l in links if same_site(l, directory_url) and TOKEN_LINK_RE.search(l)]
+                        if not links:
+                            continue
                     imap.uid("STORE", uid, "+FLAGS", "(\\Seen %s)" % KEYWORD)
                     code = find_code(re.sub(r"<[^>]+>", " ", body))
                     if code and not links:
@@ -1055,7 +1060,10 @@ def try_login(page, row, pw):
     pws[0].fill(pw)
     click_primary(page, pws[0], re.compile(r"log ?in|sign ?in|continue|submit", re.I))
     page.wait_for_timeout(4000)
-    if page.query_selector("input[type=password]") and re.search(r"incorrect|invalid|wrong|not match|no account", page.inner_text("body")[:4000], re.I):
+    body_after = page.inner_text("body")[:4000]
+    if re.search(r"no account yet|use login with google|with google below|no password", body_after, re.I):
+        return "login by Google/GitHub/X only (no password login)"
+    if page.query_selector("input[type=password]") and re.search(r"incorrect|invalid|wrong|not match|no account", body_after, re.I):
         return "sign-up login failed: password not accepted (%s)" % clean_out(re.sub(r".*?(incorrect|invalid|wrong|not match|no account)", r"\1", page.inner_text("body")[:4000], flags=re.S | re.I), 60)
     return None
 
@@ -1112,6 +1120,9 @@ def try_signup(page, row):
     text = page.inner_text("body")[:5000]
     if CAPTCHA_RE.search(text) or page.evaluate(CAPTCHA_VISIBLE_JS):
         return "captcha"
+    err = re.search(r"(password[^.\n]{0,60}(must|should|least|weak|short|special|uppercase|number)[^.\n]{0,40}|is required[^.\n]{0,30}|please [^.\n]{0,50}|invalid[^.\n]{0,40})", text, re.I)
+    if err and page.query_selector("input[type=password]") and not ALREADY_RE.search(text):
+        return "sign-up failed: %s" % clean_out(err.group(0), 80)
     if ALREADY_RE.search(text):
         try:  # an earlier sign-up may still wait for its confirmation mail: open it first
             after_verification(page, row, time.time() - 3 * 86400, 8)

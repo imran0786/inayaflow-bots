@@ -4,12 +4,12 @@ name: Directory submitter (backlinks)
 # directory names only (URLs, e-mail addresses, codes and passwords are stripped). Logs live in the PRIVATE repo
 # (imran0786/genie, branch ops-directory-logs) and never in this repo. No screenshots are uploaded.
 #
-# SCHEDULE IS COMMENTED OUT: the Director switches it on after the dry runs pass.
+# SCHEDULE IS ON since 18 Nov (first live run 44240890428 gave 6 successes). Scheduled runs are live (DRY_RUN=false).
 # One run a day, at most 1 hour: goes down the list until 20 SUCCESSFUL submissions or the time is up.
 
 on:
-  # schedule:
-  #   - cron: "17 6 * * *"
+  schedule:
+    - cron: "17 6 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
