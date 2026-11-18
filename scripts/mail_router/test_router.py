@@ -1,0 +1,82 @@
+import io, os, sys, unittest, contextlib, datetime
+sys.path.insert(0, os.path.dirname(__file__))
+import router as R
+
+DIRS = {"agenthunter.io", "aidirs.best", "indiehunt.io", "earlyhunt.com", "buildlist.io", "launchingnext.com",
+        "tinylaunch.com", "sideprojectors.com"}
+OUTR = {"lilachbullock.com"}
+SENT = {"<sent1@inayaflow.ai>"}
+
+
+def boom(_):
+    raise AssertionError("Claude must not be called")
+
+
+def run(frm, subj, body="", irt="", refs="", unsub=False, ai=boom):
+    return R.classify(frm, subj, body, irt, refs, DIRS, OUTR, SENT, unsub, ai=ai)
+
+
+class T(unittest.TestCase):
+    def test_verify(self):
+        for frm, s in [("noreply@agenthunter.io", "Confirm your email"), ("support@aidirs.best", "Confirm your email"),
+                       ("hi@indiehunt.io", "Your IndieHunt sign-in link"), ("hi@earlyhunt.com", "Sign in to EarlyHunt"),
+                       ("hello@buildlist.io", "Confirm your Buildlist subscription")]:
+            self.assertEqual(run(frm, s)[0], "DIRECTORY_VERIFY", s)
+
+    def test_status(self):
+        for frm, s in [("approvals@launchingnext.com", "InayaFlow submission, plus get published in 1 day"),
+                       ("chris@updates.tinylaunch.com", "Launch Scheduled!"),
+                       ("hello@sideprojectors.com", "Your project has been received!")]:
+            self.assertEqual(run(frm, s)[0], "DIRECTORY_STATUS", s)
+
+    def test_outreach_by_domain_and_thread(self):
+        self.assertEqual(run("lilach@lilachbullock.com", "Re: Your TikTok pay per 1000 views article...")[0], "OUTREACH_REPLY")
+        self.assertEqual(run("x@unknown.example", "Re: hi", irt="<sent1@inayaflow.ai>")[0], "OUTREACH_REPLY")
+
+    def test_ai_used_for_rest(self):
+        ai = lambda u: '{"bucket":"JOURNALIST_REQUEST","reason":"SOS digest","action":"review"}'
+        self.assertEqual(run("peter@sourceofsources.com", "[SOS] Tuesday Afternoon Media Queries", ai=ai)[0], "JOURNALIST_REQUEST")
+        ai = lambda u: '{"bucket":"PLATFORM_ACCOUNT","reason":"google notice","action":"none"}'
+        self.assertEqual(run("noreply-accounts@google.com", "You shared some Google Account data with X", ai=ai)[0], "PLATFORM_ACCOUNT")
+        ai = lambda u: '{"bucket":"NEWSLETTER_PROMO","reason":"newsletter","action":"skip"}'
+        self.assertEqual(run("hello@deeperlearning.producthunt.com", "This week in AI", unsub=True, ai=ai)[0], "NEWSLETTER_PROMO")
+
+    def test_ai_failure_never_drops(self):
+        self.assertEqual(run("a@b.example", "hello", ai=boom)[0], "OTHER_NEEDS_IMRAN")
+        self.assertEqual(run("a@b.example", "hello", ai=lambda u: '{"bucket":"NOPE"}')[0], "OTHER_NEEDS_IMRAN")
+        self.assertEqual(run("a@b.example", "hello", ai=lambda u: "not json")[0], "OTHER_NEEDS_IMRAN")
+
+    def test_directory_newsletter_not_rule(self):
+        d = R.classify_det("hello@buildlist.io", "Weekly picks", "great tools", "", "", DIRS, OUTR, SENT, True)
+        self.assertIsNone(d)
+
+    def test_audit(self):
+        now = datetime.datetime(2026, 11, 18, 12, tzinfo=datetime.timezone.utc)
+        h = lambda n: now - datetime.timedelta(hours=n)
+        items = [{"date": h(5), "frm": "a@x", "subj": "old", "bucket": "OUTREACH_REPLY", "flags": []},
+                 {"date": h(5), "frm": "b@x", "subj": "done", "bucket": "OUTREACH_REPLY", "flags": ["IFBotHandled"]},
+                 {"date": h(1), "frm": "c@x", "subj": "fresh", "bucket": "DIRECTORY_VERIFY", "flags": []},
+                 {"date": h(30), "frm": "d@x", "subj": "ancient", "bucket": "OTHER_NEEDS_IMRAN", "flags": []},
+                 {"date": h(3), "frm": "e@x", "subj": "promo", "bucket": "NEWSLETTER_PROMO", "flags": []}]
+        out = R.build_audit(items, now)
+        top = out.split("## Counts")[0]
+        self.assertIn("old", top)
+        for s in ("done", "fresh", "ancient"):
+            self.assertNotIn(s, top)
+        self.assertIn("DONE", out)
+        self.assertNotIn("promo", out)
+
+    def test_stdout_has_no_sender_or_subject(self):
+        buf = io.StringIO()
+        saved = os.environ.pop("CONTACT_EMAIL_PASSWORD", None)
+        with contextlib.redirect_stdout(buf):
+            R.main()
+        if saved:
+            os.environ["CONTACT_EMAIL_PASSWORD"] = saved
+        out = buf.getvalue()
+        for s in ["agenthunter", "@", "Confirm your email"]:
+            self.assertNotIn(s, out)
+
+
+if __name__ == "__main__":
+    unittest.main()

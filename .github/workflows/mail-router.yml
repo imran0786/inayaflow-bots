@@ -1,0 +1,72 @@
+name: Mail router (contact@)
+
+# Sorts every contact@ mail into a bucket and tags it with IMAP keywords (IFRouted, IFRoute_<BUCKET>).
+# Never moves, deletes, marks read or sends. Public output: counts only. Details and the daily audit go to
+# the PRIVATE repo branch ops-mail-router (ops/mail_router_log.md, ops/mail_audit.md).
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mail-router
+  cancel-in-progress: false
+
+jobs:
+  router:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests
+        run: python3 scripts/mail_router/test_router.py
+
+      - name: Fetch private lists and previous log
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          rm -rf /tmp/main /tmp/push
+          git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/main 2>/dev/null || echo "main clone failed"
+          if git clone -q --branch ops-mail-router --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push 2>/dev/null; then
+            echo "log branch restored"
+          else
+            git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push
+            cd /tmp/push && git checkout -q --orphan ops-mail-router && git rm -rq --cached . >/dev/null 2>&1 || true
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
+          fi
+          mkdir -p /tmp/push/ops
+
+      - name: Route mail
+        env:
+          CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DIR_JSON: /tmp/main/ops/directories.json
+          OUTREACH_TXT: /tmp/main/ops/outreach_domains.txt
+          ROUTER_OUT_DIR: /tmp/push/ops
+        run: python3 scripts/mail_router/router.py
+
+      - name: Save log and audit to the private repo
+        if: always()
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          set -e
+          [ -f /tmp/push/ops/mail_audit.md ] || { echo "nothing to save"; exit 0; }
+          cd /tmp/push
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add ops/mail_router_log.md ops/mail_audit.md
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -q -m "ops: mail router"
+          git push -q origin ops-mail-router
+          echo "saved"
