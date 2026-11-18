@@ -169,7 +169,7 @@ class ModelFallback(unittest.TestCase):
 
     def test_haiku_primary(self):
         import unittest.mock as mock
-        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k", "DEEPSEEK_API_KEY": "d"}),              mock.patch.object(r, "_post_json", return_value={"content": [{"text": "H"}]}) as post:
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k", "DEEPSEEK_API_KEY": "d"}),              mock.patch.object(r, "_post_json", return_value={"content": [{"type": "text", "text": "H"}]}) as post:
             self.assertEqual(r.llm_call("a", "b"), "H")
         self.assertEqual(post.call_args[0][0], "https://api.anthropic.com/v1/messages")
         self.assertEqual(post.call_args[0][1]["model"], "claude-haiku-5-5")
@@ -190,7 +190,7 @@ class ModelFallback(unittest.TestCase):
 
     def test_retry_succeeds_second_time(self):
         import unittest.mock as mock
-        seq = [RuntimeError("x"), {"content": [{"text": "H2"}]}]
+        seq = [RuntimeError("x"), {"content": [{"type": "text", "text": "H2"}]}]
         def fake(url, body, headers):
             v = seq.pop(0)
             if isinstance(v, Exception):

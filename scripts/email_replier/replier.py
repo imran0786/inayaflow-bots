@@ -239,11 +239,18 @@ def call_anthropic(user):
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("no Anthropic key in env")
-    body = {"model": ANTHROPIC_MODEL, "max_tokens": 600, "temperature": 0.3,
+    # Haiku 5.5: no temperature (non-default sampling = HTTP 400); thinking is on by default,
+    # so keep effort low and read only the text blocks (a thinking block can come first).
+    body = {"model": ANTHROPIC_MODEL, "max_tokens": 4000, "output_config": {"effort": "low"},
             "system": SYSTEM, "messages": [{"role": "user", "content": user}]}
     headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
     data = _post_json("https://api.anthropic.com/v1/messages", body, headers)
-    return data["content"][0]["text"]
+    if data.get("stop_reason") == "refusal":
+        raise RuntimeError("anthropic refusal")
+    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    if not text.strip():
+        raise RuntimeError("anthropic empty text")
+    return text
 
 
 def call_deepseek(user):
