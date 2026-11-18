@@ -10,6 +10,10 @@ on:
   # schedule:
   #   - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      selftest:
+        description: "true = also check the Claude key answers (prints OK or an error code only)"
+        default: "false"
 
 permissions:
   contents: read
@@ -50,6 +54,24 @@ jobs:
           if git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/main 2>/dev/null; then
             cp /tmp/main/ops/outreach_domains.txt ops/outreach_domains.txt 2>/dev/null || true
           fi
+
+      - name: Claude key self-test (manual runs only; prints status only)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.selftest == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import sys, urllib.error
+          sys.path.insert(0, "scripts/email_replier")
+          import replier
+          try:
+              out = replier.call_anthropic("Reply with the single word OK.")
+              print("haiku selftest: OK" if out.strip() else "haiku selftest: EMPTY")
+          except urllib.error.HTTPError as e:
+              print("haiku selftest: HTTP %d" % e.code); sys.exit(1)
+          except Exception as e:
+              print("haiku selftest: %s" % type(e).__name__); sys.exit(1)
+          PY
 
       - name: Run replier
         env:
