@@ -51,12 +51,13 @@ CAPTCHA_RE = re.compile(r"verify you are human|are you a robot|i'?m not a robot|
                         r"unusual traffic|captcha|attention required", re.I)
 UPSELL_RE = re.compile(r"checkout|complete your (purchase|payment|order)|\d+ ?% off|discount|coupon|upgrade (to|your)|fast.?track|"
                        r"skip the (line|queue)|featured (listing|spot|launch)|sponsor", re.I)
+BADGE_RE = re.compile(r"badge|backlink|link back to|dofollow link", re.I)
 CODE_RE = re.compile(r"(?<!\d)(\d{4,8})(?!\d)")
 # site states (from the agent) where a confirmation would change nothing
 CLOSED = {"PAID", "DEAD", "SOCIAL_LOGIN_ONLY", "BADGE_REQUIRED", "PHONE_REQUIRED", "NO_FORM"}
 FINISHED = CLOSED | {"SUBMITTED", "ALREADY_LISTED", "UNCONFIRMED"}
 HANDLED_OUTCOMES = {"SKIPPED_PAID_OFFER", "SKIPPED_NEWSLETTER", "SITE_CLOSED", "CONFIRMED_LINK_OPENED", "SESSION_ONLY_SITE_FINISHED", "SESSION_ONLY_EXPIRED"}
-HUMAN_OUTCOMES = {"UNKNOWN_SENDER", "LINK_OFF_DOMAIN", "NO_ACTION_FOUND", "CAPTCHA", "OPEN_FAILED"}
+HUMAN_OUTCOMES = {"BADGE_ASK", "UNKNOWN_SENDER", "LINK_OFF_DOMAIN", "NO_ACTION_FOUND", "CAPTCHA", "OPEN_FAILED"}
 
 
 def reg_domain(host):  # same rule as the agent and the old bot
@@ -175,7 +176,7 @@ def link_label(u):
 
 def decide(subject, sender_dom, text, known, site_status, age_min, routed_verify=True):
     """Pure decision for one mail. Returns (outcome, link or None).
-    outcome: IGNORE | WAIT | UNKNOWN_SENDER | SKIPPED_NEWSLETTER | SITE_CLOSED | SKIPPED_PAID_OFFER | OPEN_LINK | SESSION_ONLY_SITE_FINISHED |
+    outcome: IGNORE | WAIT | UNKNOWN_SENDER | SKIPPED_NEWSLETTER | SITE_CLOSED | BADGE_ASK | SKIPPED_PAID_OFFER | OPEN_LINK | SESSION_ONLY_SITE_FINISHED |
              SESSION_ONLY_EXPIRED | LINK_OFF_DOMAIN | NO_ACTION_FOUND"""
     looks_verify = bool(VERIFY_SUBJ_RE.search(subject or ""))
     if not routed_verify and not looks_verify:
@@ -198,6 +199,8 @@ def decide(subject, sender_dom, text, known, site_status, age_min, routed_verify
         if site_status in FINISHED:
             return "SESSION_ONLY_SITE_FINISHED", None
         return ("SESSION_ONLY_EXPIRED" if age_min >= SESSION_TTL_MIN else "WAIT"), None
+    if BADGE_RE.search(body[:2500]):
+        return "BADGE_ASK", None  # the listing waits for their badge / a link back on our site: a person decides
     if UPSELL_RE.search((subject or "") + " " + body[:1500]) and not looks_verify:
         return "SKIPPED_PAID_OFFER", None  # unpaid checkout / discount / featured offer: we never pay, nothing to do
     if off:
@@ -339,7 +342,10 @@ def main():
                         if ctx is None:
                             from playwright.sync_api import sync_playwright
                             pw_ctx = sync_playwright().start()
-                            browser = pw_ctx.chromium.launch(headless=True)
+                            try:  # the runner's own Chrome: no browser download, no apt packages
+                                browser = pw_ctx.chromium.launch(channel="chrome", headless=True)
+                            except Exception:
+                                browser = pw_ctx.chromium.launch(headless=True)
                             ctx = browser.new_context()
                         opened += 1
                         outcome, d2 = open_link(ctx, link, dom)
@@ -360,6 +366,8 @@ def main():
                     detail = "code / sign-in link belonged to a session that already ended with site status %s" % st
                 elif outcome == "SITE_CLOSED":
                     detail = "site status %s: nothing to confirm" % st
+                elif outcome == "BADGE_ASK":
+                    detail = "listing waits for their badge / a link back on inayaflow.ai (website change: genie + Director decide)"
                 elif outcome == "SKIPPED_PAID_OFFER":
                     detail = "paid checkout / discount / featured offer; never paid, not opened"
                 elif outcome == "SKIPPED_NEWSLETTER":

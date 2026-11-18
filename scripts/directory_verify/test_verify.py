@@ -43,6 +43,7 @@ ok(v.decide("There's a problem with Your OpenTools Launch", "opentools.ai", "Ple
 ok(v.decide("There's a problem with Your OpenTools Launch", "opentools.ai", "Your checkout was incomplete. Click here to complete checkout. Code for 20% off", K, None, 400)[0] == "SKIPPED_PAID_OFFER", "unpaid checkout mail closed, never opened")
 ok(v.site_status_for("aiagentslive.com", {"aiagentslive": {"status": "PAID"}}) == "PAID", "state by short name")
 ok(v.site_status_for("whatlaunched.today", {"whatlaunchedtoday": {"status": "SUBMITTED"}}) == "SUBMITTED", "state by squashed domain")
+ok(v.decide("Your InayaFlow listing - one step left", "fivetaco.com", "One step left: add the badge to your site as a dofollow link. Or skip the queue with featured.", K, None, 400)[0] == "BADGE_ASK", "badge ask goes to a person")
 ok(v.site_status_for("x.com", {}) is None, "no state")
 ok(v.find_code("in 2026 your code is 024449") == "024449", "code, not a year")
 s = v.scrub("go to https://x.com/confirm?token=SECRET code 123456 mail a@b.co")
