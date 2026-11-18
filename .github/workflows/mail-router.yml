@@ -52,6 +52,9 @@ jobs:
           DIR_JSON: /tmp/main/ops/directories.json
           OUTREACH_TXT: /tmp/main/ops/outreach_domains.txt
           ROUTER_OUT_DIR: /tmp/push/ops
+          DIR_EXTRA: /tmp/push/ops/directory_domains_extra.txt
+          ACK_FILE: /tmp/push/ops/mail_acknowledged.md
+          GO_LIVE_SINCE: "2026-11-18T02:51:18Z"
         run: python3 scripts/mail_router/router.py
 
       - name: Save log and audit to the private repo

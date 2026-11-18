@@ -16,6 +16,9 @@ MAX_AI = int(os.environ.get("ROUTER_MAX_AI", "40"))
 OUT_DIR = os.environ.get("ROUTER_OUT_DIR", "ops")
 DIR_JSON = os.environ.get("DIR_JSON", "ops/directories.json")
 OUTREACH_TXT = os.environ.get("OUTREACH_TXT", "ops/outreach_domains.txt")
+DIR_EXTRA = os.environ.get("DIR_EXTRA", "ops/directory_domains_extra.txt")
+ACK_FILE = os.environ.get("ACK_FILE", "ops/mail_acknowledged.md")
+GO_LIVE = os.environ.get("GO_LIVE_SINCE", "2026-11-18T02:51:18Z")
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 ROUTED = "IFRouted"
 PREFIX = "IFRoute_"
@@ -67,6 +70,44 @@ def load_dir_domains(path=DIR_JSON):
     except Exception:
         pass
     return out
+
+
+def load_extra_dir_domains(path=DIR_EXTRA):
+    return load_outreach_domains(path)
+
+
+def load_acks(path=ACK_FILE):
+    """Rows: | key | date | reason | by |  key = <message-id> or 'sender-part :: subject-part'. date = 'MM-DD HH:MM' (optional)."""
+    acks = []
+    try:
+        for l in open(path, encoding="utf-8"):
+            c = [x.strip() for x in l.strip().strip("|").split("|")]
+            if l.startswith("|") and len(c) >= 3 and c[0] and not c[0].startswith(("key", "---")):
+                acks.append((c[0], c[1]))
+    except Exception:
+        pass
+    return acks
+
+
+def is_acked(item, acks):
+    for key, date in acks:
+        if date and item["date"].strftime("%m-%d %H:%M") != date:
+            continue
+        if key.startswith("<"):
+            if key == item.get("mid"):
+                return True
+        elif " :: " in key:
+            a, b = key.split(" :: ", 1)
+            if a.lower() in item["frm"].lower() and b.lower() in item["subj"].lower():
+                return True
+    return False
+
+
+def go_live_dt():
+    try:
+        return datetime.datetime.fromisoformat(GO_LIVE.replace("Z", "+00:00"))
+    except Exception:
+        return datetime.datetime.fromtimestamp(0, datetime.timezone.utc)
 
 
 def load_outreach_domains(path=OUTREACH_TXT):
@@ -168,8 +209,9 @@ def folders(imap):
     return names
 
 
-def sent_message_ids(imap, days=60):
+def sent_message_ids(imap, days=60, replied=None):
     ids = set()
+    replied = replied if replied is not None else set()
     typ, data = imap.list()
     for raw in data or []:
         line = raw.decode(errors="ignore")
@@ -179,9 +221,11 @@ def sent_message_ids(imap, days=60):
                 since = (datetime.date.today() - datetime.timedelta(days=days)).strftime("%d-%b-%Y")
                 t, d = imap.search(None, "SINCE", since)
                 for i in (d[0] or b"").split():
-                    t, msg = imap.fetch(i, "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])")
+                    t, msg = imap.fetch(i, "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID IN-REPLY-TO REFERENCES)])")
                     if t == "OK" and msg and isinstance(msg[0], tuple):
-                        ids.update(ids_in(msg[0][1].decode(errors="ignore")))
+                        h = email.message_from_bytes(msg[0][1])
+                        ids.update(ids_in(str(h.get("Message-ID", ""))))
+                        replied.update(ids_in(str(h.get("In-Reply-To", "")) + " " + str(h.get("References", ""))))
             break
     return ids
 
@@ -191,28 +235,34 @@ def fmt_row(date, frm, subj, bucket, reason, who):
     return "| %s | %s | %s | %s | %s | %s |" % (date.strftime("%m-%d %H:%M"), c(frm), c(subj), bucket, c(reason), who)
 
 
-def build_audit(items, now):
+def build_audit(items, now, replied=frozenset(), acks=(), golive=None):
     """items: list of dict(date, frm, subj, bucket, flags). Returns markdown."""
     day = [i for i in items if (now - i["date"]).total_seconds() <= 86400]
     counts = {b: 0 for b in BUCKETS}
     for i in day:
         counts[i["bucket"]] = counts.get(i["bucket"], 0) + 1
-    rows, stale = [], []
+    rows, stale, legacy = [], [], []
+    golive = golive or datetime.datetime.fromtimestamp(0, datetime.timezone.utc)
     for i in sorted(day, key=lambda x: x["date"], reverse=True):
         if i["bucket"] not in ACTION:
             continue
-        done = bool(HANDLED_KW & set(i["flags"]))
+        done = bool(HANDLED_KW & set(i["flags"])) or bool(i.get("mid") and i["mid"] in replied) or is_acked(i, acks)
         age = (now - i["date"]).total_seconds() / 3600
-        status = "DONE" if done else "WAITING %.1fh" % age
+        is_legacy = (not done) and i["bucket"] == "OUTREACH_REPLY" and i["date"] < golive
+        status = "DONE" if done else ("LEGACY" if is_legacy else "WAITING %.1fh" % age)
         row = "| %s | %s | %s | %s | %s | %s |" % (i["date"].strftime("%m-%d %H:%M"), i["frm"].replace("|", "/")[:60],
                                                     i["subj"].replace("|", "/")[:80], i["bucket"], OWNER[i["bucket"]], status)
         rows.append(row)
-        if not done and age > STALE_HOURS:
+        if is_legacy:
+            legacy.append(row)
+        elif not done and age > STALE_HOURS:
             stale.append(row)
     hdr = "| date (UTC) | from | subject | bucket | owner | status |\n|---|---|---|---|---|---|\n"
     out = "# contact@ DAILY AUDIT\n\nUpdated %s. Last 24 h. %d mails.\n\n" % (now.strftime("%Y-%m-%d %H:%M UTC"), len(day))
     out += "## NOT HANDLED (waiting more than %d h)\n\n" % STALE_HOURS
     out += (hdr + "\n".join(stale) + "\n") if stale else "None.\n"
+    out += "\n## LEGACY (outreach replies received before the replier went live; not counted as missed)\n\n"
+    out += (hdr + "\n".join(legacy) + "\n") if legacy else "None.\n"
     out += "\n## Counts per bucket (24 h)\n\n" + "\n".join("- %s: %d" % (b, n) for b, n in counts.items()) + "\n"
     out += "\n## Every action-bucket mail (24 h)\n\n" + ((hdr + "\n".join(rows) + "\n") if rows else "None.\n")
     return out
@@ -227,7 +277,8 @@ def main():
     pw = os.environ.get("CONTACT_EMAIL_PASSWORD")
     if not pw:
         print("router: no password in env"); return 2
-    dir_d, out_d = load_dir_domains(), load_outreach_domains()
+    dir_d, out_d = load_dir_domains() | load_extra_dir_domains(), load_outreach_domains()
+    acks = load_acks()
     now = datetime.datetime.now(datetime.timezone.utc)
     since = now - datetime.timedelta(hours=HOURS)
     imap = imaplib.IMAP4_SSL(HOST, 993)
@@ -236,9 +287,10 @@ def main():
     except Exception:
         print("router: IMAP LOGIN FAILED"); return 3
     try:
-        sent_ids = sent_message_ids(imap)
+        replied = set()
+        sent_ids = sent_message_ids(imap, replied=replied)
     except Exception:
-        sent_ids = set()
+        sent_ids, replied = set(), set()
     items, new_rows, ai_used, deferred = [], [], 0, 0
     for folder in folders(imap):
         if imap.select('"%s"' % folder)[0] != "OK":
@@ -259,7 +311,8 @@ def main():
             frm, subj = dec(m.get("From")), dec(m.get("Subject"))
             prior = [f[len(PREFIX):] for f in flags if f.startswith(PREFIX)]
             if ROUTED in flags and prior:
-                items.append({"date": d, "frm": frm, "subj": subj, "bucket": prior[0], "flags": flags})
+                items.append({"date": d, "frm": frm, "subj": subj, "bucket": prior[0], "flags": flags,
+                              "mid": str(m.get("Message-ID", "")).strip()})
                 continue
             body = body_text(m)
             irt, refs = str(m.get("In-Reply-To", "")), str(m.get("References", ""))
@@ -276,7 +329,8 @@ def main():
             r = imap.uid("STORE", uid, "+FLAGS", "(%s %s%s)" % (ROUTED, PREFIX, bucket))
             if r[0] != "OK":
                 continue
-            items.append({"date": d, "frm": frm, "subj": subj, "bucket": bucket, "flags": flags + [ROUTED]})
+            items.append({"date": d, "frm": frm, "subj": subj, "bucket": bucket, "flags": flags + [ROUTED],
+                          "mid": str(m.get("Message-ID", "")).strip()})
             new_rows.append(fmt_row(d, frm, subj, bucket, reason, OWNER.get(bucket, "-")))
     imap.logout()
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -289,7 +343,7 @@ def main():
         fh.write("# contact@ mail router log (newest first)\n\n| date (UTC) | from | subject | bucket | reason | who acts |\n|---|---|---|---|---|---|\n")
         fh.write("\n".join(allrows) + "\n")
     with open(os.path.join(OUT_DIR, "mail_audit.md"), "w", encoding="utf-8") as fh:
-        fh.write(build_audit(items, now))
+        fh.write(build_audit(items, now, replied, acks, go_live_dt()))
     counts = {}
     for i in items:
         counts[i["bucket"]] = counts.get(i["bucket"], 0) + 1

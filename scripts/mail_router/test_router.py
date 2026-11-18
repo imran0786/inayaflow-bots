@@ -66,6 +66,27 @@ class T(unittest.TestCase):
         self.assertIn("DONE", out)
         self.assertNotIn("promo", out)
 
+    def test_audit_done_sources_and_legacy(self):
+        now = datetime.datetime(2026, 11, 18, 12, tzinfo=datetime.timezone.utc)
+        h = lambda n: now - datetime.timedelta(hours=n)
+        gl = now - datetime.timedelta(hours=9)
+        items = [{"date": h(5), "frm": "A <a@x.org>", "subj": "thread", "bucket": "OUTREACH_REPLY", "flags": [], "mid": "<m1@x>"},
+                 {"date": h(6), "frm": "B <b@acked.org>", "subj": "Re: Pay me", "bucket": "OUTREACH_REPLY", "flags": []},
+                 {"date": h(12), "frm": "C <c@x.org>", "subj": "old", "bucket": "OUTREACH_REPLY", "flags": []},
+                 {"date": h(4), "frm": "D <d@x.org>", "subj": "missed", "bucket": "OUTREACH_REPLY", "flags": []}]
+        acks = [("acked.org :: pay me", h(6).strftime("%m-%d %H:%M"))]
+        out = R.build_audit(items, now, {"<m1@x>"}, acks, gl)
+        top = out.split("## LEGACY")[0]
+        self.assertIn("missed", top)
+        for s in ("thread", "Pay me", "old"):
+            self.assertNotIn(s, top)
+        self.assertIn("old", out.split("## LEGACY")[1].split("## Counts")[0])
+
+    def test_dir_extra_domain(self):
+        d = R.classify_det("hello@sideprojectors.com", "Your project has been received!", "", "", "",
+                           DIRS | {"sideprojectors.com"}, OUTR | {"sideprojectors.com"}, SENT)
+        self.assertEqual(d[0], "DIRECTORY_STATUS")
+
     def test_stdout_has_no_sender_or_subject(self):
         buf = io.StringIO()
         saved = os.environ.pop("CONTACT_EMAIL_PASSWORD", None)
