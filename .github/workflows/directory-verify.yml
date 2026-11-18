@@ -14,6 +14,9 @@ on:
       dry_run:
         description: "true = report only (nothing opened, nothing flagged); writes ops/directory_verify_dryrun.md"
         default: "true"
+      selftest:
+        description: "true = also prove the browser starts on the runner (opens our own homepage only)"
+        default: "false"
 
 permissions:
   contents: read
@@ -75,6 +78,13 @@ jobs:
         env:
           CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
         run: python3 scripts/directory_verify/verify.py --open 2>/dev/null
+
+      - name: Browser self-test (manual only)
+        if: github.event.inputs.selftest == 'true'
+        run: |
+          python3 -m pip install -q playwright==1.48.0
+          command -v google-chrome >/dev/null || python3 -m playwright install --with-deps chromium >/dev/null
+          python3 scripts/directory_verify/verify.py --selftest 2>/dev/null
 
       - name: Save log and state to the private repo (never here)
         if: always()

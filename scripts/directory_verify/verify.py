@@ -252,6 +252,28 @@ def open_link(ctx, url, sender_dom):
             pass
 
 
+def start_browser():
+    from playwright.sync_api import sync_playwright
+    pw_ctx = sync_playwright().start()
+    try:  # the runner's own Chrome: no browser download, no apt packages
+        browser = pw_ctx.chromium.launch(channel="chrome", headless=True)
+    except Exception:
+        browser = pw_ctx.chromium.launch(headless=True)
+    return pw_ctx, browser, browser.new_context()
+
+
+def selftest():
+    """Proves the browser path works on the runner: opens our own homepage, touches no mail."""
+    pw_ctx, browser, ctx = start_browser()
+    try:
+        outcome, detail = open_link(ctx, "https://inayaflow.ai/", "inayaflow.ai")
+        print("SELFTEST | %s | %s" % (outcome, detail[:120]))
+        return 0 if outcome == "CONFIRMED_LINK_OPENED" else 1
+    finally:
+        browser.close()
+        pw_ctx.stop()
+
+
 def folders(imap):
     names = ["INBOX"]
     typ, data = imap.list()
@@ -279,6 +301,8 @@ def site_status_for(dom, agent_state):
 
 
 def main():
+    if "--selftest" in sys.argv:
+        return selftest()
     do_open = "--open" in sys.argv
     pw = os.environ.get("CONTACT_EMAIL_PASSWORD")
     if not pw:
@@ -340,13 +364,7 @@ def main():
                         outcome = "LINK_PENDING"
                     else:
                         if ctx is None:
-                            from playwright.sync_api import sync_playwright
-                            pw_ctx = sync_playwright().start()
-                            try:  # the runner's own Chrome: no browser download, no apt packages
-                                browser = pw_ctx.chromium.launch(channel="chrome", headless=True)
-                            except Exception:
-                                browser = pw_ctx.chromium.launch(headless=True)
-                            ctx = browser.new_context()
+                            pw_ctx, browser, ctx = start_browser()
                         opened += 1
                         outcome, d2 = open_link(ctx, link, dom)
                         detail += "; " + d2
