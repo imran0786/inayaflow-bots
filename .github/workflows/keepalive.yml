@@ -1,0 +1,24 @@
+name: Keepalive
+
+# GitHub disables scheduled workflows in public repos after 60 days without commits.
+on:
+  schedule:
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Commit the date
+        run: |
+          date -u +%Y-%m-%d > keepalive.txt
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add keepalive.txt
+          git commit -q -m "keepalive $(cat keepalive.txt)" || exit 0
+          git push -q

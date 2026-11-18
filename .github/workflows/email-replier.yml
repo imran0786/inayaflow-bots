@@ -1,0 +1,88 @@
+name: Email replier (link outreach)
+
+# Public repo: everything printed in this run is visible to anyone.
+# The script prints counts and status codes only. Logs are kept in a PRIVATE repo
+# (imran0786/genie, branch ops-email-logs) and never written to this repo.
+#
+# SCHEDULE IS COMMENTED OUT until the secrets are in place; the Director switches it on.
+
+on:
+  # schedule:
+  #   - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: email-replier
+  cancel-in-progress: false
+
+jobs:
+  replier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests
+        run: python3 scripts/email_replier/test_replier.py
+
+      - name: Restore logs and target list from the private repo
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          mkdir -p ops
+          if git clone -q --branch ops-email-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/logs 2>/dev/null; then
+            for f in email_replier_log.md for_imran.md email_replier_drafts.md; do
+              cp "/tmp/logs/ops/$f" "ops/$f" 2>/dev/null || true
+            done
+            echo "logs restored"
+          else
+            echo "no logs branch yet (or clone failed)"
+          fi
+          # the outreach domain list stays private: read it from the private repo's main branch
+          if git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/main 2>/dev/null; then
+            cp /tmp/main/ops/outreach_domains.txt ops/outreach_domains.txt 2>/dev/null || true
+          fi
+
+      - name: Run replier
+        env:
+          CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DRY_RUN: "false"
+          GO_LIVE_SINCE: "2026-11-18T02:51:18Z"
+        run: python3 scripts/email_replier/replier.py
+
+      - name: Save logs to the private repo (ops-email-logs, never here)
+        if: always()
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          set -e
+          rm -rf /tmp/push
+          if git clone -q --branch ops-email-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push 2>/dev/null; then
+            :
+          else
+            git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push
+            cd /tmp/push && git checkout -q --orphan ops-email-logs && git rm -rq --cached . >/dev/null 2>&1 || true
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
+          fi
+          mkdir -p /tmp/push/ops
+          for f in email_replier_log.md for_imran.md email_replier_drafts.md; do
+            [ -f "ops/$f" ] && cp "ops/$f" "/tmp/push/ops/$f" || true
+          done
+          cd /tmp/push
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add ops/email_replier_log.md ops/for_imran.md ops/email_replier_drafts.md 2>/dev/null || true
+          if git diff --cached --quiet; then echo "no log changes"; exit 0; fi
+          git commit -q -m "ops: email replier log"
+          git push -q origin ops-email-logs
+          echo "logs saved"
