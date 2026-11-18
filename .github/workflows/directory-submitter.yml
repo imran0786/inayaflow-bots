@@ -1,0 +1,137 @@
+name: Directory submitter (backlinks)
+
+# Public repo: everything printed in this run is visible to anyone. The script prints counts, reason codes and
+# directory names only (URLs, e-mail addresses, codes and passwords are stripped). Logs live in the PRIVATE repo
+# (imran0786/genie, branch ops-directory-logs) and never in this repo. No screenshots are uploaded.
+#
+# SCHEDULE IS COMMENTED OUT: the Director switches it on after the dry runs pass.
+# One run a day, at most 1 hour: goes down the list until 20 SUCCESSFUL submissions or the time is up.
+
+on:
+  # schedule:
+  #   - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = fill forms only, do not submit"
+        default: "true"
+      max_per_run:
+        description: "directories this run (up to 100)"
+        default: "100"
+      dry_signups:
+        description: "true = a DRY run may still create accounts (tests the sign-up path)"
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: directory-submitter
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Restore logs from the private repo
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          mkdir -p ops
+          if git clone -q --branch ops-directory-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/logs 2>/dev/null; then
+            for f in directory_log.md directory_log_dryrun.md imran_click_list.md directory_state.json failure_reasons.md directory_summary.md; do
+              cp "/tmp/logs/ops/$f" "ops/$f" 2>/dev/null || true
+            done
+            echo "logs restored"
+          else
+            echo "no logs branch yet (or clone failed)"
+          fi
+
+      # Cap check FIRST, before any install (stdlib only, about a second): stop when 20 successes or the attempt cap
+      # are reached today, or nothing is left to try.
+      - name: Daily cap check
+        id: pre
+        env:
+          MAX_PER_RUN: ${{ github.event.inputs.max_per_run || '100' }}
+          MAX_PER_DAY: "120"
+          TARGET_SUCCESS: "20"
+        run: python3 scripts/directory_submitter/submitter.py --precheck
+
+      - name: Stop (cap reached or nothing to do)
+        if: steps.pre.outputs.go != 'true'
+        run: echo "Nothing to do this run (daily cap reached or no directories left)."
+
+      - uses: actions/setup-python@v5
+        if: steps.pre.outputs.go == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests
+        if: steps.pre.outputs.go == 'true'
+        run: python3 scripts/directory_submitter/test_submitter.py
+
+      - name: Cache Playwright browsers
+        if: steps.pre.outputs.go == 'true'
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.48.0-chromium-${{ runner.os }}
+
+      - name: Install Playwright + Chromium
+        if: steps.pre.outputs.go == 'true'
+        run: |
+          python3 -m pip install -q playwright==1.48.0
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            python3 -m playwright install-deps chromium
+          else
+            python3 -m playwright install --with-deps chromium
+          fi
+
+      - name: Run submitter
+        if: steps.pre.outputs.go == 'true'
+        env:
+          CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DIR_MASTER_KEY: ${{ secrets.DIR_MASTER_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || (github.event_name == 'schedule' && 'false') || 'true' }}
+          MAX_PER_RUN: ${{ github.event.inputs.max_per_run || '100' }}
+          MAX_PER_DAY: "120"
+          TARGET_SUCCESS: "20"
+          DRY_SIGNUPS: ${{ github.event.inputs.dry_signups || 'false' }}
+        run: python3 scripts/directory_submitter/submitter.py
+
+      - name: Save logs to the private repo (ops-directory-logs, never here)
+        if: always() && steps.pre.outputs.go == 'true'
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          set -e
+          rm -rf /tmp/push
+          if git clone -q --branch ops-directory-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push 2>/dev/null; then
+            :
+          else
+            git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push
+            cd /tmp/push && git checkout -q --orphan ops-directory-logs && git rm -rq --cached . >/dev/null 2>&1 || true
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
+          fi
+          mkdir -p /tmp/push/ops
+          for f in directory_log.md directory_log_dryrun.md imran_click_list.md directory_state.json failure_reasons.md directory_summary.md; do
+            [ -f "ops/$f" ] && cp "ops/$f" "/tmp/push/ops/$f" || true
+          done
+          cd /tmp/push
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add ops 2>/dev/null || true
+          if git diff --cached --quiet; then echo "no log changes"; exit 0; fi
+          git commit -q -m "ops: directory submitter log"
+          git push -q origin ops-directory-logs
+          echo "logs saved"

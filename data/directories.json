@@ -1,0 +1,647 @@
+[
+ {
+  "name": "FutureTools",
+  "submit_url": "https://www.futuretools.io",
+  "type": "AI tools",
+  "free": "yes (\"Submissions are free and outbound ",
+  "notes": "Nofollow: referral + AI-citation value only. Fetch the homepage for the submit link before submitting."
+ },
+ {
+  "name": "aitoolsdirectory.com",
+  "submit_url": "https://aitoolsdirectory.com/submit-tool",
+  "type": "AI tools",
+  "free": "yes for standard queue (\"does not charge",
+  "notes": "Skip the paid \"Fast Track\" skip-the-line. Confirm the link type before counting it."
+ },
+ {
+  "name": "AI Tools by Neil Patel",
+  "submit_url": "https://aitools.neilpatel.com",
+  "type": "AI tools",
+  "free": "free + paid (ideaproof listing, third-pa",
+  "notes": "Strongest candidate if the free path is confirmed on the site. Verify before submitting.",
+  "skip": "Not a directory: submit URL lands on an analytics dashboard (/en/analyze/dashboard), no listing form. Skipped 18 Nov."
+ },
+ {
+  "name": "SideProjectStack",
+  "submit_url": "https://sideprojectstack.com/projects/new",
+  "type": "launch",
+  "free": "unknown (\"never states\" free or paid)",
+  "notes": "Side-project launch directory. Read /guidelines first."
+ },
+ {
+  "name": "ToolFinder",
+  "submit_url": "https://toolfinder.wiki",
+  "type": "AI tools",
+  "free": "unknown",
+  "notes": "Named in an awesome-directories list. Not fetched."
+ },
+ {
+  "name": "Altern.ai",
+  "submit_url": "https://altern.ai",
+  "type": "AI tools",
+  "free": "unknown",
+  "notes": "Named in an awesome-directories list. Not fetched."
+ },
+ {
+  "name": "AI Agents Directory",
+  "submit_url": "https://aiagentsdirectory.com",
+  "type": "AI agents",
+  "free": "unknown",
+  "notes": "Listed by a codersera aggregator, not fetched. Agent-focused, so a weaker fit for a consumer app."
+ },
+ {
+  "name": "Aidirs",
+  "submit_url": "https://aidirs.best",
+  "type": "AI tools",
+  "free": "unknown",
+  "notes": "From the codersera aggregator, not fetched."
+ },
+ {
+  "name": "Good AI Tools",
+  "submit_url": "https://goodaitools.com",
+  "type": "AI tools",
+  "free": "unknown",
+  "notes": "From the codersera aggregator, not fetched."
+ },
+ {
+  "name": "MarketingDB",
+  "submit_url": "https://marketingdb.live",
+  "type": "marketing",
+  "free": "unknown",
+  "notes": "Marketing niche. Not fetched."
+ },
+ {
+  "name": "Nick Launches",
+  "submit_url": "https://nicklaunches.com",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "From the codersera aggregator. Check for a paid \"featured\" path."
+ },
+ {
+  "name": "Super Launch",
+  "submit_url": "https://www.superlaun.ch",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "AIMonstr",
+  "submit_url": "https://www.aimonstr.com",
+  "type": "AI tools",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "AgentHunter",
+  "submit_url": "https://www.agenthunter.io",
+  "type": "AI agents",
+  "free": "unknown",
+  "notes": "Agent-focused, weaker fit."
+ },
+ {
+  "name": "Buildlist",
+  "submit_url": "https://buildlist.io",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "EarlyHunt",
+  "submit_url": "https://earlyhunt.com",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "IndieHunt",
+  "submit_url": "https://indiehunt.io",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "ShipBoost",
+  "submit_url": "https://shipboost.io",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "TheSaaSDir",
+  "submit_url": "https://thesaasdir.com",
+  "type": "SaaS",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "Findly.tools",
+  "submit_url": "https://findly.tools",
+  "type": "AI tools",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "Makerlog",
+  "submit_url": "https://getmakerlog.com",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "Named in an awesome-directories list. Not fetched."
+ },
+ {
+  "name": "LaunchCaster",
+  "submit_url": "https://launchcaster.xyz",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "Named in an awesome-directories list. Not fetched."
+ },
+ {
+  "name": "AI Directory (aidirectory.wiki)",
+  "submit_url": "https://aidirectory.wiki",
+  "type": "AI tools",
+  "free": "unknown",
+  "notes": "Named in an awesome-directories list. Not fetched."
+ },
+ {
+  "name": "AI Dir (aidir.wiki)",
+  "submit_url": "https://aidir.wiki",
+  "type": "AI tools",
+  "free": "unknown",
+  "notes": "Named in an awesome-directories list. Not fetched."
+ },
+ {
+  "name": "Productivity Directory",
+  "submit_url": "https://productivity.directory",
+  "type": "productivity tools",
+  "free": "unknown",
+  "notes": "Named in an awesome-directories list. Not fetched."
+ },
+ {
+  "name": "Idea Kiln",
+  "submit_url": "https://ideakiln.com",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "Smol Launch",
+  "submit_url": "https://smollaunch.com",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "Launch Scroll",
+  "submit_url": "https://launchscroll.com",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "Verified Tools",
+  "submit_url": "https://www.verifiedtools.info",
+  "type": "AI tools",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "Open SaaS Directory",
+  "submit_url": "https://opensaas.directory",
+  "type": "SaaS",
+  "free": "unknown",
+  "notes": "Retry from a different route before counting it."
+ },
+ {
+  "name": "ShowMySites",
+  "submit_url": "https://www.showmysites.com",
+  "type": "sites",
+  "free": "unknown",
+  "notes": "From the codersera aggregator. Generic, weak fit."
+ },
+ {
+  "name": "Startup Inspire",
+  "submit_url": "https://www.startupinspire.com",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "SumoDir",
+  "submit_url": "https://sumodir.com",
+  "type": "directory",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "Neeed Directory",
+  "submit_url": "https://neeed.directory",
+  "type": "directory",
+  "free": "unknown",
+  "notes": "From the codersera aggregator."
+ },
+ {
+  "name": "Betapage (now pitchwall.co)",
+  "submit_url": "https://pitchwall.co",
+  "type": "launch",
+  "free": "unknown (betapage.co redirects to pitchw",
+  "notes": "Redirect not followed. Check pitchwall.co before use."
+ },
+ {
+  "name": "WIP",
+  "submit_url": "https://wip.co",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "Named in an awesome-directories list. Check it loads first."
+ },
+ {
+  "name": "Webwiki",
+  "submit_url": "https://webwiki.com",
+  "type": "directory",
+  "free": "free + paid (ideaproof DR 78, third-part",
+  "notes": "Generic site directory, weak niche fit."
+ },
+ {
+  "name": "Exactseek",
+  "submit_url": "https://exactseek.com",
+  "type": "directory",
+  "free": "free + paid (ideaproof DR 73, third-part",
+  "notes": "Generic web directory, weak niche fit."
+ },
+ {
+  "name": "Listly",
+  "submit_url": "https://list.ly",
+  "type": "list platform",
+  "free": "free (ideaproof DR 69, third-party)",
+  "notes": "Lists platform. Submit route is to add a product to a list; unclear."
+ },
+ {
+  "name": "Sitelike",
+  "submit_url": "https://sitelike.org",
+  "type": "website directory",
+  "free": "free (ideaproof DR 70, third-party)",
+  "notes": "Generic site directory."
+ },
+ {
+  "name": "BetaTesting",
+  "submit_url": "https://www.betatesting.com",
+  "type": "community",
+  "free": "unknown",
+  "notes": "Beta-tester community rather than a listing directory."
+ },
+ {
+  "name": "Side Project Club",
+  "submit_url": "https://www.sideprojectclub.com",
+  "type": "community / launch",
+  "free": "unknown",
+  "notes": "Named in the GitHub awesome-launch community list. Not fetched."
+ },
+ {
+  "name": "Launch Club",
+  "submit_url": "https://www.launchclub.io",
+  "type": "launch",
+  "free": "unknown",
+  "notes": "Named in the GitHub awesome-launch community list. Not fetched."
+ },
+ {
+  "name": "The Hive Index",
+  "submit_url": "https://thehiveindex.com",
+  "type": "startup directory",
+  "free": "unknown",
+  "notes": "Named in the GitHub awesome-launch community list. Not fetched."
+ },
+ {
+  "name": "SaaSworthy",
+  "submit_url": "https://www.saasworthy.com",
+  "type": "SaaS review",
+  "free": "unknown",
+  "notes": "Named in the GitHub awesome-launch community list. Review site; check whether vendors can add a free profile."
+ },
+ {
+  "name": "Active Search Results",
+  "submit_url": "https://activesearchresults.com",
+  "type": "directory",
+  "free": "free + paid (ideaproof DR 78, third-part",
+  "notes": "Generic directory."
+ },
+ {
+  "name": "Startups UK",
+  "submit_url": "https://startups.co.uk",
+  "type": "UK startup directory",
+  "free": "free (ideaproof DR 68, third-party)",
+  "notes": "UK-focused, so weaker for a US-first plan."
+ },
+ {
+  "name": "aitools.inc",
+  "submit_url": "https://aitools.inc",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Easy With AI",
+  "submit_url": "https://easywithai.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "AI Scout",
+  "submit_url": "https://aiscout.net",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Supertools (The Rundown)",
+  "submit_url": "https://supertools.therundown.ai",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Newsletter-linked directory. Not checked."
+ },
+ {
+  "name": "AI Cyclopedia",
+  "submit_url": "https://aicyclopedia.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "All Things AI",
+  "submit_url": "https://allthingsai.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "AI Depot",
+  "submit_url": "https://aidepot.co",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "AI Valley",
+  "submit_url": "https://aivalley.ai",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "FindMyAITool",
+  "submit_url": "https://findmyaitool.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "SaaS AI Tools",
+  "submit_url": "https://saasaitools.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Aixploria",
+  "submit_url": "https://aixploria.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Ben's Bites",
+  "submit_url": "https://bensbites.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Newsletter with a tool list. Not checked."
+ },
+ {
+  "name": "AI Parabellum",
+  "submit_url": "https://aiparabellum.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Opentools",
+  "submit_url": "https://opentools.ai",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "GPT Forge",
+  "submit_url": "https://not",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked. No URL in paste."
+ },
+ {
+  "name": "AI Stash",
+  "submit_url": "https://aistash.co",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "ToolsPedia",
+  "submit_url": "https://toolspedia.io",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "AI Library (Phygital)",
+  "submit_url": "https://library.phygital.plus",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Insidr",
+  "submit_url": "https://insidr.ai",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "AI Marketing Directory",
+  "submit_url": "https://aimarketing.directory",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Marketing niche. Not checked."
+ },
+ {
+  "name": "1000.tools",
+  "submit_url": "https://1000.tools",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "AI Tool Guru",
+  "submit_url": "https://aitoolguru.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "AI Wizard",
+  "submit_url": "https://not",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked. No URL in paste."
+ },
+ {
+  "name": "aitoolslist.io",
+  "submit_url": "https://aitoolslist.io",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "AI Infinity",
+  "submit_url": "https://not",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked. No URL in paste."
+ },
+ {
+  "name": "Victrays",
+  "submit_url": "https://victrays.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "That AI Collection",
+  "submit_url": "https://thataicollection.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Every AI",
+  "submit_url": "https://every-ai.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked. Name pattern is common among mass directories: verify before any submit."
+ },
+ {
+  "name": "AI Tools Club",
+  "submit_url": "https://aitoolsclub.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "NextGen Tools",
+  "submit_url": "https://nextgentools.me",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "AI Top Tools",
+  "submit_url": "https://aitoptools.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Mars AI Directory",
+  "submit_url": "https://not",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked. No URL in paste."
+ },
+ {
+  "name": "AI Hunter",
+  "submit_url": "https://not",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked. No URL in paste."
+ },
+ {
+  "name": "Best AI Tools",
+  "submit_url": "https://bestaitools.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Share Tool AI",
+  "submit_url": "https://not",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked. No URL in paste."
+ },
+ {
+  "name": "AI Tool Board",
+  "submit_url": "https://aitoolboard.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Elite AI Tools",
+  "submit_url": "https://eliteai.tools",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "AI Apps",
+  "submit_url": "https://aiapps.com",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "Digital Tools AI",
+  "submit_url": "https://digitaltools.ai",
+  "type": "AI-tools-dir",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "TrustRadius",
+  "submit_url": "https://trustradius.com",
+  "type": "review-site",
+  "free": "unknown",
+  "notes": "Spot-check returned 403 (blocked). Vendor free path unknown."
+ },
+ {
+  "name": "GoodFirms",
+  "submit_url": "https://goodfirms.co",
+  "type": "review-site",
+  "free": "unknown",
+  "notes": "Spot-check returned 403 (blocked). B2B-leaning. Verify free vendor path."
+ },
+ {
+  "name": "SoftwareWorld",
+  "submit_url": "https://softwareworld.co",
+  "type": "SaaS-launchpad",
+  "free": "unknown",
+  "notes": "Not checked."
+ },
+ {
+  "name": "FinancesOnline",
+  "submit_url": "https://financesonline.com",
+  "type": "review-site",
+  "free": "unknown",
+  "notes": "Spot-check: no free vendor path stated."
+ },
+ {
+  "name": "Appscope",
+  "submit_url": "https://not",
+  "type": "SaaS-launchpad",
+  "free": "unknown",
+  "notes": "PWA directory. PWA stores were scrapped in TRAFFIC_CHANNELS_2026-11-12 (no proof of traffic). Low priority."
+ },
+ {
+  "name": "FindPWA",
+  "submit_url": "https://not",
+  "type": "SaaS-launchpad",
+  "free": "unknown",
+  "notes": "PWA directory. Same note as G55."
+ }
+]
