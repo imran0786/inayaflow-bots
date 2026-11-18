@@ -4,12 +4,14 @@ name: Directory submitter (backlinks)
 # directory names only (URLs, e-mail addresses, codes and passwords are stripped). Logs live in the PRIVATE repo
 # (imran0786/genie, branch ops-directory-logs) and never in this repo. No screenshots are uploaded.
 #
-# SCHEDULE IS ON since 18 Nov (first live run 44240890428 gave 6 successes). Scheduled runs are live (DRY_RUN=false).
+# SCHEDULE RETIRED 18 Nov (Director): the browser-use agent (directory-agent.yml) is the daily engine now (16 successes in ~75 tries
+# with no per-site code, vs 6 for this bot), and two bots must not hit the same sites. Code kept; manual run (workflow_dispatch) still works.
+# (Was: SCHEDULE ON since 18 Nov, first live run 44240890428 gave 6 successes.)
 # One run a day, at most 1 hour: goes down the list until 20 SUCCESSFUL submissions or the time is up.
 
 on:
-  schedule:
-    - cron: "17 6 * * *"
+  # schedule:
+  #   - cron: "17 6 * * *"   # retired 18 Nov: replaced by directory-agent.yml (cron 37 6)
   workflow_dispatch:
     inputs:
       dry_run:
