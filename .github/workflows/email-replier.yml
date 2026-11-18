@@ -54,6 +54,7 @@ jobs:
       - name: Run replier
         env:
           CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DRY_RUN: "false"
           GO_LIVE_SINCE: "2026-11-18T02:51:18Z"

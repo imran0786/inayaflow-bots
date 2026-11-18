@@ -163,5 +163,43 @@ class StdoutAudit(unittest.TestCase):
         self.assertIn("ValueError", out.getvalue())
 
 
+class ModelFallback(unittest.TestCase):
+    def setUp(self):
+        r.MODEL_USED.update({"haiku": 0, "deepseek": 0})
+
+    def test_haiku_primary(self):
+        import unittest.mock as mock
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k", "DEEPSEEK_API_KEY": "d"}),              mock.patch.object(r, "_post_json", return_value={"content": [{"text": "H"}]}) as post:
+            self.assertEqual(r.llm_call("a", "b"), "H")
+        self.assertEqual(post.call_args[0][0], "https://api.anthropic.com/v1/messages")
+        self.assertEqual(post.call_args[0][1]["model"], "claude-haiku-5-5")
+        self.assertEqual(r.MODEL_USED, {"haiku": 1, "deepseek": 0})
+
+    def test_retry_once_then_deepseek(self):
+        import unittest.mock as mock, urllib.error
+        calls = []
+        def fake(url, body, headers):
+            calls.append(url)
+            if "anthropic" in url:
+                raise urllib.error.HTTPError(url, 529, "overloaded", {}, None)
+            return {"choices": [{"message": {"content": "D"}}]}
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k", "DEEPSEEK_API_KEY": "d"}),              mock.patch.object(r, "_post_json", fake), mock.patch.object(r.time, "sleep"):
+            self.assertEqual(r.llm_call("a", "b"), "D")
+        self.assertEqual(sum("anthropic" in c for c in calls), 2)
+        self.assertEqual(r.MODEL_USED, {"haiku": 0, "deepseek": 1})
+
+    def test_retry_succeeds_second_time(self):
+        import unittest.mock as mock
+        seq = [RuntimeError("x"), {"content": [{"text": "H2"}]}]
+        def fake(url, body, headers):
+            v = seq.pop(0)
+            if isinstance(v, Exception):
+                raise v
+            return v
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k"}),              mock.patch.object(r, "_post_json", fake), mock.patch.object(r.time, "sleep"):
+            self.assertEqual(r.llm_call("a", "b"), "H2")
+        self.assertEqual(r.MODEL_USED["haiku"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

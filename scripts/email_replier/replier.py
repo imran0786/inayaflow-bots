@@ -221,27 +221,57 @@ Stay on the topic of the page/tool in OUR original message; never invent tools o
 Output ONLY JSON: {"category": "...", "summary": "max 15 words, no personal data", "draft": "..."}"""
 
 
-def llm_call(sent_text, reply_text):
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
+MODEL_USED = {"haiku": 0, "deepseek": 0}
+
+
+def _post_json(url, body, headers):
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+
+def _user_prompt(sent_text, reply_text):
+    return "OUR ORIGINAL MESSAGE (truncated):\n%s\n\nTHEIR REPLY:\n%s" % (sent_text[:1500], reply_text)
+
+
+def call_anthropic(user):
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        raise RuntimeError("no Anthropic key in env")
+    body = {"model": ANTHROPIC_MODEL, "max_tokens": 600, "temperature": 0.3,
+            "system": SYSTEM, "messages": [{"role": "user", "content": user}]}
+    headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+    data = _post_json("https://api.anthropic.com/v1/messages", body, headers)
+    return data["content"][0]["text"]
+
+
+def call_deepseek(user):
     key = os.environ.get("LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
     if not key:
         raise RuntimeError("no LLM key in env")
-    user = "OUR ORIGINAL MESSAGE (truncated):\n%s\n\nTHEIR REPLY:\n%s" % (sent_text[:1500], reply_text)
-    if CFG["llm_style"] == "anthropic":
-        url = CFG["llm_base"].rstrip("/") + "/v1/messages"
-        body = {"model": CFG["llm_model"], "max_tokens": 600, "temperature": 0.3,
-                "system": SYSTEM, "messages": [{"role": "user", "content": user}]}
-        headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
-    else:
-        url = CFG["llm_base"].rstrip("/") + "/chat/completions"
-        body = {"model": CFG["llm_model"], "temperature": 0.3, "thinking": {"type": "disabled"},
-                "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]}
-        headers = {"Authorization": "Bearer " + key, "content-type": "application/json"}
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers)
-    with urllib.request.urlopen(req, timeout=60) as r:
-        data = json.load(r)
-    if CFG["llm_style"] == "anthropic":
-        return data["content"][0]["text"]
+    body = {"model": CFG["llm_model"], "temperature": 0.3, "thinking": {"type": "disabled"},
+            "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]}
+    headers = {"Authorization": "Bearer " + key, "content-type": "application/json"}
+    data = _post_json(CFG["llm_base"].rstrip("/") + "/chat/completions", body, headers)
     return data["choices"][0]["message"]["content"]
+
+
+def llm_call(sent_text, reply_text):
+    """Primary: Claude Haiku (one retry). Fallback: DeepSeek. Same prompt for both; same guards downstream."""
+    user = _user_prompt(sent_text, reply_text)
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        for attempt in (1, 2):
+            try:
+                out = call_anthropic(user)
+                MODEL_USED["haiku"] += 1
+                return out
+            except Exception:
+                if attempt == 1:
+                    time.sleep(2)
+    out = call_deepseek(user)
+    MODEL_USED["deepseek"] += 1
+    return out
 
 # ---------- IMAP ----------
 
@@ -452,6 +482,7 @@ def main():
     append("ops/email_replier_log.md", "# Email replier log\n\n| date | from domain | category | action | summary |\n|---|---|---|---|---|\n", log)
     append("ops/for_imran.md", "# For Imran (replier did not answer)\n\n| date | from domain | category | summary |\n|---|---|---|---|\n", imran)
     append("ops/email_replier_drafts.md", "# Dry-run drafts (our text only)\n\n", drafts)
+    print("model_used haiku=%d deepseek=%d" % (MODEL_USED["haiku"], MODEL_USED["deepseek"]))
     print("checked=%d handled=%d replied=%d for_imran=%d" % (checked, len(log), sends, len(imran)))
     return 0
 
