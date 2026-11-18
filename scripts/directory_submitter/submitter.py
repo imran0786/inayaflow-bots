@@ -261,6 +261,8 @@ def can_retry(st, fix_version=FIX_VERSION):
     res = st.get("result", "")
     if res.startswith(("SUBMITTED", "CONFIRMED")):
         return False
+    if st.get("confirm_pending") and st.get("attempts", 1) < 4:
+        return True
     _, fixable = reason_code(res)
     return bool(fixable) and st.get("attempts", 1) < 2 and st.get("fix") != fix_version
 
@@ -803,46 +805,86 @@ def text_fields(info):
     return [f for f in info["fields"] if f["type"] not in ("checkbox", "radio", "file", "customselect", "buttons")]
 
 
+MAIL_FOLDERS = ("INBOX", "Junk", "INBOX.Junk", "Spam")
+TOKEN_LINK_RE = re.compile(r"verify|confirm|token|magic|auth|activate|validate|sign-?in|login", re.I)
+
+
+def all_mail_text(msg):
+    """Plain and HTML parts together (confirm links are often only in the HTML)."""
+    out = []
+    try:
+        for part in msg.walk():
+            if part.get_content_type() in ("text/plain", "text/html"):
+                out.append(part.get_content())
+    except Exception:
+        pass
+    return "\n".join(out) or body_text(msg)
+
+
+def confirm_links_from_mail(text, directory_url):
+    """Links to open: URLs on the directory's own domain, plus (the SENDER already matched the directory) off-domain links that
+    look like verify/confirm/token/magic links. Confirmation-looking first."""
+    urls = re.findall(r"https?://[^\s<>\"')\]]+", (text or "").replace("&amp;", "&"))
+    own = [u.rstrip(".,;") for u in urls if same_site(u, directory_url)]
+    tok = [u.rstrip(".,;") for u in urls if TOKEN_LINK_RE.search(u) and u.rstrip(".,;") not in own
+           and not re.search(r"unsubscribe|\.(png|jpe?g|gif|css|js)(\?|$)|privacy|terms", u, re.I)]
+    seen, out = set(), []
+    for u in sorted(own + tok, key=lambda x: 0 if re.search(r"confirm|verify|activate|approve|validate|token|magic", x, re.I) else 1):
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out[:3]
+
+
 def fetch_verification(directory_url, since_ts, wait=90):
-    """Wait for a mail from the directory's domain after since_ts; return ('code', x) | ('link', url) | None."""
+    """Wait for a mail from the directory's domain after since_ts (INBOX and Junk, last 24 h+); return ('code', x) | ('link', url) | None."""
     pw = os.environ.get("CONTACT_EMAIL_PASSWORD")
     if not pw:
         return None
     end = time.time() + wait
-    while time.time() < end:
+    while True:
         imap = imaplib.IMAP4_SSL(CFG["imap_host"], 993)
         imap.login(CFG["user"], pw)
         try:
-            imap.select("INBOX")
-            since = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
-            typ, data = imap.uid("SEARCH", None, "SINCE", since, "UNKEYWORD", KEYWORD)
-            for uid in reversed(data[0].split() if data and data[0] else []):
-                typ, d = imap.uid("FETCH", uid, "(BODY.PEEK[])")
-                msg = next((email.message_from_bytes(p[1], policy=policy.default) for p in d if isinstance(p, tuple)), None)
-                if msg is None or not sender_matches(str(msg.get("From", "")), directory_url):
-                    continue
+            days = max(1, int((time.time() - since_ts) // 86400) + 1)
+            since = (datetime.date.today() - datetime.timedelta(days=days)).strftime("%d-%b-%Y")
+            for folder in MAIL_FOLDERS:
                 try:
-                    if msg["Date"].datetime.timestamp() < since_ts - 60:
+                    if imap.select(folder)[0] != "OK":
                         continue
                 except Exception:
-                    pass
-                body = body_text(msg)
-                links = pick_confirm_links(body, directory_url)
-                imap.uid("STORE", uid, "+FLAGS", "(\\Seen %s)" % KEYWORD)
-                code = find_code(body)
-                if code and not links:
-                    return ("code", code)
-                if links:
-                    return ("link", links[0])
-                if code:
-                    return ("code", code)
+                    continue
+                typ, data = imap.uid("SEARCH", None, "SINCE", since, "UNKEYWORD", KEYWORD)
+                for uid in reversed(data[0].split() if data and data[0] else []):
+                    typ, d = imap.uid("FETCH", uid, "(BODY.PEEK[])")
+                    msg = next((email.message_from_bytes(p[1], policy=policy.default) for p in d if isinstance(p, tuple)), None)
+                    if msg is None or not sender_matches(str(msg.get("From", "")), directory_url):
+                        continue
+                    if re.search(r"subscription|newsletter", str(msg.get("Subject", "")), re.I):
+                        continue  # newsletter double-opt-in, not an account
+                    try:
+                        if msg["Date"].datetime.timestamp() < since_ts - 60:
+                            continue
+                    except Exception:
+                        pass
+                    body = all_mail_text(msg)
+                    links = confirm_links_from_mail(body, directory_url)
+                    imap.uid("STORE", uid, "+FLAGS", "(\\Seen %s)" % KEYWORD)
+                    code = find_code(re.sub(r"<[^>]+>", " ", body))
+                    if code and not links:
+                        return ("code", code)
+                    if links:
+                        return ("link", links[0])
+                    if code:
+                        return ("code", code)
         finally:
             try:
                 imap.logout()
             except Exception:
                 pass
+        if time.time() >= end:
+            return None
         time.sleep(10)
-    return None
 
 
 def visible_email(page):
@@ -1040,6 +1082,10 @@ def try_signup(page, row):
     if CAPTCHA_RE.search(text) or page.evaluate(CAPTCHA_VISIBLE_JS):
         return "captcha"
     if ALREADY_RE.search(text):
+        try:  # an earlier sign-up may still wait for its confirmation mail: open it first
+            after_verification(page, row, time.time() - 3 * 86400, 8)
+        except Exception as e:
+            print("  pending-mail check failed:", type(e).__name__)
         why = try_login(page, row, pw)
         if why:
             return why
@@ -1133,7 +1179,11 @@ def process(page, row, logo_path, dry, shot_path):
         target, info = locate_form(page, row)
         load_custom_options(target, info)
         reason = wall_reason(page, info)
-        if is_wall(page, info, reason):  # signed up but not signed in: log in with the same per-site password
+        if is_wall(page, info, reason):  # signed up but not signed in: confirm via any pending mail from this directory, then log in
+            try:
+                after_verification(page, row, time.time() - 3 * 86400, 8)
+            except Exception as e:
+                print("  pending-mail check failed:", type(e).__name__)
             why = try_login(page, row, site_password(os.environ["DIR_MASTER_KEY"], row["submit_url"]))
             if why:
                 return "BLOCKED:" + why, "", ""
@@ -1210,8 +1260,28 @@ def body_text(msg):
         return ""
 
 
-def check_confirmations(ctx, directories):
-    """Scan recent contact@ mail (not yet IFDirHandled) from directory domains; open own-domain links."""
+CONFIRM_SUBJECT_RE = re.compile(r"confirm|verif|activate|sign.?in|log.?in|magic|welcome|complete your|validate", re.I)
+NEWSLETTER_RE = re.compile(r"subscription|newsletter|digest|weekly|unsubscribe from", re.I)
+
+
+def match_directory(msg, directories):
+    """The directory whose domain sent this mail (From host), or None. Newsletter-style subjects never match."""
+    if NEWSLETTER_RE.search(str(msg.get("Subject", ""))):
+        return None
+    for row in directories:
+        if sender_matches(str(msg.get("From", "")), row["submit_url"]):
+            return row
+    return None
+
+
+def is_confirm_mail(msg, links):
+    return bool(links) and bool(CONFIRM_SUBJECT_RE.search(str(msg.get("Subject", "")) + " " + " ".join(links)))
+
+
+def check_confirmations(ctx, directories, hours=72):
+    """INBOX SWEEP (start and end of every run): in INBOX + Junk, last `hours`, find unprocessed confirm / verify / sign-in /
+    magic-link mails from any directory in the list, open the link in the browser, mark the mail IFDirHandled (each link used once).
+    Returns [(directory name, opened ok)]. Never prints links or addresses."""
     pw = os.environ.get("CONTACT_EMAIL_PASSWORD")
     if not pw:
         return []
@@ -1219,37 +1289,66 @@ def check_confirmations(ctx, directories):
     imap = imaplib.IMAP4_SSL(CFG["imap_host"], 993)
     imap.login(CFG["user"], pw)
     try:
-        imap.select("INBOX")
-        since = (datetime.date.today() - datetime.timedelta(days=3)).strftime("%d-%b-%Y")
-        typ, data = imap.uid("SEARCH", None, "SINCE", since, "UNKEYWORD", KEYWORD)
-        for uid in (data[0].split() if data and data[0] else []):
-            typ, d = imap.uid("FETCH", uid, "(BODY.PEEK[])")
-            msg = next((email.message_from_bytes(p[1], policy=policy.default) for p in d if isinstance(p, tuple)), None)
-            if msg is None:
+        since = (datetime.date.today() - datetime.timedelta(days=max(1, hours // 24))).strftime("%d-%b-%Y")
+        for folder in MAIL_FOLDERS:
+            try:
+                if imap.select(folder)[0] != "OK":
+                    continue
+            except Exception:
                 continue
-            for row in directories:
-                if sender_matches(str(msg.get("From", "")), row["submit_url"]):
-                    links = pick_confirm_links(body_text(msg), row["submit_url"])
+            typ, data = imap.uid("SEARCH", None, "SINCE", since, "UNKEYWORD", KEYWORD)
+            for uid in (data[0].split() if data and data[0] else []):
+                typ, d = imap.uid("FETCH", uid, "(BODY.PEEK[])")
+                msg = next((email.message_from_bytes(p[1], policy=policy.default) for p in d if isinstance(p, tuple)), None)
+                if msg is None:
+                    continue
+                row = match_directory(msg, directories)
+                if row is None:
+                    continue
+                links = confirm_links_from_mail(all_mail_text(msg), row["submit_url"])
+                if not is_confirm_mail(msg, links):
+                    continue
+                ok = False
+                pg = ctx.new_page()
+                try:
+                    pg.set_default_timeout(15000)
+                    pg.goto(links[0], wait_until="domcontentloaded", timeout=30000)
+                    pg.wait_for_timeout(3000)
+                    ok = True
+                except Exception:
                     ok = False
-                    if links:
-                        pg = ctx.new_page()
-                        try:
-                            pg.goto(links[0], wait_until="domcontentloaded", timeout=30000)
-                            pg.wait_for_timeout(2500)
-                            ok = True
-                        except Exception:
-                            ok = False
-                        finally:
-                            pg.close()
+                finally:
+                    pg.close()
+                if ok:
                     imap.uid("STORE", uid, "+FLAGS", "(\\Seen %s)" % KEYWORD)
-                    done.append((row["name"], ok))
-                    break
+                done.append((row["name"], ok))
     finally:
         try:
             imap.logout()
         except Exception:
             pass
     return done
+
+
+def run_sweep(ctx, rows, state, log_path, today, state_path, dry):
+    """Open pending confirmation links; log ACCOUNT CONFIRMED; flag the directory so it is retried (log in + submit)."""
+    if not os.environ.get("CONTACT_EMAIL_PASSWORD") or (dry and not CFG["dry_signups"]):
+        return 0
+    n = 0
+    try:
+        for name, ok in check_confirmations(ctx, rows):
+            append_log(log_path, LOG_HEADER, "| %s | %s | %s | |" % (today, name, "ACCOUNT CONFIRMED (link opened)" if ok else "ERROR:confirm link failed"))
+            if ok:
+                n += 1
+                if not dry and name in state and not state[name].get("result", "").startswith(("SUBMITTED", "CONFIRMED")):
+                    state[name]["confirm_pending"] = True
+        if not dry:
+            json.dump(state, open(state_path, "w", encoding="utf-8"), indent=1)
+    except Exception as e:
+        print("inbox sweep failed:", type(e).__name__)
+    print("inbox sweep: %d confirmation links opened" % n)
+    return n
+
 
 # ---------------- state + logs ----------------
 
@@ -1318,6 +1417,8 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(viewport={"width": 1280, "height": 1600}, locale="en-US")
+        if run_sweep(ctx, rows, state, log_path, today, state_path, dry) and not dry:
+            rows, state, todo, attempts_today, successes_today = plan_run()
         for row in todo:
             if successes_today + run_ok >= TARGET_SUCCESS or time.time() - t0 > CFG["max_seconds"]:
                 break
@@ -1358,17 +1459,9 @@ def main():
                 if res.startswith("BLOCKED"):
                     append_log("ops/imran_click_list.md", CLICK_HEADER,
                                "| %s | %s | %s | %s |" % (today, row["name"], row["submit_url"], res[8:]))
-        if not dry and os.environ.get("CONTACT_EMAIL_PASSWORD"):
-            if run_ok:
-                time.sleep(75)
-            try:
-                for name, ok in check_confirmations(ctx, rows):
-                    if ok and name in state:
-                        state[name]["result"] = "CONFIRMED"
-                    append_log(log_path, LOG_HEADER, "| %s | %s | %s | |" % (today, name, "CONFIRMED" if ok else "ERROR:confirm link failed"))
-                json.dump(state, open(state_path, "w", encoding="utf-8"), indent=1)
-            except Exception as e:
-                print("confirmation check failed:", type(e).__name__)
+        if run_ok:
+            time.sleep(60)
+        run_sweep(ctx, rows, state, log_path, today, state_path, dry)
         browser.close()
     print("model_used haiku=%d deepseek=%d" % (MODEL_USED["haiku"], MODEL_USED["deepseek"]))
     if not dry:

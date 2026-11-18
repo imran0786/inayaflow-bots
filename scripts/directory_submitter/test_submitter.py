@@ -208,6 +208,27 @@ class T(unittest.TestCase):
     def test_model_json_parse(self):
         self.assertEqual(s.parse_mapping('```json {"a": "b"} ```'), {"a": "b"})
 
+    def test_confirm_links_html_and_offdomain_token(self):
+        html = '<a href="https://abc.supabase.co/auth/v1/verify?token=xyz&amp;type=signup">Confirm</a> <a href="https://agenthunter.io/unsubscribe">u</a>'
+        links = s.confirm_links_from_mail(html, "https://www.agenthunter.io")
+        self.assertTrue(links[0].startswith("https://abc.supabase.co/auth/v1/verify?token=xyz&type=signup"))
+        self.assertFalse(any("unsubscribe" in l for l in links[:1]))
+
+    def test_inbox_sweep_matcher(self):
+        from email.message import EmailMessage
+        rows = [{"name": "AgentHunter", "submit_url": "https://www.agenthunter.io"}, {"name": "Aidirs", "submit_url": "https://aidirs.best"}]
+        m = EmailMessage(); m["From"] = "AgentHunter <noreply@agenthunter.io>"; m["Subject"] = "Confirm your email"
+        self.assertEqual(s.match_directory(m, rows)["name"], "AgentHunter")
+        m2 = EmailMessage(); m2["From"] = "support@aidirs.best"; m2["Subject"] = "Confirm your email"
+        self.assertEqual(s.match_directory(m2, rows)["name"], "Aidirs")
+        m3 = EmailMessage(); m3["From"] = "hi@buildlist.io"; m3["Subject"] = "Confirm your Buildlist subscription"
+        self.assertIsNone(s.match_directory(m3, rows + [{"name": "Buildlist", "submit_url": "https://buildlist.io"}]))
+        m4 = EmailMessage(); m4["From"] = "x@evil.com"; m4["Subject"] = "Confirm your email"
+        self.assertIsNone(s.match_directory(m4, rows))
+        self.assertTrue(s.is_confirm_mail(m, ["https://agenthunter.io/auth/confirm?token=1"]))
+        self.assertFalse(s.is_confirm_mail(m, []))
+        self.assertTrue(s.can_retry({"result": "BLOCKED:captcha", "attempts": 1, "fix": s.FIX_VERSION, "confirm_pending": True}))
+
     def test_list_builder(self):
         import build_list
         md = "| 1 | FutureTools | https://x.io | AI | yes | a | b | c | note | TODO |\n| 2 | Paid | https://p.io | AI | no | a | b | c | n | PAID |\n"
