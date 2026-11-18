@@ -124,13 +124,66 @@ const qual = list.filter((a) => {
 const cands = [...new Set([...watch, ...qual.sort((a, b) => size(b) - size(a))])].slice(0, 150);
 console.log(`${which}: deep candidates ${cands.length} (watch ${watch.length})`);
 
+const LOOK = /alternative|looking for (an? )?(app|better|good|another)|switch(ed)? (to|from)|any other app|better app|used to be (good|great)|doesn'?t work anymore|no longer works?|stopped working|please update|not updated|abandoned/i;
+function looking(rev) {
+  const hit = rev.filter((r) => LOOK.test(String(r.text || '')));
+  return { lookN: rev.length, lookCount: hit.length, lookQuotes: hit.slice(0, 2).map((r) => String(r.text).replace(/\s+/g, ' ').slice(0, 160)) };
+}
 let i = 0;
 for (const a of cands) {
   const rev = await getReviews(a);
-  Object.assign(a, { deep: true, watch: WATCH.test(a.title), reviewsFetched: rev.length, ...lowShare(rev) });
+  Object.assign(a, { deep: true, watch: WATCH.test(a.title), reviewsFetched: rev.length, ...lowShare(rev), ...looking(rev) });
   const lows = rev.filter((r) => r.score <= 2 && r.t >= now - 120 * DAY).sort((x, y) => y.t - x.t);
   a.themes = await themes(a, lows.length >= 5 ? lows : rev.filter((r) => r.score <= 2));
   if (++i % 20 === 0) console.log(`${which}: deep ${i}/${cands.length}`);
+}
+// extra pass: top-3 apps of every term (not already deep) -> "still looking" phrases from recent reviews
+const byId = Object.fromEntries(list.map((a) => [a.id, a]));
+const extra = new Set();
+for (const term of TERMS) {
+  hits.filter((h) => h.term === term && h.rank <= 3).forEach((h) => { const a = byId[h.id]; if (a && !a.deep) extra.add(a.id); });
+}
+console.log(`${which}: extra review pass ${extra.size}`);
+let ex = 0;
+for (const id of extra) {
+  const a = byId[id];
+  const rev = (await getReviews(a)).slice(0, 150);
+  Object.assign(a, { reviewsFetched: rev.length, ...looking(rev) });
+  if (++ex % 50 === 0) console.log(`${which}: extra ${ex}/${extra.size}`);
+}
+
+// iOS money: price model, in-app purchase prices (best-effort from the public app page), top-grossing rank
+if (which === 'ios') {
+  const topIds = new Set();
+  for (const term of TERMS) hits.filter((h) => h.term === term && h.rank <= 5).forEach((h) => topIds.add(h.id));
+  let ok = 0, tried = 0;
+  for (const id of topIds) {
+    const a = byId[id]; if (!a) continue;
+    tried++;
+    try {
+      await sleep(DELAY);
+      const r = await fetch(`https://apps.apple.com/us/app/id${id}`, { headers: { 'user-agent': 'Mozilla/5.0 (research scan)' } });
+      if (r.ok) {
+        const html = await r.text();
+        const m = html.match(/In-App Purchases[\s\S]{0,6000}/i);
+        const prices = m ? [...m[0].matchAll(/\$\d+(?:\.\d{2})?/g)].map((x) => x[0]) : [];
+        const names = m ? [...m[0].matchAll(/"title":"([^"]{2,60})","(?:subtitle|price)/g)].map((x) => x[1]) : [];
+        a.iapPrices = [...new Set(prices)].slice(0, 12); a.iapNames = names.slice(0, 8);
+        a.iap = a.iapPrices.length > 0 || /offers in-app purchases/i.test(html);
+        ok++;
+      } else blocks++;
+    } catch (e) { errors++; }
+    if (tried % 100 === 0) console.log(`ios: money pages ${tried}/${topIds.size}`);
+  }
+  console.log(`ios: money pages ok ${ok}/${tried}`);
+  for (const a of list) a.priceModel = a.free === false || (a.price || 0) > 0 ? 'paid' : a.iap ? 'free+IAP' : 'free';
+  const cats = [undefined, 'PHOTO_AND_VIDEO', 'PRODUCTIVITY', 'UTILITIES', 'HEALTH_AND_FITNESS', 'EDUCATION', 'FINANCE', 'LIFESTYLE', 'ENTERTAINMENT', 'MUSIC', 'REFERENCE', 'BUSINESS'];
+  let gross = 0;
+  for (const c of cats) {
+    const res = await retry(() => store.list({ collection: store.collection.TOP_GROSSING_IOS, category: c ? store.category[c] : undefined, num: 200, country: 'us' }), 'grossing');
+    (res || []).forEach((x, n) => { const a = byId[String(x.id)]; if (a) { a.grossRank = Math.min(a.grossRank || 999, n + 1); a.grossCat = c || 'ALL'; gross++; } });
+  }
+  console.log(`ios: top-grossing matches ${gross}`);
 }
 fs.mkdirSync('out', { recursive: true });
 fs.writeFileSync(`out/${which}.json`, JSON.stringify({ store: which, scannedAt: new Date().toISOString(), apps: list, hits, stats: { errors, blocks, claudeCalls } }));
