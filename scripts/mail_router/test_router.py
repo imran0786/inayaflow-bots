@@ -63,7 +63,7 @@ class T(unittest.TestCase):
         self.assertIn("old", top)
         for s in ("done", "fresh", "ancient"):
             self.assertNotIn(s, top)
-        self.assertIn("DONE", out)
+        self.assertIn("completed in 24 h: 1", out)
         self.assertNotIn("promo", out)
 
     def test_audit_done_sources_and_legacy(self):
@@ -86,6 +86,38 @@ class T(unittest.TestCase):
         d = R.classify_det("hello@sideprojectors.com", "Your project has been received!", "", "", "",
                            DIRS | {"sideprojectors.com"}, OUTR | {"sideprojectors.com"}, SENT)
         self.assertEqual(d[0], "DIRECTORY_STATUS")
+
+    def test_own_mail_skipped(self):
+        d = R.classify_det("InayaFlow Team <contact@inayaflow.ai>", "watchdog all clear", "", "", "", DIRS, OUTR, SENT)
+        self.assertEqual(d[0], "NEWSLETTER_PROMO")
+
+    def test_status_words(self):
+        self.assertEqual(R.status_word("InayaFlow submission, plus get published in 1 day"), "upsell")
+        self.assertEqual(R.status_word("Launch Scheduled!"), "scheduled")
+        self.assertEqual(R.status_word("Your project has been received!"), "received")
+        self.assertEqual(R.status_word("Your listing was approved"), "approved")
+        self.assertEqual(R.status_word("Submission rejected"), "rejected")
+
+    def test_sections(self):
+        now = datetime.datetime(2026, 11, 18, 12, tzinfo=datetime.timezone.utc)
+        h = lambda n: now - datetime.timedelta(hours=n)
+        mk_ = lambda n, b, subj: {"date": h(n), "frm": "x <x@y.org>", "subj": subj, "bucket": b, "flags": []}
+        items = [mk_(5, "DIRECTORY_VERIFY", "verifyme"), mk_(5, "CREATOR_OR_PARTNER", "creatorx"),
+                 mk_(5, "JOURNALIST_REQUEST", "sosdigest"), mk_(5, "DIRECTORY_STATUS", "statusmail")]
+        out = R.build_audit(items, now, frozenset(), (), now - datetime.timedelta(hours=9))
+        p = {k: out.split("## " + k)[1].split("\n## ")[0] for k in ("NOT HANDLED", "FOR IMRAN", "DIRECTOR TODO")}
+        self.assertIn("verifyme", p["NOT HANDLED"]); self.assertNotIn("creatorx", p["NOT HANDLED"])
+        self.assertIn("creatorx", p["FOR IMRAN"])
+        self.assertIn("sosdigest", p["DIRECTOR TODO"])
+        self.assertNotIn("statusmail", out)
+
+    def test_listing_log(self):
+        import tempfile
+        p = os.path.join(tempfile.mkdtemp(), "ls.md")
+        it = [{"date": datetime.datetime(2026, 11, 18, 1, tzinfo=datetime.timezone.utc), "frm": "a <a@tinylaunch.com>", "subj": "Launch Scheduled!"}]
+        self.assertEqual(R.log_listing_status(it, p), 1)
+        self.assertEqual(R.log_listing_status(it, p), 0)
+        self.assertIn("scheduled", open(p).read())
 
     def test_stdout_has_no_sender_or_subject(self):
         buf = io.StringIO()

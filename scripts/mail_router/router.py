@@ -121,6 +121,8 @@ def classify_det(frm, subject, body, in_reply_to, references, dir_domains, outre
                  list_unsub=False):
     """Return (bucket, reason) or None. No network."""
     sd = domain_of(frm)
+    if sd == "inayaflow.ai" or sd.endswith(".inayaflow.ai"):
+        return "NEWSLETTER_PROMO", "our own automated mail"
     text = subject + " " + body[:3000]
     link_doms = {m.lower() for m in URL_RE.findall(body[:6000])}
     from_dir = dom_match(sd, dir_domains)
@@ -235,37 +237,85 @@ def fmt_row(date, frm, subj, bucket, reason, who):
     return "| %s | %s | %s | %s | %s | %s |" % (date.strftime("%m-%d %H:%M"), c(frm), c(subj), bucket, c(reason), who)
 
 
+BOT_OWNED = ("DIRECTORY_VERIFY", "OUTREACH_REPLY")
+FOR_IMRAN = ("CREATOR_OR_PARTNER", "PAYMENT_OR_LEGAL", "OTHER_NEEDS_IMRAN")
+UPSELL_RE = re.compile(r"get published in|skip the (line|queue)|fast.?track|featured|promote|upgrade|boost|sponsor", re.I)
+
+
+def status_word(subject, body=""):
+    t = subject + " " + body[:600]
+    if UPSELL_RE.search(subject):
+        return "upsell"
+    for w, rx in (("rejected", r"reject|declin|not (been )?approved|unable to (list|accept)"),
+                  ("approved", r"approv|accepted"), ("live", r"\blive\b|published|is now listed|has been listed"),
+                  ("scheduled", r"schedul"), ("received", r"received|in the queue|under review|submission")):
+        if re.search(rx, t, re.I):
+            return w
+    return "received"
+
+
 def build_audit(items, now, replied=frozenset(), acks=(), golive=None):
     """items: list of dict(date, frm, subj, bucket, flags). Returns markdown."""
     day = [i for i in items if (now - i["date"]).total_seconds() <= 86400]
     counts = {b: 0 for b in BUCKETS}
     for i in day:
         counts[i["bucket"]] = counts.get(i["bucket"], 0) + 1
-    rows, stale, legacy = [], [], []
     golive = golive or datetime.datetime.fromtimestamp(0, datetime.timezone.utc)
+    sec = {"stale": [], "imran": [], "director": [], "legacy": []}
+    done_n = 0
     for i in sorted(day, key=lambda x: x["date"], reverse=True):
-        if i["bucket"] not in ACTION:
+        bk = i["bucket"]
+        if bk not in ACTION:
             continue
-        done = bool(HANDLED_KW & set(i["flags"])) or bool(i.get("mid") and i["mid"] in replied) or is_acked(i, acks)
+        done = (bk == "DIRECTORY_STATUS" or bool(HANDLED_KW & set(i["flags"]))
+                or bool(i.get("mid") and i["mid"] in replied) or is_acked(i, acks))
+        if done:
+            done_n += 1
+            continue
         age = (now - i["date"]).total_seconds() / 3600
-        is_legacy = (not done) and i["bucket"] == "OUTREACH_REPLY" and i["date"] < golive
-        status = "DONE" if done else ("LEGACY" if is_legacy else "WAITING %.1fh" % age)
-        row = "| %s | %s | %s | %s | %s | %s |" % (i["date"].strftime("%m-%d %H:%M"), i["frm"].replace("|", "/")[:60],
-                                                    i["subj"].replace("|", "/")[:80], i["bucket"], OWNER[i["bucket"]], status)
-        rows.append(row)
-        if is_legacy:
-            legacy.append(row)
-        elif not done and age > STALE_HOURS:
-            stale.append(row)
+        row = "| %s | %s | %s | %s | %s | WAITING %.1fh |" % (i["date"].strftime("%m-%d %H:%M"), i["frm"].replace("|", "/")[:60],
+                                                             i["subj"].replace("|", "/")[:80], bk, OWNER[bk], age)
+        if bk == "OUTREACH_REPLY" and i["date"] < golive:
+            sec["legacy"].append(row)
+        elif bk in BOT_OWNED:
+            if age > STALE_HOURS:
+                sec["stale"].append(row)
+        elif bk in FOR_IMRAN:
+            sec["imran"].append(row)
+        elif bk == "JOURNALIST_REQUEST":
+            sec["director"].append(row)
     hdr = "| date (UTC) | from | subject | bucket | owner | status |\n|---|---|---|---|---|---|\n"
+    tbl = lambda r: (hdr + "\n".join(r) + "\n") if r else "None.\n"
     out = "# contact@ DAILY AUDIT\n\nUpdated %s. Last 24 h. %d mails.\n\n" % (now.strftime("%Y-%m-%d %H:%M UTC"), len(day))
-    out += "## NOT HANDLED (waiting more than %d h)\n\n" % STALE_HOURS
-    out += (hdr + "\n".join(stale) + "\n") if stale else "None.\n"
-    out += "\n## LEGACY (outreach replies received before the replier went live; not counted as missed)\n\n"
-    out += (hdr + "\n".join(legacy) + "\n") if legacy else "None.\n"
-    out += "\n## Counts per bucket (24 h)\n\n" + "\n".join("- %s: %d" % (b, n) for b, n in counts.items()) + "\n"
-    out += "\n## Every action-bucket mail (24 h)\n\n" + ((hdr + "\n".join(rows) + "\n") if rows else "None.\n")
+    out += "## NOT HANDLED (bot-owned mail waiting more than %d h: directory verify, outreach reply)\n\n%s" % (STALE_HOURS, tbl(sec["stale"]))
+    out += "\n## FOR IMRAN (creators/partners, payment/legal, other; not acknowledged)\n\n" + tbl(sec["imran"])
+    out += "\n## DIRECTOR TODO (journalist requests not acknowledged)\n\n" + tbl(sec["director"])
+    out += "\n## LEGACY (outreach replies received before the replier went live; not counted as missed)\n\n" + tbl(sec["legacy"])
+    out += "\n## DONE\n\n- action-bucket mails completed in 24 h: %d (listing-status mails count once logged to ops/listing_status.md)\n" % done_n
+    out += "\n## Counts per bucket (24 h)\n\n" + "\n".join("- %s: %d" % (k, n) for k, n in counts.items()) + "\n"
     return out
+
+
+def log_listing_status(items_with_body, path):
+    """Append each DIRECTORY_STATUS mail once (key = date|from|subject) to the private listing log."""
+    seen = set()
+    old = []
+    if os.path.exists(path):
+        for l in open(path, encoding="utf-8").read().splitlines():
+            if l.startswith("| ") and not l.startswith("| date"):
+                old.append(l)
+                seen.add(l)
+    new = []
+    for i in items_with_body:
+        c = lambda x: str(x).replace("|", "/").replace("\n", " ")[:90]
+        row = "| %s | %s | %s | %s |" % (i["date"].strftime("%Y-%m-%d %H:%M"), c(domain_of(i["frm"])), c(status_word(i["subj"], i.get("body", ""))), c(i["subj"]))
+        if row not in seen:
+            seen.add(row)
+            new.append(row)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("# Listing status log (from directory mails)\n\n| date (UTC) | directory | status | subject |\n|---|---|---|---|\n")
+        fh.write("\n".join((new + old)[:3000]) + "\n")
+    return len(new)
 
 
 def parse_flags(meta):
@@ -310,9 +360,11 @@ def main():
                 continue
             frm, subj = dec(m.get("From")), dec(m.get("Subject"))
             prior = [f[len(PREFIX):] for f in flags if f.startswith(PREFIX)]
+            if prior and domain_of(frm).endswith("inayaflow.ai"):
+                prior = ["NEWSLETTER_PROMO"]
             if ROUTED in flags and prior:
                 items.append({"date": d, "frm": frm, "subj": subj, "bucket": prior[0], "flags": flags,
-                              "mid": str(m.get("Message-ID", "")).strip()})
+                              "mid": str(m.get("Message-ID", "")).strip(), "body": body_text(m)[:600] if prior[0] == "DIRECTORY_STATUS" else ""})
                 continue
             body = body_text(m)
             irt, refs = str(m.get("In-Reply-To", "")), str(m.get("References", ""))
@@ -330,7 +382,7 @@ def main():
             if r[0] != "OK":
                 continue
             items.append({"date": d, "frm": frm, "subj": subj, "bucket": bucket, "flags": flags + [ROUTED],
-                          "mid": str(m.get("Message-ID", "")).strip()})
+                          "mid": str(m.get("Message-ID", "")).strip(), "body": body[:600] if bucket == "DIRECTORY_STATUS" else ""})
             new_rows.append(fmt_row(d, frm, subj, bucket, reason, OWNER.get(bucket, "-")))
     imap.logout()
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -342,12 +394,13 @@ def main():
     with open(logp, "w", encoding="utf-8") as fh:
         fh.write("# contact@ mail router log (newest first)\n\n| date (UTC) | from | subject | bucket | reason | who acts |\n|---|---|---|---|---|---|\n")
         fh.write("\n".join(allrows) + "\n")
+    n_status = log_listing_status([i for i in items if i["bucket"] == "DIRECTORY_STATUS"], os.path.join(OUT_DIR, "listing_status.md"))
     with open(os.path.join(OUT_DIR, "mail_audit.md"), "w", encoding="utf-8") as fh:
         fh.write(build_audit(items, now, replied, acks, go_live_dt()))
     counts = {}
     for i in items:
         counts[i["bucket"]] = counts.get(i["bucket"], 0) + 1
-    print("router: seen=%d newly_routed=%d ai_calls=%d deferred=%d" % (len(items), len(new_rows), ai_used, deferred))
+    print("router: seen=%d newly_routed=%d ai_calls=%d deferred=%d status_logged=%d" % (len(items), len(new_rows), ai_used, deferred, n_status))
     print("router: buckets " + " ".join("%s=%d" % (b, n) for b, n in sorted(counts.items())))
     return 0
 
