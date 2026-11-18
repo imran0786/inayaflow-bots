@@ -4,11 +4,11 @@ name: Email replier (link outreach)
 # The script prints counts and status codes only. Logs are kept in a PRIVATE repo
 # (imran0786/genie, branch ops-email-logs) and never written to this repo.
 #
-# SCHEDULE IS COMMENTED OUT until the secrets are in place; the Director switches it on.
+# LIVE since 18 Nov 2026 (moved from the private repo; Imran: "Yes, move them").
 
 on:
-  # schedule:
-  #   - cron: "*/5 * * * *"
+  schedule:
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       selftest:
