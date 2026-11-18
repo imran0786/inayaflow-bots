@@ -1,0 +1,139 @@
+{
+ "sites": [
+  {
+   "name": "AI Directory",
+   "url": "https://www.aidirectory.org/user-submit/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "AI Finder",
+   "url": "https://ai-finder.net/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "AI Tool For Business",
+   "url": "https://aitoolforbusiness.com/submit-ai-tool/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "AIFINDY",
+   "url": "https://aifindy.com/contacto/publica-tu-ia-en-aifindy",
+   "group": "pilot_live"
+  },
+  {
+   "name": "AIWikiTools",
+   "url": "https://aiwikitools.com/submit-a-tool/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "AiSuperSmart",
+   "url": "https://www.aisupersmart.com/submit-tool/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "Alternative.me",
+   "url": "https://alternative.me/how-to/submit-software/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "App Rater",
+   "url": "https://apprater.net/add/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "BufferApps",
+   "url": "https://bufferapps.com/beta-listing/new",
+   "group": "pilot_live"
+  },
+  {
+   "name": "Changelog",
+   "url": "https://changelog.com/news/submit",
+   "group": "pilot_live"
+  },
+  {
+   "name": "DropYourAI",
+   "url": "https://www.dropyourai.com/submit-tool",
+   "group": "pilot_live"
+  },
+  {
+   "name": "Foundr.ai",
+   "url": "https://foundr.ai/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "Fund a Maker",
+   "url": "https://fundamaker.com/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "Indie Tools",
+   "url": "https://indietools.co/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "Interested In AI",
+   "url": "https://www.interestedinai.com/submit-tool",
+   "group": "pilot_live"
+  },
+  {
+   "name": "Paxi",
+   "url": "https://paxi.ai/submit",
+   "group": "pilot_live"
+  },
+  {
+   "name": "PoweredbyAI",
+   "url": "https://poweredbyai.app/submit-tool",
+   "group": "pilot_live"
+  },
+  {
+   "name": "Prime Indies",
+   "url": "https://primeindies.com/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "Simple Lister",
+   "url": "https://simplelister.com/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "SpotTheAI",
+   "url": "https://www.spottheai.com/submit",
+   "group": "pilot_live"
+  },
+  {
+   "name": "Startup Collections",
+   "url": "https://startupcollections.com/submit-product/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "TechFaster",
+   "url": "http://techfaster.com/submit-your-company/",
+   "group": "pilot_live"
+  },
+  {
+   "name": "The AI Warehouse",
+   "url": "https://www.thewarehouse.ai/product-submission",
+   "group": "pilot_live"
+  },
+  {
+   "name": "TrackBes",
+   "url": "https://trackbes.com/submit-tool",
+   "group": "pilot_live"
+  },
+  {
+   "name": "WhatLaunched.Today",
+   "url": "https://www.whatlaunched.today",
+   "group": "pilot_live"
+  },
+  {
+   "name": "aiwith.me",
+   "url": "https://aiwith.me/zh/submit",
+   "group": "pilot_live"
+  },
+  {
+   "name": "insanelycooltools",
+   "url": "https://www.insanelycooltools.com/submit",
+   "group": "pilot_live"
+  }
+ ]
+}
