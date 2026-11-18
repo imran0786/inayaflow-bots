@@ -1,0 +1,52 @@
+name: Inbox digest (contact@, read-only)
+
+# Reads the Namecheap contact@ mailbox read-only (INBOX + Junk) and saves a list of
+# sender/subject/read-status to the PRIVATE repo branch ops-inbox-digest. Public output: counts only.
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: inbox-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build digest
+        env:
+          CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
+        run: python3 scripts/inbox_digest/digest.py
+      - name: Save digest to the private repo (ops-inbox-digest, never here)
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          set -e
+          [ -f ops/inbox_digest.md ] || { echo "no digest"; exit 0; }
+          rm -rf /tmp/push
+          if ! git clone -q --branch ops-inbox-digest --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push 2>/dev/null; then
+            git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push
+            cd /tmp/push && git checkout -q --orphan ops-inbox-digest && git rm -rq --cached . >/dev/null 2>&1 || true
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
+          fi
+          mkdir -p /tmp/push/ops && cp ops/inbox_digest.md /tmp/push/ops/inbox_digest.md
+          cd /tmp/push
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add ops/inbox_digest.md
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -q -m "ops: inbox digest"
+          git push -q origin ops-inbox-digest
+          echo "digest saved"
