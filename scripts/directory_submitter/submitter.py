@@ -358,11 +358,15 @@ def call_anthropic(user):
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("no Anthropic key")
+    # Haiku 5.5: no temperature (HTTP 400); thinking is on by default, so low effort and read only the text blocks.
     data = _post_json("https://api.anthropic.com/v1/messages",
-                      {"model": ANTHROPIC_MODEL, "max_tokens": 2000, "temperature": 0, "system": LLM_SYSTEM,
+                      {"model": ANTHROPIC_MODEL, "max_tokens": 4000, "output_config": {"effort": "low"}, "system": LLM_SYSTEM,
                        "messages": [{"role": "user", "content": user}]},
                       {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-    return data["content"][0]["text"]
+    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    if not text.strip():
+        raise RuntimeError("anthropic empty text")
+    return text
 
 
 def call_deepseek(user):
@@ -387,7 +391,7 @@ def llm_map(fields):
                 MODEL_USED["haiku"] += 1
                 return out
             except Exception as e:
-                print("  model: haiku call failed:", type(e).__name__)
+                print("  model: haiku call failed:", type(e).__name__, clean_out(getattr(e, "code", ""), 20))
     if os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("LLM_API_KEY"):
         out = parse_mapping(call_deepseek(user))
         MODEL_USED["deepseek"] += 1
@@ -658,8 +662,8 @@ def locate_form(page, row):
         else:
             break
         target, info = scan_frames(page, page, page.evaluate(EXTRACT_JS))
-    if not done() and not followed:
-        first = row["submit_url"]
+    if not done():
+        first = page.url if followed else row["submit_url"]
         base = origin_of(page.url)
         for pth in COMMON_SUBMIT_PATHS[:8]:
             u = base + pth
@@ -1007,6 +1011,22 @@ def after_verification(page, row, since, wait):
     return enter_code(page, got[1])
 
 
+def open_pending_mail(page, row):
+    """Open an unprocessed confirm / sign-in mail from this directory (last 3 days). True when something was opened or typed."""
+    try:
+        got = fetch_verification(row["submit_url"], time.time() - 3 * 86400, wait=8)
+        if not got:
+            return False
+        if got[0] == "link":
+            goto(page, got[1], 1500, 4000)
+        else:
+            enter_code(page, got[1])
+        return True
+    except Exception as e:
+        print("  pending-mail check failed:", type(e).__name__)
+        return False
+
+
 def try_login(page, row, pw):
     """The account may already exist (earlier run / dry run): log in with the same per-site password."""
     if not (visible_email(page) and page.query_selector("input[type=password]")):
@@ -1179,12 +1199,15 @@ def process(page, row, logo_path, dry, shot_path):
         target, info = locate_form(page, row)
         load_custom_options(target, info)
         reason = wall_reason(page, info)
-        if is_wall(page, info, reason):  # signed up but not signed in: confirm via any pending mail from this directory, then log in
-            try:
-                after_verification(page, row, time.time() - 3 * 86400, 8)
-            except Exception as e:
-                print("  pending-mail check failed:", type(e).__name__)
+        if is_wall(page, info, reason):  # signed up but not signed in
+            if open_pending_mail(page, row):  # confirmation / sign-in mail from this directory: open it (same browser session)
+                target, info = locate_form(page, row)
+                load_custom_options(target, info)
+                reason = wall_reason(page, info)
+        if is_wall(page, info, reason):
             why = try_login(page, row, site_password(os.environ["DIR_MASTER_KEY"], row["submit_url"]))
+            if why and "no login form" in why:  # magic-link site (no password): request a fresh sign-in link
+                why = try_signup(page, row)
             if why:
                 return "BLOCKED:" + why, "", ""
             target, info = locate_form(page, row)

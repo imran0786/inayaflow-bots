@@ -201,5 +201,39 @@ class ModelFallback(unittest.TestCase):
         self.assertEqual(r.MODEL_USED["haiku"], 1)
 
 
+class MarksEveryDecision(unittest.TestCase):
+    """Audit needs IFBotHandled on every post-go-live mail the replier decided on, even when it does not reply."""
+    def _run(self, llm_json, date):
+        import io, tempfile, contextlib, unittest.mock as mock
+        m = mk(frm="Jo <jo@thirdparty-example.org>", subj="Re: hello", irt="<CAabc@mail.gmail.com>",
+               refs="<CAabc@mail.gmail.com>", Date=date)
+        m.set_content("Our rate is $50 per link.\n> InayaFlow swap")
+        stores = []
+        class Rec(FakeImap):
+            def uid(self, cmd, *a):
+                if cmd == "STORE":
+                    stores.append(a)
+                    return "OK", []
+                return FakeImap.uid(self, cmd, *a)
+        old = os.getcwd()
+        with tempfile.TemporaryDirectory() as d:
+            os.chdir(d)
+            try:
+                with mock.patch.dict(os.environ, {"CONTACT_EMAIL_PASSWORD": "x"}),                      mock.patch.object(r.imaplib, "IMAP4_SSL", lambda *a, **k: Rec(m.as_bytes())),                      mock.patch.object(r, "llm_call", lambda *a: llm_json),                      mock.patch.object(r, "GO_LIVE_TS", 1700000000.0),                      mock.patch.dict(r.CFG, {"dry": False}),                      contextlib.redirect_stdout(io.StringIO()):
+                    r.safe_main()
+            finally:
+                os.chdir(old)
+        return stores
+
+    def test_money_deal_skip_is_marked(self):
+        stores = self._run('{"category":"MONEY_DEAL_OTHER","summary":"wants money","draft":""}', "Wed, 18 Nov 2026 12:00:00 +0000")
+        self.assertTrue(any("IFBotHandled" in str(s) for s in stores))
+        self.assertFalse(any("Answered" in str(s) for s in stores))
+
+    def test_pre_golive_not_touched(self):
+        stores = self._run('{"category":"MONEY_DEAL_OTHER","summary":"x","draft":""}', "Sun, 01 Jan 2023 12:00:00 +0000")
+        self.assertEqual(stores, [])
+
+
 if __name__ == "__main__":
     unittest.main()
