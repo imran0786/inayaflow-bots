@@ -52,7 +52,7 @@ jobs:
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           mkdir -p ops
           if git clone -q --branch ops-directory-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/logs 2>/dev/null; then
-            for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_state.json; do
+            for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_state.json directory_verify_state.json; do
               cp "/tmp/logs/ops/$f" "ops/$f" 2>/dev/null || true
             done
             echo "state restored"

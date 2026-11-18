@@ -22,6 +22,7 @@ ASSET_DIR = os.path.join(ROOT, "data", "assets")
 STATE_PATH = os.path.join(ROOT, "ops", "directory_agent_state.json")
 OLD_STATE_PATH = os.path.join(ROOT, "ops", "directory_state.json")
 SUMMARY_PATH = os.path.join(ROOT, "ops", "directory_agent_summary.md")
+VSTATE_PATH = os.path.join(ROOT, "ops", "directory_verify_state.json")  # written by scripts/directory_verify (read-only here)
 DRY = os.environ.get("DRY_RUN", "true").strip().lower() != "false"
 ALLOW_SIGNUP = os.environ.get("ALLOW_SIGNUP", "true").strip().lower() == "true"
 SITE_SECONDS = int(os.environ.get("SITE_SECONDS", "420"))
@@ -99,7 +100,7 @@ def read_mail_from_domain(directory_url, wait=90):
                 since = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
                 for folder in ("INBOX", "Junk", "INBOX.Junk", "Spam"):
                     try:
-                        if imap.select(folder, readonly=True)[0] != "OK":
+                        if imap.select(folder)[0] != "OK":  # read-write only to set the IFDirHandled keyword; BODY.PEEK never marks mail read
                             continue
                     except Exception:
                         continue
@@ -122,6 +123,10 @@ def read_mail_from_domain(directory_url, wait=90):
                         links = re.findall(r"https?://[^\s\"'<>)\]]+", text)
                         links = [l for l in links if re.search(r"verif|confirm|token|magic|auth|activate|validate|sign-?in|login|code", l, re.I)]
                         codes = re.findall(r"(?<!\d)(\d{4,8})(?!\d)", re.sub(r"https?://\S+", " ", text))
+                        try:  # tell the mail router and the verify sweeper that this mail was used in a live session
+                            imap.uid("STORE", uid, "+FLAGS", "(IFDirHandled)")
+                        except Exception:
+                            pass
                         return "MAIL FOUND. subject=%r. confirm_links=%s. codes=%s. first 400 chars of text: %s" % (
                             str(msg.get("Subject", ""))[:120], links[:3], codes[:3], re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text))[:400])
             finally:
@@ -141,7 +146,8 @@ def build_task(site):
            "Do NOT click that final button. Report READY_TO_SUBMIT." if DRY else
            "LIVE: after everything is filled in and valid, click the final submit button once, confirm the success message, report SUBMITTED.")
     signup = ("If an account is required, create one with the e-mail %s and the password in <secret:password>. Type it only with the secret tool. "
-              "If the site sends a confirmation mail, call read_confirmation_mail and use the code or link from it, then continue." % CONTACT
+              "If the account already exists (we may have signed up on an earlier visit), log in with the same e-mail and <secret:password> instead of signing up again. "
+              "If the site sends a confirmation mail or a login code, call read_confirmation_mail and use the code or link from it, then continue." % CONTACT
               if ALLOW_SIGNUP else "Do NOT create any account. If an account is required, report OTHER with 'needs account'.")
     return f"""Submit our product to the directory '{site['name']}' (start at {site['url']}). Find the page where a tool/product/startup is submitted.
 
@@ -268,11 +274,23 @@ def old_bot_verdict(result):
     return None
 
 
-def eligible(site, state, old_state, today):
+def boosted(site, state, vstate):
+    """True when the verify sweeper confirmed this site's account (or closed an expired login code) on or after our last try:
+    the 3-day wait is skipped and one extra try is allowed, so the agent logs in and finishes the listing on its next run."""
+    dom = reg_domain(urlparse(site["url"]).hostname or "")
+    when = ((vstate or {}).get("retry") or {}).get(dom)
+    if not when:
+        return False
+    e = state.get(dom) or state.get(nkey(site["name"])) or {}
+    return e.get("status") in ("OTHER", "ERROR", "TIMEOUT", "EMAIL_CODE_NOT_RECEIVED") and when >= e.get("date", "")
+
+
+def eligible(site, state, old_state, today, vstate=None):
     """True when this site may be tried today. Never retries submitted/paid/dead/social/badge/phone sites."""
     if site.get("skip"):
         return False
     keys = {nkey(site["name"]), reg_domain(urlparse(site["url"]).hostname or "")}
+    boost = boosted(site, state, vstate)
     for k in keys:
         e = state.get(k)
         if not e:
@@ -287,9 +305,9 @@ def eligible(site, state, old_state, today):
             age = (datetime.date.fromisoformat(today) - datetime.date.fromisoformat(e.get("date", "2000-01-01"))).days
         except Exception:
             age = 999
-        if age < days:
+        if age < days and not boost:
             return False
-        if st != "CAPTCHA" and e.get("tries", 1) >= MAX_TRIES:
+        if st != "CAPTCHA" and e.get("tries", 1) >= MAX_TRIES + (1 if boost else 0):
             return False
     o = old_state.get(site["name"])
     if o:
@@ -306,7 +324,7 @@ def eligible(site, state, old_state, today):
     return True
 
 
-def build_feed(state, old_state, today):
+def build_feed(state, old_state, today, vstate=None):
     cands = load_json(os.path.join(ROOT, "data", "directories_candidates.json"), {}).get("sites", [])
     feed = []
     # candidates: free_likely + their auto flag first
@@ -322,8 +340,9 @@ def build_feed(state, old_state, today):
         if k in seen:
             continue
         seen.add(k)
-        if eligible(s, state, old_state, today):
+        if eligible(s, state, old_state, today, vstate):
             out.append(s)
+    out.sort(key=lambda s: not boosted(s, state, vstate))  # stable: confirmed accounts first, they are one step from done
     return out
 
 
@@ -380,7 +399,7 @@ def main():
             sites = [s for s in sites if s["name"].lower() in only]
         untried = len(sites)
     else:
-        sites = build_feed(state, old_state, today)
+        sites = build_feed(state, old_state, today, load_json(VSTATE_PATH, {}))
         untried = len(sites)
     att0, succ0 = count_today(state, today)
     print("directory agent: model=%s fallback=%s dry=%s signup=%s %s untried=%d today attempts=%d successes=%d" % (

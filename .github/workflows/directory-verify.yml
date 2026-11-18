@@ -1,0 +1,113 @@
+name: Directory verify sweeper (confirm links + login codes)
+
+# Finishes directory sign-ups that wait on a mail in the contact@ mailbox (see scripts/directory_verify/verify.py).
+# Opens confirm links ONLY on the sending directory's own domain; closes expired login codes / sign-in links and puts
+# the site on the directory agent's retry list. Never solves CAPTCHAs, never pays, never fills forms, never sends mail,
+# never marks mail read. Flags finished mail IFDirHandled so the mail router's audit stops listing it.
+# Public repo: stdout = sender domain + outcome code + counts. Details go to the PRIVATE repo
+# (imran0786/genie, branch ops-directory-logs, ops/directory_verify_*.md|json).
+on:
+  # schedule: (switched on after the first reviewed dry run)
+  #   - cron: "13,43 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = report only (nothing opened, nothing flagged); writes ops/directory_verify_dryrun.md"
+        default: "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: directory-verify
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DRY_RUN: ${{ github.event.inputs.dry_run || (github.event_name == 'schedule' && 'false') || 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests
+        run: python3 scripts/directory_verify/test_verify.py
+
+      - name: Restore state from the private repo
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          mkdir -p ops
+          if git clone -q --branch ops-directory-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/logs 2>/dev/null; then
+            for f in directory_agent_state.json directory_verify_state.json directory_verify_log.md directory_verify_needs_human.md; do
+              cp "/tmp/logs/ops/$f" "ops/$f" 2>/dev/null || true
+            done
+            echo "state restored"
+          else
+            echo "no logs branch yet"
+          fi
+          if git clone -q --branch ops-mail-router --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/router 2>/dev/null; then
+            echo "VERIFY_EXTRA_DOMAINS=$(grep -v '^#' /tmp/router/ops/directory_domains_extra.txt 2>/dev/null | tr '\n' ' ')" >> "$GITHUB_ENV"
+          fi
+
+      - name: Sweep mail (no browser)
+        id: sweep
+        env:
+          CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
+        run: python3 scripts/directory_verify/verify.py
+
+      - name: Cache Playwright browsers
+        if: env.DRY_RUN == 'false' && steps.sweep.outputs.pending != '0' && steps.sweep.outputs.pending != ''
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.48.0-chromium-${{ runner.os }}
+
+      - name: Install Playwright + Chromium
+        if: env.DRY_RUN == 'false' && steps.sweep.outputs.pending != '0' && steps.sweep.outputs.pending != ''
+        run: |
+          python3 -m pip install -q playwright==1.48.0
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then
+            python3 -m playwright install-deps chromium >/dev/null
+          else
+            python3 -m playwright install --with-deps chromium >/dev/null
+          fi
+
+      - name: Open confirm links (directory's own domain only)
+        if: env.DRY_RUN == 'false' && steps.sweep.outputs.pending != '0' && steps.sweep.outputs.pending != ''
+        env:
+          CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
+        run: python3 scripts/directory_verify/verify.py --open 2>/dev/null
+
+      - name: Save log and state to the private repo (never here)
+        if: always()
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          set -e
+          ls ops/directory_verify_* >/dev/null 2>&1 || { echo "nothing to save"; exit 0; }
+          rm -rf /tmp/push
+          git clone -q --branch ops-directory-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push
+          mkdir -p /tmp/push/ops
+          for f in directory_verify_log.md directory_verify_state.json directory_verify_needs_human.md directory_verify_dryrun.md; do
+            [ -f "ops/$f" ] && cp "ops/$f" "/tmp/push/ops/$f" || true
+          done
+          cd /tmp/push
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add ops
+          if git diff --cached --quiet; then echo "no log changes"; exit 0; fi
+          git commit -q -m "ops: directory verify sweeper"
+          git pull -q --rebase origin ops-directory-logs 2>/dev/null || true
+          git push -q origin ops-directory-logs
+          echo "log and state saved"
