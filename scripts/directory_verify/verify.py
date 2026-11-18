@@ -49,11 +49,13 @@ LINK_BAD_RE = re.compile(r"unsubscribe|opt-?out|preferences|\.(png|jpe?g|gif|svg
                          r"billing|payment|upgrade|/plans?\b|sponsor|advertis", re.I)
 CAPTCHA_RE = re.compile(r"verify you are human|are you a robot|i'?m not a robot|just a moment|checking your browser|"
                         r"unusual traffic|captcha|attention required", re.I)
+UPSELL_RE = re.compile(r"checkout|complete your (purchase|payment|order)|\d+ ?% off|discount|coupon|upgrade (to|your)|fast.?track|"
+                       r"skip the (line|queue)|featured (listing|spot|launch)|sponsor", re.I)
 CODE_RE = re.compile(r"(?<!\d)(\d{4,8})(?!\d)")
 # site states (from the agent) where a confirmation would change nothing
 CLOSED = {"PAID", "DEAD", "SOCIAL_LOGIN_ONLY", "BADGE_REQUIRED", "PHONE_REQUIRED", "NO_FORM"}
 FINISHED = CLOSED | {"SUBMITTED", "ALREADY_LISTED", "UNCONFIRMED"}
-HANDLED_OUTCOMES = {"SKIPPED_NEWSLETTER", "SITE_CLOSED", "CONFIRMED_LINK_OPENED", "SESSION_ONLY_SITE_FINISHED", "SESSION_ONLY_EXPIRED"}
+HANDLED_OUTCOMES = {"SKIPPED_PAID_OFFER", "SKIPPED_NEWSLETTER", "SITE_CLOSED", "CONFIRMED_LINK_OPENED", "SESSION_ONLY_SITE_FINISHED", "SESSION_ONLY_EXPIRED"}
 HUMAN_OUTCOMES = {"UNKNOWN_SENDER", "LINK_OFF_DOMAIN", "NO_ACTION_FOUND", "CAPTCHA", "OPEN_FAILED"}
 
 
@@ -173,7 +175,7 @@ def link_label(u):
 
 def decide(subject, sender_dom, text, known, site_status, age_min, routed_verify=True):
     """Pure decision for one mail. Returns (outcome, link or None).
-    outcome: IGNORE | WAIT | UNKNOWN_SENDER | SKIPPED_NEWSLETTER | SITE_CLOSED | OPEN_LINK | SESSION_ONLY_SITE_FINISHED |
+    outcome: IGNORE | WAIT | UNKNOWN_SENDER | SKIPPED_NEWSLETTER | SITE_CLOSED | SKIPPED_PAID_OFFER | OPEN_LINK | SESSION_ONLY_SITE_FINISHED |
              SESSION_ONLY_EXPIRED | LINK_OFF_DOMAIN | NO_ACTION_FOUND"""
     looks_verify = bool(VERIFY_SUBJ_RE.search(subject or ""))
     if not routed_verify and not looks_verify:
@@ -196,6 +198,8 @@ def decide(subject, sender_dom, text, known, site_status, age_min, routed_verify
         if site_status in FINISHED:
             return "SESSION_ONLY_SITE_FINISHED", None
         return ("SESSION_ONLY_EXPIRED" if age_min >= SESSION_TTL_MIN else "WAIT"), None
+    if UPSELL_RE.search((subject or "") + " " + body[:1500]) and not looks_verify:
+        return "SKIPPED_PAID_OFFER", None  # unpaid checkout / discount / featured offer: we never pay, nothing to do
     if off:
         return "LINK_OFF_DOMAIN", None
     return "NO_ACTION_FOUND", None
@@ -262,8 +266,13 @@ def parse_flags(meta):
 
 
 def site_status_for(dom, agent_state):
-    e = agent_state.get(dom) or {}
-    return e.get("status")
+    """The agent keys its state by registered domain and by squashed site name; batch runs may leave only the name key."""
+    squash = re.sub(r"[^a-z0-9]", "", dom)
+    for k in (dom, squash, dom.split(".")[0]):
+        e = agent_state.get(k)
+        if e:
+            return e.get("status")
+    return None
 
 
 def main():
@@ -351,6 +360,8 @@ def main():
                     detail = "code / sign-in link belonged to a session that already ended with site status %s" % st
                 elif outcome == "SITE_CLOSED":
                     detail = "site status %s: nothing to confirm" % st
+                elif outcome == "SKIPPED_PAID_OFFER":
+                    detail = "paid checkout / discount / featured offer; never paid, not opened"
                 elif outcome == "SKIPPED_NEWSLETTER":
                     detail = "newsletter double opt-in, not needed for a listing; not opened"
                 elif outcome == "LINK_OFF_DOMAIN":

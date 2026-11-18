@@ -7,8 +7,8 @@ name: Directory verify sweeper (confirm links + login codes)
 # Public repo: stdout = sender domain + outcome code + counts. Details go to the PRIVATE repo
 # (imran0786/genie, branch ops-directory-logs, ops/directory_verify_*.md|json).
 on:
-  # schedule: (switched on after the first reviewed dry run)
-  #   - cron: "13,43 * * * *"
+  schedule:
+    - cron: "13,43 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
