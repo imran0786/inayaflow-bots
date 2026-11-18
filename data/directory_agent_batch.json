@@ -1,0 +1,13 @@
+{
+ "note": "Batch for the browser-use dry run (18 Nov): 4 sites the Playwright bot failed on + 4 new auto-submittable sites from the backlink-pilot list.",
+ "sites": [
+  {"name": "Good AI Tools", "url": "https://goodaitools.com", "group": "bot_failed"},
+  {"name": "AIMonstr", "url": "https://www.aimonstr.com", "group": "bot_failed"},
+  {"name": "Findly.tools", "url": "https://findly.tools", "group": "bot_failed"},
+  {"name": "Nick Launches", "url": "https://nicklaunches.com", "group": "bot_failed"},
+  {"name": "ToolHunter.ai", "url": "https://www.toolhunter.ai/submit-a-tool", "group": "pilot_new"},
+  {"name": "AI Tools Masters", "url": "https://aitoolsmasters.com/add-ai-tools/", "group": "pilot_new"},
+  {"name": "AIToolMall", "url": "https://aitoolmall.com/submit/", "group": "pilot_new"},
+  {"name": "Twelve.tools", "url": "https://twelve.tools/submit-your-tool", "group": "pilot_new"}
+ ]
+}

@@ -1,0 +1,86 @@
+name: Directory agent (browser-use prototype)
+
+# PROTOTYPE, manual only, NO schedule. Public repo: stdout = site names + result codes only.
+# Logs go to the PRIVATE repo (imran0786/genie, branch ops-directory-logs, ops/directory_agent_log.md).
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = stop right before the final submit"
+        default: "true"
+      allow_signup:
+        description: "true = the agent may create an account with contact@ (approved directory sign-up exception)"
+        default: "true"
+      model:
+        description: "claude-sonnet-5-5 or claude-haiku-5-5"
+        default: "claude-sonnet-5-5"
+      only:
+        description: "optional: comma-separated site names from the batch file"
+        default: ""
+      batch_file:
+        description: "batch json path in the repo"
+        default: "data/directory_agent_batch.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: directory-agent
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install browser-use (pinned)
+        run: python3 -m pip install -q 'browser-use==1.0.6' 2>&1 | tail -2
+
+      - name: Run agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
+          DIR_MASTER_KEY: ${{ secrets.DIR_MASTER_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+          ALLOW_SIGNUP: ${{ github.event.inputs.allow_signup || 'true' }}
+          AGENT_MODEL: ${{ github.event.inputs.model || 'claude-sonnet-5-5' }}
+          ONLY: ${{ github.event.inputs.only || '' }}
+          BATCH_FILE: ${{ github.event.inputs.batch_file || 'data/directory_agent_batch.json' }}
+          BROWSER_USE_SETUP_LOGGING: "false"
+          ANONYMIZED_TELEMETRY: "false"
+        run: python3 scripts/directory_agent/agent.py 2>/dev/null
+
+      - name: Save log to the private repo (never here)
+        if: always()
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          set -e
+          [ -f ops/directory_agent_log.md ] || { echo "no log written"; exit 0; }
+          rm -rf /tmp/push
+          if git clone -q --branch ops-directory-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push 2>/dev/null; then
+            :
+          else
+            git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push
+            cd /tmp/push && git checkout -q --orphan ops-directory-logs && git rm -rq --cached . >/dev/null 2>&1 || true
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
+          fi
+          mkdir -p /tmp/push/ops
+          cat ops/directory_agent_log.md >> /tmp/push/ops/directory_agent_log.md
+          cd /tmp/push
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add ops
+          if git diff --cached --quiet; then echo "no log changes"; exit 0; fi
+          git commit -q -m "ops: directory agent log"
+          git push -q origin ops-directory-logs
+          echo "log saved"
