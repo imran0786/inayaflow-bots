@@ -11,7 +11,8 @@
   "submit_url": "https://aitoolsdirectory.com/submit-tool",
   "type": "AI tools",
   "free": "yes for standard queue (\"does not charge",
-  "notes": "Skip the paid \"Fast Track\" skip-the-line. Confirm the link type before counting it."
+  "notes": "Skip the paid \"Fast Track\" skip-the-line. Confirm the link type before counting it.",
+  "skip": "Already submitted by the browser job on 18 Nov. Never submit twice."
  },
  {
   "name": "AI Tools by Neil Patel",
@@ -131,7 +132,8 @@
   "submit_url": "https://thesaasdir.com",
   "type": "SaaS",
   "free": "unknown",
-  "notes": "From the codersera aggregator."
+  "notes": "From the codersera aggregator.",
+  "skip": "Already submitted by the browser job on 18 Nov (badge site). Never submit twice."
  },
  {
   "name": "Findly.tools",
