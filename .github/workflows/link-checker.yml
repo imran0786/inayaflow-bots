@@ -1,0 +1,63 @@
+name: Link checker (are our directory listings live, and do they link to us)
+
+# Daily. GET requests only: no sign-ups, no form submits. Public log = counts only.
+# Input and output live in the PRIVATE repo (imran0786/genie, branch ops-directory-logs):
+#   reads ops/directory_agent_state.json, ops/directory_state.json, ops/directory_log.md, ops/directory_agent_log.md, ops/manual_submissions.md
+#   writes ops/live_links.md and appends ops/live_links_new.md
+on:
+  schedule:
+    - cron: "53 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: link-checker
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests
+        run: python3 scripts/link_checker/test_check.py 2>&1 | tail -3
+
+      - name: Restore logs from the private repo
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          rm -rf /tmp/logs
+          git clone -q --branch ops-directory-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/logs 2>/dev/null
+          echo "logs restored"
+
+      - name: Check listings
+        env:
+          LOGS_DIR: /tmp/logs
+        run: python3 scripts/link_checker/check.py 2>/dev/null
+
+      - name: Save results to the private repo (never here)
+        if: always()
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          cd /tmp/logs
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add ops
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -q -m "ops: link checker results"
+          git pull -q --rebase origin ops-directory-logs 2>/dev/null || true
+          git push -q origin ops-directory-logs
+          echo "results saved"
