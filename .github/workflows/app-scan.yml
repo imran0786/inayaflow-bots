@@ -1,0 +1,91 @@
+name: App scan (Google Play + App Store, free)
+
+# Free scrapers (npm). Public log = counts only. Results go to the PRIVATE repo branch ops-app-research.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+        working-directory: scripts/app_scan
+      - name: Scan Google Play
+        working-directory: scripts/app_scan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scan.mjs play
+      - uses: actions/upload-artifact@v4
+        with:
+          name: play-json
+          path: scripts/app_scan/out/play.json
+          retention-days: 1
+  ios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+        working-directory: scripts/app_scan
+      - name: Scan App Store
+        working-directory: scripts/app_scan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scan.mjs ios
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-json
+          path: scripts/app_scan/out/ios.json
+          retention-days: 1
+  combine:
+    needs: [play, ios]
+    if: ${{ always() && (needs.play.result == 'success' || needs.ios.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          path: scripts/app_scan/out
+          merge-multiple: true
+      - name: Score
+        working-directory: scripts/app_scan
+        run: node score.mjs
+      - name: Save to the private repo (ops-app-research, never here)
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          set -e
+          rm -rf /tmp/push
+          if ! git clone -q --branch ops-app-research --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push 2>/dev/null; then
+            git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push
+            cd /tmp/push && git checkout -q --orphan ops-app-research && git rm -rq --cached . >/dev/null 2>&1 || true
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
+          fi
+          D=/tmp/push/research/app-scan-2026-11-18
+          mkdir -p $D
+          cp scripts/app_scan/out/*.json scripts/app_scan/out/scored.csv scripts/app_scan/out/giants.csv scripts/app_scan/out/summary.md $D/
+          cd /tmp/push
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add research
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -q -m "research: app scan 2026-11-18"
+          git push -q origin ops-app-research
+          echo "saved"
