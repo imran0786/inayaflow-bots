@@ -243,15 +243,22 @@ UPSELL_RE = re.compile(r"get published in|skip the (line|queue)|fast.?track|feat
 
 
 def status_word(subject, body=""):
-    t = subject + " " + body[:600]
     if UPSELL_RE.search(subject):
         return "upsell"
+    for t in (subject, subject + " " + body[:600]):
+        w = _status_in(t)
+        if w:
+            return w
+    return "received"
+
+
+def _status_in(t):
     for w, rx in (("rejected", r"reject|declin|not (been )?approved|unable to (list|accept)"),
                   ("approved", r"approv|accepted"), ("live", r"\blive\b|published|is now listed|has been listed"),
                   ("scheduled", r"schedul"), ("received", r"received|in the queue|under review|submission")):
         if re.search(rx, t, re.I):
             return w
-    return "received"
+    return None
 
 
 def build_audit(items, now, replied=frozenset(), acks=(), golive=None):
