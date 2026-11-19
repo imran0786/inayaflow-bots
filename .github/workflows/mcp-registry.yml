@@ -1,0 +1,43 @@
+name: Publish to the MCP Registry (manual)
+
+# Lists our public plugin server (https://inayaflow.ai/api/mcp) in the official MCP Registry
+# (registry.modelcontextprotocol.io). No secrets: GitHub OIDC proves the io.github.imran0786 namespace.
+# Run by hand after changing mcp-registry/server.json (bump "version" every time).
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      MCP_PUBLISHER_VERSION: v1.8.1
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Download and verify mcp-publisher
+        run: |
+          set -euo pipefail
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          mv mcp-publisher mcp-registry/
+      - name: Log in (GitHub OIDC)
+        working-directory: mcp-registry
+        run: ./mcp-publisher login github-oidc
+      - name: Publish
+        working-directory: mcp-registry
+        run: ./mcp-publisher publish
+      - name: Check the listing
+        run: curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.imran0786/tiktok-scripts" | head -c 1500
