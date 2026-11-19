@@ -87,7 +87,7 @@ def main():
     work = c.clone()
     path = os.path.join(work, OUT)
     try:
-        url, anon, tok = os.environ.get("SUPABASE_URL", ""), os.environ.get("SUPABASE_ANON_KEY", ""), os.environ.get("FUNNEL_READ_TOKEN", "")
+        url, anon, tok = (os.environ.get(n, "").strip() for n in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "FUNNEL_READ_TOKEN"))
         missing = [n for n, v in (("SUPABASE_URL", url), ("SUPABASE_ANON_KEY", anon), ("FUNNEL_READ_TOKEN", tok)) if not v]
         if missing:
             c.write_text(path, not_set_up(missing))
@@ -105,7 +105,7 @@ def main():
         saved = c.commit_push("ops: daily funnel numbers")
         print("funnel: days=%d saved=%s dry=%s" % (len(data["days"]), saved, c.DRY))
     except Exception as e:
-        print("funnel: FAILED %s" % type(e).__name__)
+        print("funnel: FAILED %s %s" % (type(e).__name__, getattr(e, "code", "")))
         try:
             c.error_notice(path, "daily funnel numbers", e)
             c.commit_push("ops: funnel error notice")
