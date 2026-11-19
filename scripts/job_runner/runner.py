@@ -497,7 +497,7 @@ def run_deepseek(job):
 def git(*args, check=True, cwd=None):
     r = subprocess.run(["git", "-C", cwd or WORK, *args], capture_output=True, text=True)
     if check and r.returncode != 0:
-        raise RuntimeError("git %s failed" % args[0])
+        raise RuntimeError("git %s failed: %s" % (args[0], re.sub(r"x-access-token:[^@]*@", "", (r.stderr or "").strip().splitlines()[-1] if (r.stderr or "").strip() else "")[:60]))
     return r
 
 
@@ -690,6 +690,8 @@ def process(name, spend, today):
             maker = "Claude"
         except Exception as e:
             err = "HTTP %d" % e.code if isinstance(e, urllib.error.HTTPError) else type(e).__name__
+            if type(e) is RuntimeError:      # raised by this file only: short fixed texts, never a secret
+                err = "RuntimeError: %s" % str(e)[:80]
             if DEEPSEEK_ON and os.environ.get("DEEPSEEK_API_KEY"):
                 try:
                     status, text, meter = run_deepseek(job)
