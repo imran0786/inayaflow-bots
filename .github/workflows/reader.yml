@@ -1,0 +1,33 @@
+name: Reader (read contact@ mail on request, read-only)
+
+# Public repo: the script prints counts only.
+# Requests are JSON files in the PRIVATE repo imran0786/genie, branch ops-outbox, reader/requests/;
+# results are written to reader/results/<id>.md there. INBOX + Junk, nothing is marked read.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reader
+  cancel-in-progress: false
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch requested messages
+        env:
+          CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          cd scripts/outbox && python3 read.py
