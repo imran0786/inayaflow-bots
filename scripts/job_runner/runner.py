@@ -17,6 +17,7 @@ BRANCH = "ops-jobs"
 WORK = os.environ.get("JOBS_WORK", "/tmp/ops_jobs")
 GENIE_MAIN = os.environ.get("GENIE_MAIN_WORK", "/tmp/genie_main")
 CODE_WORK = os.environ.get("CODE_WORK", "/tmp/genie_code")           # working copy for "code" jobs (new branch only)
+CODE_GIT = os.environ.get("CODE_GIT_DIR", CODE_WORK + "_gitdir")      # git data for code jobs: never inside the working copy, never mounted in the container
 CODE_JOB_CAP = float(os.environ.get("CODE_JOB_COST_CAP", "2.00"))     # default per code job (Sonnet)
 CODE_TURNS = int(os.environ.get("CODE_MAX_TURNS", "70"))
 CODE_SECONDS = int(os.environ.get("CODE_JOB_SECONDS", "1500"))
@@ -26,7 +27,10 @@ MAX_TEST_RUNS = 6
 CODE_ROLE_ON = os.environ.get("CODE_ROLE_ON", "false").strip().lower() == "true"
 PREVIEW_PATTERN = "https://genie-git-%s-agentwork.vercel.app"         # Vercel's branch address for this project (expected, not checked here)
 # A code job may never write these (SQL, deploy settings, CI, secrets, git internals):
-FORBIDDEN_PATHS = r"^(\.env|\.git/|\.github/|\.vercel/|vercel\.json|supabase/|ops/|node_modules/|package-lock\.json$|.*\.(pem|key)$)"
+# A code job may also never change what decides how the app is BUILT (a robot branch must not be able to run its own build steps):
+FORBIDDEN_PATHS = (r"^(\.env|\.git($|/)|\.gitmodules$|\.gitattributes$|\.github/|\.vercel/|vercel\.json|supabase/|ops/|node_modules/"
+                   r"|package\.json$|package-lock\.json$|\.npmrc$|\.nvmrc$|next\.config\.|tsconfig[^/]*\.json$|postcss\.config\.|tailwind\.config\."
+                   r"|eslint\.config\.|babel\.config\.|\.babelrc|instrumentation\.|.*\.(pem|key)$)")
 PLUGIN_PATHS = r"^(lib/plugin|lib/chatgptPlugin|app/api/mcp/|chatgpt-plugin/)"
 MAX_JOBS = int(os.environ.get("MAX_JOBS_PER_RUN", "3"))
 DAILY_CAP = float(os.environ.get("DAILY_COST_CAP", "3.00"))
@@ -62,7 +66,8 @@ How to work:
   (repo 'docs') that matter. Before changing a file, search the tests folder for its name and read those tests.
 - Make ONLY the change the brief asks for, as small as possible. Match the code around it. No drive-by clean-ups.
 - Use edit_file for small changes and write_file for new files. You cannot write: .env files, .github/, vercel.json,
-  supabase/ (SQL), ops/, package-lock.json. If the job needs one of those, stop and say so in the result.
+  supabase/ (SQL), ops/, package.json, package-lock.json, next.config.*, tsconfig, postcss/tailwind/eslint config.
+  If the job needs one of those, stop and say so in the result.
 - Run run_tests after your change. The baseline (tests on main before your change) is given in the brief message; main
   has a few old failures. Report new failures honestly; fix the ones your change caused; never edit a test just to make it pass.
 - If you touch plugin files (lib/plugin*, lib/chatgptPlugin*, app/api/mcp, chatgpt-plugin/), the plugin tools/list hash
@@ -137,14 +142,17 @@ def parse_brief(text, fallback_id=""):
     except ValueError:
         searches = MAX_SEARCHES
     asked = {a.strip().lower() for a in re.split(r"[,;]", meta.get("allowed", "read, write_result")) if a.strip()}
+    no_web = role in ("code", "code-read") and "web" in asked     # a job that reads or writes app code never gets the web
+    if no_web:
+        asked.discard("web")
     return {"id": jid, "role": role, "model": model, "asked_cost": cap, "branch": meta.get("branch", "robot/" + jid) if is_code else "",
             "max_cost": max(0.01, min(cap, DAILY_CAP if is_code else HARD_JOB_CAP)), "max_searches": max(0, min(searches, 10)),
-            "allowed": sorted(asked & ALLOWED_ACTIONS), "refused_actions": sorted(asked - ALLOWED_ACTIONS),
+            "allowed": sorted(asked & ALLOWED_ACTIONS), "refused_actions": sorted(asked - ALLOWED_ACTIONS) + (["web (never for code roles)"] if no_web else []),
             "output": re.sub(r"[^A-Za-z0-9._-]", "-", meta.get("output", ""))[:80], "body": body.strip()}
 
 
 def validate(job):
-    if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", job["id"] or ""):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", job["id"] or ""):   # must start with a letter or digit: never "." or ".."
         return "bad id"
     if job["role"] not in ROLES:
         return "unknown role"
@@ -282,7 +290,8 @@ def parse_tests(out):
 
 
 def docker_node(args, network, timeout):
-    """Run a node/npm command on the working copy inside a container: no secrets, no host process list, optional network."""
+    """Run a node/npm command on the working copy inside a container: no secrets, no host process list, optional network.
+    Only CODE_WORK is mounted. The git data (CODE_GIT) is outside it, so nothing in the container can reach hooks or git config."""
     cmd = ["docker", "run", "--rm", "--user", "%d:%d" % (os.getuid(), os.getgid()), "-e", "HOME=/tmp", "-e", "CI=true", "-e", "npm_config_cache=/tmp/.npm",
            "-v", "%s:/w" % CODE_WORK, "-w", "/w"] + ([] if network else ["--network", "none"]) + [NODE_IMAGE] + args
     try:
@@ -383,7 +392,7 @@ def build_tools(job):
 
 class Meter:
     def __init__(self, model):
-        self.m, self.cost, self.tin, self.tout, self.searches, self.calls = MODELS[model], 0.0, 0, 0, 0, 0
+        self.m, self.cost, self.tin, self.tout, self.searches, self.calls, self.last_in = MODELS[model], 0.0, 0, 0, 0, 0, 0
 
     def add(self, usage):
         u = usage or {}
@@ -394,6 +403,7 @@ class Meter:
         pcr = self.m.get("cache_read", pin * 0.1) * (pin / self.m["in"] if self.m["in"] else 1)
         self.cost += (fresh * pin + cr * pcr + cw * pin * 1.25 + out * pout) / 1e6 + s * SEARCH_PRICE
         self.tin += fresh + cr + cw
+        self.last_in = fresh + cr + cw
         self.tout += out
         self.searches += s
         self.calls += 1
@@ -405,12 +415,27 @@ def post_json(url, body, headers, timeout=180):
         return json.load(r)
 
 
-def run_claude(job, post=post_json, clock=time.time):
-    """Agent loop. Returns (status, result_text, meter). status: DONE | COST_CAP | TURN_CAP | TIME_CAP | REFUSED | NO_RESULT"""
+def affordable_tokens(job, meter, prompt_chars, last_in):
+    """How many output tokens the next request may ask for so the job cannot pass its cap, or 0 when the next turn does
+    not fit. Counts the whole prompt at the full (uncached) price and keeps money back for web searches and fetched pages."""
+    m = meter.m
+    est_in = max(int(last_in * 1.15), int(prompt_chars / 3))          # ~3 characters per token: rounds the estimate UP
+    long_ = est_in > 100000
+    pin, pout = (m["long_in"], m["long_out"]) if long_ else (m["in"], m["out"])
+    reserve = 0.0
+    if "web" in job["allowed"]:
+        reserve = max(0, job["max_searches"] - meter.searches) * SEARCH_PRICE + 8 * 12000 * pin / 1e6     # searches still possible + pages fetched inside the turn
+    left = job["max_cost"] - meter.cost - reserve - est_in * pin / 1e6
+    return int(left / pout * 1e6) if pout and left > 0 else 0
+
+
+def run_claude(job, post=post_json, clock=time.time, meter=None):
+    """Agent loop. Returns (status, result_text, meter). status: DONE | COST_CAP | TURN_CAP | TIME_CAP | REFUSED | NO_RESULT.
+    Pass `meter` to keep the spend of the calls already made when a later call raises."""
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("no ANTHROPIC_API_KEY")
-    meter = Meter(job["model"])
+    meter = meter or Meter(job["model"])
     headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
     system = build_system(job)
     first = "JOB BRIEF (id %s):\n\n%s" % (job["id"], job["body"])
@@ -425,8 +450,13 @@ def run_claude(job, post=post_json, clock=time.time):
             return "COST_CAP", last_text, meter
         if clock() - t0 > seconds:
             return "TIME_CAP", last_text, meter
+        # before the turn: only ask for as many output tokens as the rest of the budget can pay for
+        want = 16000 if job["role"] == "code" else 8000
+        can = affordable_tokens(job, meter, len(system) + len(json.dumps(messages)) + len(json.dumps(tools)), meter.last_in)
+        if can < 1500:
+            return "COST_CAP", last_text, meter
         # top-level cache_control = automatic prompt caching: each turn re-reads the earlier turns at the cache price
-        body = {"model": meter.m["id"], "max_tokens": 16000 if job["role"] == "code" else 8000, "cache_control": {"type": "ephemeral"},
+        body = {"model": meter.m["id"], "max_tokens": min(want, can), "cache_control": {"type": "ephemeral"},
                 "output_config": {"effort": "low" if job["model"] == "haiku" else "medium"},
                 "system": system, "tools": tools, "messages": messages}
         data = post("https://api.anthropic.com/v1/messages", body, headers)
@@ -527,6 +557,36 @@ def clone_genie_main():
     subprocess.run(["rm", "-rf", os.path.join(GENIE_MAIN, ".git")])
 
 
+def code_git(*args, check=True, with_token_url=False):
+    """Host git for code jobs. The model's code and the tests can write anything inside CODE_WORK, so this call trusts
+    NOTHING in there: git data is in CODE_GIT (outside, never mounted in the container), hooks and the file-system
+    monitor are switched off on the command line, no user or system git config is read, and the environment holds
+    no API key and no token (the push URL is the only place the token appears)."""
+    env = {"PATH": os.environ.get("PATH", ""), "HOME": CODE_GIT + "_home", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+           "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"}
+    if os.environ.get("SYSTEMROOT"):
+        env["SYSTEMROOT"] = os.environ["SYSTEMROOT"]     # Windows needs it to start a program (unit tests)
+    cmd = ["git", "--git-dir=" + CODE_GIT, "--work-tree=" + CODE_WORK, "-c", "core.hooksPath=" + os.devnull, "-c", "core.fsmonitor=false",
+           "-c", "core.untrackedCache=false", "-c", "protocol.ext.allow=never", "-c", "credential.helper=", *args]
+    r = subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=os.path.dirname(CODE_GIT) or "/")
+    if check and r.returncode != 0:
+        raise RuntimeError("git %s failed" % args[0])
+    return r
+
+
+def drop_planted_git():
+    """Remove a `.git` file or folder that appeared INSIDE the working copy (the runner never puts one there)."""
+    planted = os.path.join(CODE_WORK, ".git")
+    if os.path.islink(planted) or os.path.isfile(planted):
+        os.remove(planted)
+        return True
+    if os.path.isdir(planted):
+        import shutil
+        shutil.rmtree(planted, ignore_errors=True)
+        return True
+    return False
+
+
 def _token_url():
     return "https://x-access-token:%s@github.com/%s.git" % (os.environ.get("GENIE_LOGS_TOKEN", ""), PRIVATE)
 
@@ -535,20 +595,22 @@ def prepare_code(job):
     """Fresh working copy of main, WITHOUT the token on disk, dependencies installed, baseline tests run."""
     if not os.environ.get("GENIE_LOGS_TOKEN"):
         raise RuntimeError("no GENIE_LOGS_TOKEN")
-    subprocess.run(["rm", "-rf", CODE_WORK])
+    subprocess.run(["rm", "-rf", CODE_WORK, CODE_GIT])
     # cwd outside the checked-out bots repo: its local git config carries the Actions token header for THIS repo only
     r = subprocess.run(["git", "ls-remote", "--heads", _token_url(), job["branch"]], capture_output=True, text=True, cwd=os.path.dirname(CODE_WORK) or "/")
     if r.returncode != 0:
         raise RuntimeError("cannot reach the app repo")
     if r.stdout.strip():
         return "branch already exists"
-    if subprocess.run(["git", "clone", "-q", "--depth", "1", _token_url(), CODE_WORK], capture_output=True, text=True, cwd=os.path.dirname(CODE_WORK) or "/").returncode != 0:
+    if subprocess.run(["git", "clone", "-q", "--depth", "1", "--separate-git-dir", CODE_GIT, _token_url(), CODE_WORK],
+                      capture_output=True, text=True, cwd=os.path.dirname(CODE_WORK) or "/").returncode != 0:
         raise RuntimeError("clone failed")
-    git("remote", "set-url", "origin", "https://github.com/%s.git" % PRIVATE, cwd=CODE_WORK)   # the token never stays in the working copy
-    git("config", "user.name", "inayaflow-bot", cwd=CODE_WORK)
-    git("config", "user.email", "contact@inayaflow.ai", cwd=CODE_WORK)
-    job["_base"] = git("rev-parse", "--short", "HEAD", cwd=CODE_WORK).stdout.strip()
-    git("checkout", "-q", "-b", job["branch"], cwd=CODE_WORK)
+    os.remove(os.path.join(CODE_WORK, ".git"))      # the pointer file: from here on the working copy holds no git data at all
+    code_git("remote", "set-url", "origin", "https://github.com/%s.git" % PRIVATE)   # the token is not kept on disk
+    code_git("config", "user.name", "inayaflow-bot")
+    code_git("config", "user.email", "contact@inayaflow.ai")
+    job["_base"] = code_git("rev-parse", "--short", "HEAD").stdout.strip()
+    code_git("checkout", "-q", "-b", job["branch"])
     code, out = docker_node(["npm", "ci", "--no-audit", "--no-fund", "--ignore-scripts"], True, 900)
     if code != 0:
         return "npm ci failed (exit %d)" % code
@@ -559,9 +621,13 @@ def prepare_code(job):
 def finish_code(job):
     """Commit the working copy to the NEW branch and push ONLY that branch. Returns a dict for the result file."""
     info = {"branch": job["branch"], "base": job.get("_base", "?"), "pushed": False, "commit": "", "files": [], "note": ""}
-    git("add", "-A", cwd=CODE_WORK)
-    names = [n for n in git("diff", "--cached", "--name-only", cwd=CODE_WORK).stdout.split("\n") if n.strip()]
+    planted = drop_planted_git()
+    code_git("add", "-A")
+    names = [n for n in code_git("diff", "--cached", "--name-only").stdout.split("\n") if n.strip()]
     info["files"] = names
+    if planted:
+        info["note"] = "REFUSED TO PUSH: a .git file or folder appeared inside the working copy (removed, nothing ran)"
+        return info
     if not names:
         info["note"] = "no file was changed, nothing pushed"
         return info
@@ -572,12 +638,12 @@ def finish_code(job):
     if not re.fullmatch(r"robot/[A-Za-z0-9._-]{1,70}", job["branch"]) or job["branch"] in ("main", "master"):
         info["note"] = "REFUSED TO PUSH: bad branch name"
         return info
-    info["stat"] = git("diff", "--cached", "--stat", cwd=CODE_WORK).stdout.strip()[-3000:]
+    info["stat"] = code_git("diff", "--cached", "--stat").stdout.strip()[-3000:]
     info["plugin_files"] = [n for n in names if re.search(PLUGIN_PATHS, n)]
-    git("commit", "-q", "-m", "robot: %s (cloud code job %s, Claude Sonnet on the API; not reviewed)" % (job["branch"], job["id"]), cwd=CODE_WORK)
-    info["commit"] = git("rev-parse", "--short", "HEAD", cwd=CODE_WORK).stdout.strip()
+    code_git("commit", "-q", "--no-verify", "-m", "robot: %s (cloud code job %s, Claude Sonnet on the API; not reviewed)" % (job["branch"], job["id"]))
+    info["commit"] = code_git("rev-parse", "--short", "HEAD").stdout.strip()
     # explicit refspec: this can only ever create refs/heads/robot/<name>
-    r = subprocess.run(["git", "-C", CODE_WORK, "push", "-q", _token_url(), "HEAD:refs/heads/%s" % job["branch"]], capture_output=True, text=True)
+    r = code_git("push", "-q", "--no-verify", _token_url(), "HEAD:refs/heads/%s" % job["branch"], check=False)
     info["pushed"] = r.returncode == 0
     if not info["pushed"]:
         info["note"] = "push failed (the token may not be allowed to push branches)"
@@ -596,7 +662,7 @@ def code_report(job, info):
          "- New failures (fail now, passed on main): %s." % ("; ".join(new) if new else ("none" if now_t and now_t.get("tests") is not None else "unknown")),
          "- Plugin files changed: %s.%s" % (", ".join(info.get("plugin_files") or []) or "no",
                                            " The plugin tools/list hash test is part of npm test: check the lines above before any go-live." if info.get("plugin_files") else ""),
-         "- Preview (expected address, NOT checked by the robot): %s" % (PREVIEW_PATTERN % slug if info["pushed"] else "none"),
+         "- Preview: robot branches are meant NOT to build on Vercel before code QA. After QA passes, the Director pushes the same commit under a normal branch name to get a preview. (If the Vercel skip rule for robot/* is not set yet, a preview may exist at %s : do not open it with real data before QA.)" % (PREVIEW_PATTERN % slug if info["pushed"] else "-"),
          "- Not done by the robot: code QA, merge, deploy, SQL, Vercel settings. main was not touched.", "",
          "Changed files:", "", "```", info.get("stat") or "(none)", "```", ""]
     return "\n".join(L)
@@ -664,14 +730,24 @@ def status_line(job_id, status, meter, maker):
     write("jobs/status.md", "\n".join(lines[:4] + lines[4:][-500:]) + "\n" + line)
 
 
+def safe_name(*candidates):
+    """First candidate that is a plain file name (letters, digits, dot, dash, underscore, max 80), else 'job'."""
+    for c_ in candidates:
+        n = re.sub(r"[^A-Za-z0-9._-]", "-", str(c_ or ""))[:80].strip(".-")
+        if n:
+            return n
+    return "job"
+
+
 def process(name, spend, today):
     """Run one pending brief. Returns (status, cost)."""
     src = os.path.join(WORK, "jobs", "pending", name)
     job = parse_brief(open(src, encoding="utf-8", errors="replace").read(), name[:-3])
+    shown_id = safe_name(job["id"], name[:-3])      # the id as it may be written into file names and the status table
     bad = validate(job)
     meter, maker = None, "nobody"
     if bad:
-        status, doc = "BAD_BRIEF", "# Result: %s\n\n- Status: BAD_BRIEF (%s). Nothing was run. Fix the brief and submit it under a new id.\n" % (job["id"] or name, bad)
+        status, doc = "BAD_BRIEF", "# Result: %s\n\n- Status: BAD_BRIEF (%s). Nothing was run. Fix the brief and submit it under a new id.\n" % (shown_id, bad)
     else:
         if job["role"] == "code-read":
             clone_genie_main()
@@ -680,12 +756,13 @@ def process(name, spend, today):
             return "WAIT", 0.0     # stays in pending: a code job never runs on a shrunken budget
         job["max_cost"] = min(job["max_cost"], left)
         note, code_info = "", None
+        meter = Meter(job["model"])          # made here so the spend survives an error in the middle of the job
         try:
             problem = prepare_code(job) if job["role"] == "code" else None
             if problem:
-                status, text, meter = "CODE_SETUP_FAILED", problem, Meter(job["model"])
+                status, text = "CODE_SETUP_FAILED", problem
             else:
-                status, text, meter = run_claude(job)
+                status, text, meter = run_claude(job, meter=meter)
                 if job["role"] == "code":
                     if status == "DONE" and not job.get("_tests"):
                         job["_tests"] = run_app_tests()      # the helper forgot: the runner records the numbers anyway
@@ -699,22 +776,24 @@ def process(name, spend, today):
             err = "HTTP %d" % e.code if isinstance(e, urllib.error.HTTPError) else type(e).__name__
             if type(e) is RuntimeError:      # raised by this file only: short fixed texts, never a secret
                 err = "RuntimeError: %s" % str(e)[:80]
+            # `meter` still holds every Claude call that was paid for before the error: it is never replaced
             if DEEPSEEK_ON and os.environ.get("DEEPSEEK_API_KEY"):
                 try:
-                    status, text, meter = run_deepseek(job)
-                    maker, note = "DeepSeek", "Claude failed with %s" % err
+                    status, text, ds = run_deepseek(job)
+                    maker, note = "DeepSeek", "Claude failed with %s after $%.4f; DeepSeek tokens %d in / %d out" % (err, meter.cost, ds.tin, ds.tout)
                 except Exception as e2:
-                    status, text, meter, note = "ERROR", "", Meter(job["model"]), "Claude: %s; DeepSeek: %s" % (err, type(e2).__name__)
+                    status, text, note = "ERROR", "", "run: %s; DeepSeek: %s" % (err, type(e2).__name__)
             else:
-                status, text, meter, note = "ERROR", "", Meter(job["model"]), "Claude: %s; DeepSeek backup is switched off, no fallback" % err
+                status, text, note = "ERROR", "", "run: %s; DeepSeek backup is switched off, no fallback" % err
+                maker = "Claude" if meter.calls else "nobody"
         doc = result_doc(job, status, text, meter, maker, note)
-    out_name = (job["output"] or job["id"] or name[:-3])
+    out_name = safe_name(job["output"] if not bad else "", shown_id)
     out_name = out_name if out_name.endswith(".md") else out_name + ".md"
     folder = "done" if status == "DONE" else "failed"
     write("jobs/%s/%s" % (folder, out_name), doc)
     os.makedirs(os.path.join(WORK, "jobs", "briefs"), exist_ok=True)
-    os.replace(src, os.path.join(WORK, "jobs", "briefs", name))
-    status_line(job["id"] or name, status, meter, maker)
+    os.replace(src, os.path.join(WORK, "jobs", "briefs", safe_name(name[:-3]) + ".md"))
+    status_line(shown_id, status, meter, maker)
     return status, (meter.cost if meter else 0.0)
 
 

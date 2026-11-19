@@ -241,7 +241,8 @@ class Batch(unittest.TestCase):
                            "b.com": {"status": "sent", "date": "2026-11-13", "followup_due": "2026-11-20", "to": "ed@b.com", "id": "j", "subject": "S"},
                            "r.com": {"status": "sent", "date": "2026-11-12", "followup_due": "2026-11-19", "to": "ed@r.com", "id": "k", "subject": "S"},
                            "d.com": {"status": "sent", "date": "2026-11-12", "followup_due": "2026-11-19", "to": "ed@d.com", "id": "l", "subject": "S", "followup_id": "x"}}}
-        due = bb.due_followups(st, {"r.com": "2026-11-15"}, "2026-11-19")
+        bb.mark_replies(st, {"domains": {"r.com": "2026-11-15"}, "addresses": {}})
+        due = bb.due_followups(st, "2026-11-19")
         self.assertEqual([k for k, _e in due], ["a.com"])
         self.assertEqual(st["outreach"]["r.com"]["status"], "replied")
 

@@ -471,33 +471,108 @@ def outbox_id(kind, key, day):
     return re.sub(r"[^A-Za-z0-9._-]", "-", "%s-robot-%s-%s" % (day, kind, key))[:80]
 
 
-def replied_domains(replier_log, inbox_digest):
-    """{domain: latest date string seen} from the replier log and the inbox digest (best effort)."""
-    out = {}
+FREEMAIL = {"gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "yahoo.com", "icloud.com", "me.com", "aol.com",
+            "proton.me", "protonmail.com", "gmx.com", "mail.com", "zoho.com", "yandex.com", "msn.com"}
+
+
+def replied_index(replier_log, inbox_digest):
+    """{"domains": {registered domain: latest date}, "addresses": {full address: latest date}} from the replier log
+    (domains only) and the inbox digest (full sender addresses). Best effort, read-only."""
+    doms, addrs = {}, {}
     for r in c.md_rows(replier_log):
         if len(r) >= 3 and r[2].upper() != "AUTO_ACK":
-            out[c.reg_domain(r[1])] = max(out.get(c.reg_domain(r[1]), ""), r[0])
+            d = c.reg_domain(r[1])
+            doms[d] = max(doms.get(d, ""), r[0])
     year = c.today()[:4]
     for r in c.md_rows(inbox_digest):
         if len(r) >= 3:
-            m = re.search(r"@([A-Za-z0-9.-]+)", r[2])
+            m = re.search(EMAIL_RE, r[2])
             if m:
-                d = c.reg_domain(m.group(1))
-                out[d] = max(out.get(d, ""), "%s-%s" % (year, r[0][:5]))
-    return out
+                a = m.group(0).lower()
+                if a.endswith("@" + OWN):
+                    continue
+                when = "%s-%s" % (year, r[0][:5])
+                addrs[a] = max(addrs.get(a, ""), when)
+                d = c.reg_domain(a.split("@")[-1])
+                doms[d] = max(doms.get(d, ""), when)
+    return {"domains": doms, "addresses": addrs}
 
 
-def due_followups(state, replied, today):
-    out = []
-    for k, e in sorted(state.get("outreach", {}).items()):
-        if e.get("status") != "sent" or e.get("followup_id") or not e.get("followup_due") or e["followup_due"] > today:
-            continue
-        doms = {k, c.reg_domain(e.get("to", "").split("@")[-1])}
-        if any(replied.get(d, "") >= e.get("date", "9999") for d in doms):
+def has_replied(key, entry, replied):
+    """True when mail came back since we wrote: from the SITE's domain, from the domain of the address we wrote to,
+    or from that exact address. Free-mail domains (gmail ...) count only by the exact address."""
+    since = entry.get("date", "9999")
+    to = (entry.get("to") or "").lower()
+    if to and replied["addresses"].get(to, "") >= since:
+        return True
+    for d in {c.reg_domain(key), c.reg_domain(to.split("@")[-1]) if "@" in to else ""}:
+        if d and d not in FREEMAIL and replied["domains"].get(d, "") >= since:
+            return True
+    return False
+
+
+def mark_replies(state, replied):
+    """EVERY run (not only when a follow-up is due): a site that answered is 'replied' and gets no robot follow-up."""
+    n = 0
+    for k, e in state.get("outreach", {}).items():
+        if e.get("status") in ("sent", "queued") and has_replied(k, e, replied):
             e["status"] = "replied"
+            n += 1
+    return n
+
+
+def due_followups(state, today):
+    return [(k, e) for k, e in sorted(state.get("outreach", {}).items())
+            if e.get("status") == "sent" and not e.get("followup_id") and e.get("followup_due") and e["followup_due"] <= today]
+
+
+def outbox_index(files):
+    """What is already in the outbox (pending / sent / failed), from {path: json text}:
+    file names, every recipient address, every recipient domain. A site found here is never written to again."""
+    names, addrs, doms = set(), set(), set()
+    for path, text in files.items():
+        names.add(os.path.basename(path))
+        try:
+            job = json.loads(text)
+        except Exception:
             continue
-        out.append((k, e))
-    return out
+        for a in list(job.get("to") or []) + list(job.get("cc") or []):
+            a = str(a).lower().strip()
+            if "@" in a:
+                addrs.add(a)
+                doms.add(c.reg_domain(a.split("@")[-1]))
+    return {"names": names, "addresses": addrs, "domains": doms}
+
+
+def in_outbox(key, emails, idx):
+    """True when this site already appears in ANY outbox file: by file name, recipient address or recipient domain."""
+    k = c.reg_domain(key)
+    if any(("-" + key) in n or ("-" + k) in n for n in idx["names"]):
+        return True
+    if k in idx["domains"] and k not in FREEMAIL:
+        return True
+    for e in emails or []:
+        e = e.lower()
+        d = c.reg_domain(e.split("@")[-1])
+        if e in idx["addresses"] or (d in idx["domains"] and d not in FREEMAIL):
+            return True
+    return False
+
+
+def reconcile(state, idx):
+    """Compare our memory with the outbox itself. 'queued' + file there -> sent. 'queued' + no file (the outbox push
+    failed last run) -> forgotten, so it is tried again. A follow-up id with no file -> cleared."""
+    for k in list(state.get("outreach", {})):
+        e = state["outreach"][k]
+        if e.get("status") == "queued":
+            if (e.get("id", "") + ".json") in idx["names"]:
+                e["status"] = "sent"
+            else:
+                del state["outreach"][k]
+                continue
+        if e.get("followup_id") and (e["followup_id"] + ".json") not in idx["names"]:
+            e.pop("followup_id", None)
+            e.pop("followup_date", None)
 
 
 def run_outreach(work, state, send, get=c.http_get, ai=c.haiku):
@@ -505,17 +580,19 @@ def run_outreach(work, state, send, get=c.http_get, ai=c.haiku):
     today = c.today()
     prospects = c.read_json(os.path.join(work, PROSPECTS), [])
     exclude = {c.reg_domain(l.strip().lower()) for l in c.fetch_file("main", "ops/outreach_domains.txt").splitlines() if l.strip() and not l.startswith("#")}
-    sent_files = c.list_files("ops-outbox", "outbox/sent") + c.list_files("ops-outbox", "outbox/pending")
-    n_today = max(state.get("days", {}).get(today, 0), sum(1 for f in sent_files if f.startswith(today) and "-robot-" in f))
+    outbox_files = c.read_tree("ops-outbox", ["outbox/sent", "outbox/pending", "outbox/failed"])
+    idx = outbox_index(outbox_files)
+    reconcile(state, idx)
+    n_today = max(state.get("days", {}).get(today, 0), sum(1 for f in idx["names"] if f.startswith(today) and "-robot-" in f))
     room = max(0, MAX_SENDS_DAY - n_today)
     queued, skipped = [], []
-    replied = replied_domains(c.fetch_file("ops-email-logs", "ops/email_replier_log.md"), c.fetch_file("ops-inbox-digest", "ops/inbox_digest.md"))
+    replied = replied_index(c.fetch_file("ops-email-logs", "ops/email_replier_log.md"), c.fetch_file("ops-inbox-digest", "ops/inbox_digest.md"))
+    mark_replies(state, replied)          # every run, for every site we wrote to
     # 1) follow-ups that are due
-    for k, e in due_followups(state, replied, today):
+    for k, e in due_followups(state, today):
         if room <= 0:
             break
-        sent_meta = c.read_json(os.path.join(c.FIXTURE_DIR or "", "ops-outbox", "outbox", "sent", e["id"] + ".json"), None) if c.FIXTURE_DIR else \
-            c.json_obj(c.fetch_file("ops-outbox", "outbox/sent/%s.json" % e["id"]))
+        sent_meta = c.json_obj(outbox_files.get("outbox/sent/%s.json" % e["id"], ""))
         if not sent_meta or not sent_meta.get("message_id"):
             skipped.append((k, "follow-up: first mail has no sent record"))
             continue
@@ -534,8 +611,12 @@ def run_outreach(work, state, send, get=c.http_get, ai=c.haiku):
     for p in ok:
         if room <= 0 or tries >= MAX_PROSPECT_TRIES:
             break
-        tries += 1
         k = site_key(p)
+        if in_outbox(k, p.get("emails"), idx):       # already written to by anyone (robot or Director): never twice
+            skipped.append((k, "already in the outbox"))
+            state.setdefault("outreach", {})[k] = {"status": "skipped", "why": "already in the outbox", "date": today}
+            continue
+        tries += 1
         try:
             job, why = prepare_first(p, get, ai)
         except c.BudgetExceeded:
@@ -556,7 +637,7 @@ def run_outreach(work, state, send, get=c.http_get, ai=c.haiku):
             e = state.setdefault("outreach", {})
             if q["_kind"] == "first":
                 due = (datetime.date.fromisoformat(today) + datetime.timedelta(days=FOLLOWUP_DAYS)).isoformat()
-                e[q["_key"]] = {"status": "sent", "id": q["id"], "date": today, "to": q["to"][0], "subject": q["subject"], "title": q["_title"],
+                e[q["_key"]] = {"status": "queued", "id": q["id"], "date": today, "to": q["to"][0], "subject": q["subject"], "title": q["_title"],
                                 "page": q["_page"], "match": q["_match"], "followup_due": due}
             else:
                 e[q["_key"]]["followup_id"] = q["id"]
@@ -564,7 +645,7 @@ def run_outreach(work, state, send, get=c.http_get, ai=c.haiku):
         state.setdefault("days", {})[today] = n_today + len(queued)
     else:
         for k, v in list(state.get("outreach", {}).items()):   # a dry run must not burn prospects
-            if v.get("status") == "skipped" and v.get("date") == today:
+            if v.get("status") == "skipped" and v.get("date") == today and v.get("why") != "already in the outbox":
                 del state["outreach"][k]
     return queued, skipped, human
 
@@ -660,9 +741,7 @@ def main():
         for p, why in human:
             state.setdefault("blocked", {})["form:" + site_key(p)] = {"date": state.get("blocked", {}).get("form:" + site_key(p), {}).get("date", c.today()),
                                                                      "what": "outreach by contact form", "where": p.get("contact", ""), "why": why + " (page: %s)" % p.get("page", "")}
-        if send:
-            write_outbox(queued)
-        else:
+        if not send:
             c.write_text(os.path.join(work, DRAFTS), "# Outreach drafts (not sent)\n\nMade %s UTC.\n\n" % c.now().strftime("%Y-%m-%d %H:%M") + "\n".join(
                 "## %s -> %s\n\nSubject: %s\n\n```\n%s\n```\n" % (q["_kind"], q["to"][0], q["subject"], q["body"]) for q in queued) + ("\nNo drafts this run.\n" if not queued else ""))
         section = render(flags, untried(data.get("sites", [])), rows, queued, skipped, human, send, note)
@@ -678,6 +757,17 @@ def main():
             state["last_run"] = c.now().isoformat()
         c.write_json(os.path.join(work, STATE), state)
         saved = c.commit_push("ops: backlink batch")
+        if send and queued:
+            # Order matters. Our memory (status "queued") is already saved above. Only now are the job files handed to the
+            # outbox robot. If this push fails, the next run finds "queued" without a file and tries again; if it works but
+            # the lines below fail, the next run finds the file and marks it sent. A mail can never be queued twice.
+            write_outbox(queued)
+            for q in queued:
+                e = state["outreach"].get(q["_key"])
+                if e and e.get("status") == "queued":
+                    e["status"] = "sent"
+            c.write_json(os.path.join(work, STATE), state)
+            c.commit_push("ops: backlink batch (outbox handed over)")
         print("batch: flags=%d untried=%d checked=%d usable=%d queued=%d skipped=%d human=%d send=%s ai_calls=%d saved=%s dry=%s" % (
             flags, untried(data.get("sites", [])), len(rows), sum(1 for r in rows if r.get("usable")), len(queued), len(skipped), len(human), send, c.USAGE["calls"], saved, c.DRY))
     except Exception as e:

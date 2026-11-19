@@ -98,6 +98,31 @@ def list_files(branch, prefix, work=None):
     return sorted(os.path.basename(x) for x in r.stdout.split())
 
 
+def read_tree(branch, prefixes, work=None):
+    """{path: text} for every file under the given folders of another private branch (ONE fetch). Read-only."""
+    out = {}
+    if FIXTURE_DIR:
+        for pre in prefixes:
+            d = os.path.join(FIXTURE_DIR, branch, pre)
+            for n in (sorted(os.listdir(d)) if os.path.isdir(d) else []):
+                try:
+                    out[pre.rstrip("/") + "/" + n] = open(os.path.join(d, n), encoding="utf-8").read()
+                except OSError:
+                    pass
+        return out
+    work = work or WORK
+    if git("fetch", "-q", "--depth", "1", "origin", branch, check=False, cwd=work).returncode != 0:
+        return out
+    sha = git("rev-parse", "FETCH_HEAD", cwd=work).stdout.strip()
+    for pre in prefixes:
+        r = git("ls-tree", "--name-only", sha, pre.rstrip("/") + "/", check=False, cwd=work)
+        for path in r.stdout.split():
+            x = subprocess.run(["git", "-C", work, "show", "%s:%s" % (sha, path)], capture_output=True)
+            if x.returncode == 0:
+                out[path] = x.stdout.decode("utf-8", "replace")
+    return out
+
+
 def commit_push(msg, branch=REPORT_BRANCH, work=None):
     work = work or WORK
     if FIXTURE_DIR:

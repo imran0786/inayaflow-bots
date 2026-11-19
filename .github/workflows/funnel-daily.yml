@@ -29,8 +29,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Unit tests
-        run: python3 -W ignore scripts/reports/test_reports.py 2>&1 | tail -3
+      - name: Unit tests (a failure stops the run)
+        run: python3 -W ignore scripts/reports/test_reports.py
       - name: Read the counts and save the report (private repo, never here)
         env:
           GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}

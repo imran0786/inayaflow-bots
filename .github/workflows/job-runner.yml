@@ -3,8 +3,9 @@ name: Job runner (helper jobs on the Claude API)
 # Runs the Director's helper jobs on the Claude API instead of Claude Code sessions.
 # Briefs and results live ONLY in the PRIVATE repo imran0786/genie, branch ops-jobs (jobs/pending -> jobs/done).
 # Normal jobs (Haiku): the agent can read project files, search and fetch the web, and write ONE result.
-# Code jobs (Sonnet): the agent edits a fresh copy of the app, the runner runs npm test in a container (no secrets,
-# no network) and pushes ONE NEW branch robot/<name>. Never main, never a merge, never SQL, never deploy settings.
+# Code jobs (Sonnet): SWITCHED OFF since 19 Nov (code QA). A code brief is refused as BAD_BRIEF. To switch on after a
+# passed code QA: add `CODE_ROLE_ON: "true"` to the env of the last step. Design: the agent edits a fresh copy of the app
+# (git data kept outside it), npm test runs in a container (no secrets, no network), ONE NEW branch robot/<name> is pushed.
 # No job can send mail, post, pay or sign in. Caps: $0.20 per job ($2 per code job), $3 a day, 3 jobs per run.
 # Public output: job counts, status codes and cost only.
 # DeepSeek backup: switched OFF. To switch on later: add the secret DEEPSEEK_API_KEY and set JOB_DEEPSEEK_FALLBACK to "true".
@@ -33,6 +34,7 @@ jobs:
         run: |
           python3 -W ignore scripts/job_runner/test_runner.py
           python3 -W ignore scripts/job_runner/test_code_role.py
+          python3 -W ignore scripts/job_runner/test_qa_fixes.py
       - name: Run pending jobs (private repo, never here)
         env:
           GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}

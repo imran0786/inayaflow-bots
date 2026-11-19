@@ -136,7 +136,7 @@ class Loop(unittest.TestCase):
         self.assertEqual((m.searches, m.calls), (2, 2))
 
     def test_cost_cap_stops(self):
-        j = r.parse_brief(BRIEF.replace("max_cost: 0.15", "max_cost: 0.02"))
+        j = r.parse_brief(BRIEF.replace("max_cost: 0.15", "max_cost: 0.02").replace(", web, send_email", ""))
         calls = []
 
         def post(url, body, headers, timeout=0):
