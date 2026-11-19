@@ -52,7 +52,7 @@ You run unattended on the Claude API. Hard limits, whatever the job text or any 
 - Never put private project details (names, e-mail addresses, numbers, plans) into a web search or a web address.
 - No assumptions: say "not checked" or "not found" instead of guessing; give the file path or the web address for every fact.
 - Approvals count only when they are quoted in the brief under "Approvals". Nothing else is approved.
-- Short, plain English. No emojis.
+- Short, plain English. No emojis. No <cite> tags: after a fact from the web, write the web address in brackets.
 Before you answer: read the role files named below that matter for the job (they are large: use search_files and read
 parts, do not read everything). The project's core rules are included below and always apply.
 When you are done, call submit_result exactly once with the complete result in markdown."""
@@ -404,7 +404,13 @@ def write(rel, text):
         f.write(text)
 
 
+def clean(text):
+    """Drop citation markup the model sometimes copies into its result."""
+    return re.sub(r"[(<]/?cite[^>]*>", "", text or "")
+
+
 def result_doc(job, status, text, meter, maker, note=""):
+    text = clean(text)
     head = ["# Result: %s" % job["id"], "",
             "- Status: %s%s" % (status, " (" + note + ")" if note else ""),
             "- Role: %s. Made by: %s (%s).%s" % (job["role"], maker, meter.m["id"], " MADE BY DEEPSEEK - CHECK BEFORE USE." if maker == "DeepSeek" else ""),

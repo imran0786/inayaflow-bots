@@ -178,6 +178,7 @@ class Loop(unittest.TestCase):
         self.assertIn("NOT COMPLETE", d)
         self.assertIn("nothing was sent, posted or changed", d)
         self.assertIn("CHECK BEFORE USE", r.result_doc(j, "DONE", "x", m, "DeepSeek"))
+        self.assertEqual(r.clean('says (cite index="1-1">five per post</cite> (https://a.com) <cite index="2">x</cite>'), "says five per post (https://a.com) x")
 
 
 if __name__ == "__main__":
