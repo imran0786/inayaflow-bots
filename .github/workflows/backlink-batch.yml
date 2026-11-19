@@ -1,0 +1,69 @@
+name: Backlink batch (list builder + outreach, twice a day)
+
+# A. fixes the status flags in data/directories_candidates.json from the directory agent's real results
+# B. list builder: checks NEW directories on their live pages (GET only) and adds them; only free + followed +
+#    relevant ones get usable=true (the directory agent applies to those)
+# C. outreach: at most 3 e-mails a day, written as job files for the Namecheap outbox robot (never Gmail)
+# Never signs up, never fills a form, never pays, never solves a CAPTCHA: those go to ops/blocked_needs_imran.md.
+# Details: PRIVATE repo imran0786/genie, branch ops-reports. Public output: counts only.
+# The script skips a run when the last real run was under 3 hours ago.
+on:
+  schedule:
+    - cron: "7 13,18 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = candidates may be written, NO e-mail is queued (drafts only)"
+        default: "true"
+      force:
+        description: "true = run even if the last run was under 3 hours ago"
+        default: "false"
+      max_new_sites:
+        description: "how many new directories to check"
+        default: "15"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backlink-batch
+  cancel-in-progress: false
+
+jobs:
+  batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python3 -W ignore scripts/reports/test_reports.py 2>&1 | tail -3
+      - name: Run the batch
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || (github.event_name == 'schedule' && 'false') || 'true' }}
+          FORCE: ${{ github.event.inputs.force || 'false' }}
+          MAX_NEW_SITES: ${{ github.event.inputs.max_new_sites || '15' }}
+          MAX_AI_CALLS: "30"
+          MAX_SENDS_PER_DAY: "3"
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          python3 scripts/reports/backlink_batch.py 2>/dev/null
+      - name: Save the candidates list (this repo, data file only)
+        if: always()
+        run: |
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add data/directories_candidates.json
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -q -m "data: directory candidates (backlink batch)"
+          for i in 1 2 3; do
+            if git push -q origin HEAD:main; then echo "saved"; exit 0; fi
+            git pull -q --rebase origin main || true
+          done
+          echo "push failed"; exit 1

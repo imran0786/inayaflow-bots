@@ -1,0 +1,42 @@
+name: Inbox + backlinks report (every 3 h, read-only)
+
+# Reads the other robots' PRIVATE log files and writes ONE short report to the PRIVATE repo
+# (imran0786/genie, branch ops-reports: ops/report_latest.md + ops/history/). Sends nothing, marks no mail.
+# Claude Haiku reads NEW journalist-request digests only (capped). Public output: counts only.
+on:
+  schedule:
+    - cron: "23 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = write the report but do not remember what was shown (next run shows it again)"
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python3 -W ignore scripts/reports/test_reports.py 2>&1 | tail -3
+      - name: Build and save the report (private repo, never here)
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          MAX_AI_CALLS: "4"
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          python3 scripts/reports/inbox_report.py 2>/dev/null

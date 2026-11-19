@@ -1,0 +1,43 @@
+name: Daily funnel numbers (read-only, counts only)
+
+# Once a day. Calls ONE database function that returns daily COUNTS (sign-ups, sources, /analyze reports,
+# paying accounts, ChatGPT plugin calls). It never uses the service-role key and never reads a name or e-mail.
+# Result: PRIVATE repo imran0786/genie, branch ops-reports, ops/funnel_daily.md. No AI call. Public output: counts only.
+# Until SUPABASE_URL, SUPABASE_ANON_KEY and FUNNEL_READ_TOKEN exist, the file says "NOT SET UP".
+on:
+  schedule:
+    - cron: "30 7 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = do not store today's totals in the history file"
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: funnel-daily
+  cancel-in-progress: false
+
+jobs:
+  funnel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python3 -W ignore scripts/reports/test_reports.py 2>&1 | tail -3
+      - name: Read the counts and save the report (private repo, never here)
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
+          FUNNEL_READ_TOKEN: ${{ secrets.FUNNEL_READ_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          python3 scripts/reports/funnel_daily.py 2>/dev/null

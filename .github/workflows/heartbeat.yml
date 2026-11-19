@@ -31,6 +31,8 @@ jobs:
           busy() { gh run list --repo "$REPO" --workflow "$1" --limit 5 --json status --jq '[.[]|select(.status=="in_progress" or .status=="queued")]|length'; }
           ran_today() { gh run list --repo "$REPO" --workflow "$1" --limit 20 --json createdAt,event --jq "[.[]|select(.createdAt|startswith(\"$(date -u +%F)\"))]|length"; }
           nudge() { if [ "$(busy "$1")" = "0" ]; then gh workflow run "$1" --repo "$REPO" --ref main "${@:2}" && echo "$(date -u +%H:%M) started $1"; else echo "$(date -u +%H:%M) $1 already running"; fi; }
+          age_min() { last=$(gh run list --repo "$REPO" --workflow "$1" --limit 1 --json createdAt --jq '.[0].createdAt // empty'); if [ -z "$last" ]; then echo 99999; else echo $(( ($(date -u +%s) - $(date -u -d "$last" +%s)) / 60 )); fi; }
+          ran_since_uk() { since=$(date -u -d "TZ=\"Europe/London\" today $2" +%Y-%m-%dT%H:%M:%SZ); gh run list --repo "$REPO" --workflow "$1" --limit 10 --json createdAt --jq "[.[]|select(.createdAt >= \"$since\")]|length"; }
           end=$((SECONDS+20400))
           n=0
           while [ $SECONDS -lt $end ]; do
@@ -42,6 +44,12 @@ jobs:
             h=$(date -u +%H%M)
             if [ "$h" -ge 0700 ] && [ "$(ran_today directory-agent.yml)" = "0" ]; then nudge directory-agent.yml -f dry_run=false; fi
             if [ "$h" -ge 0815 ] && [ "$(ran_today link-checker.yml)" = "0" ]; then nudge link-checker.yml; fi
+            # report robots (19 Nov): inbox + backlinks report every 3 h; funnel numbers 07:30 UK; backlink batch 13:07 and 18:07 UK
+            uk=$(TZ=Europe/London date +%H%M)
+            if [ "$(age_min ops-report.yml)" -ge 175 ]; then nudge ops-report.yml; fi
+            if [ "$uk" -ge 0730 ] && [ "$(ran_since_uk funnel-daily.yml 00:00)" = "0" ]; then nudge funnel-daily.yml; fi
+            if [ "$uk" -ge 1307 ] && [ "$uk" -lt 1800 ] && [ "$(ran_since_uk backlink-batch.yml 13:00)" = "0" ]; then nudge backlink-batch.yml -f dry_run=false; fi
+            if [ "$uk" -ge 1807 ] && [ "$(ran_since_uk backlink-batch.yml 18:00)" = "0" ]; then nudge backlink-batch.yml -f dry_run=false; fi
             n=$((n+1))
             sleep 600
           done
