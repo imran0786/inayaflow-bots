@@ -4461,7 +4461,7 @@
    "followed": "mixed",
    "checked": "2026-11-19",
    "judge_reason": "Free listing needs your badge on site; paid $9/$99 skips it. Google sign-in required.",
-   "status": "HOLD spam risk",
+   "status": "TRIED PHONE_REQUIRED 2026-11-18",
    "followed_sample": "63 followed / 9 not",
    "needs": [
     "google_login_only",
@@ -4716,6 +4716,50 @@
     "payment",
     "badge_or_backlink"
    ]
+  },
+  {
+   "name": "AI Pulse",
+   "domain": "aipulse.fyi",
+   "submit_url": "https://www.aipulse.fyi/submit",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://www.aipulse.fyi/",
+   "free_check": "unclear",
+   "captcha_words_on_page": true,
+   "has_form_on_page": true,
+   "quality": "relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-19",
+   "judge_reason": "Lists AI tools and takes submissions; no free-listing statement or pricing page found.",
+   "status": "HOLD free not confirmed",
+   "followed_sample": "3 followed / 0 not",
+   "needs": []
+  },
+  {
+   "name": "AI Resource Pro",
+   "domain": "airesource.pro",
+   "submit_url": "https://airesource.pro",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://airesourcepro.com/",
+   "free_check": "unknown",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "unknown",
+   "usable": false,
+   "followed": "unknown",
+   "checked": "2026-11-19",
+   "judge_reason": "",
+   "status": "HOLD dead or unreachable"
   }
  ]
 }
