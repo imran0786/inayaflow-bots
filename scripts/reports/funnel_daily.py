@@ -70,6 +70,17 @@ def build(data, hist):
         L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
             d.get("day"), p.get("calls", 0), p.get("ok", 0), (p.get("by_outcome") or {}).get("invalid_input", 0), p.get("callers", 0),
             p.get("no_answer_callers", 0), p.get("handles", 0), p.get("outside_calls", 0), kv(p.get("by_tool"), 8), kv(p.get("by_outcome"), 8)))
+    L += ["", "## Agents outside ChatGPT (30-day trial, Imran 19 Nov: report every day)", "",
+          "Programs other than ChatGPT that called the plugin (Claude, Cursor, scripts...). The program name is what the caller says it is.", "",
+          "| day | agents (different callers) | calls | by program |", "|---|---|---|---|"]
+    for d in days:
+        p = d.get("plugin") or {}
+        n = int(p.get("outside_callers", 0) or 0)
+        if "outside_callers" not in p:
+            who = "not counted yet (needs the client-name update)"
+        else:
+            who = "none" if n == 0 else str(n)
+        L.append("| %s | %s | %s | %s |" % (d.get("day"), who, p.get("outside_calls", 0), kv(p.get("outside_by_client"), 8)))
     L += ["", "Refusal reasons: the plugin log stores ONE label (invalid_input) for three different niche answers (no niche given, niche word not known, "
           "niche not clear from the account). The real reason is not in the table, so it cannot be split until the app logs it."]
     L += ["", "Not in this report: page visits and the sticky-box events (they live in Vercel Analytics, which this robot cannot read).", ""]
