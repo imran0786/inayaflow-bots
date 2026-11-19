@@ -105,7 +105,13 @@ def main():
         saved = c.commit_push("ops: daily funnel numbers")
         print("funnel: days=%d saved=%s dry=%s" % (len(data["days"]), saved, c.DRY))
     except Exception as e:
-        print("funnel: FAILED %s %s" % (type(e).__name__, getattr(e, "code", "")))
+        why = ""
+        try:
+            body = json.loads(e.read().decode("utf-8", "replace")) if hasattr(e, "read") else {}
+            why = "%s %s" % (str(body.get("code", ""))[:12], str(body.get("message", body.get("hint", "")))[:60])
+        except Exception:
+            pass
+        print("funnel: FAILED %s %s %s" % (type(e).__name__, getattr(e, "code", ""), why))
         try:
             c.error_notice(path, "daily funnel numbers", e)
             c.commit_push("ops: funnel error notice")
