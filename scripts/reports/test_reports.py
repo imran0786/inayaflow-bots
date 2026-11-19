@@ -286,3 +286,18 @@ class Funnel(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class HumanRepliesTest(unittest.TestCase):
+    def test_people_replies_any_label(self):
+        import datetime as dt
+        dig = ("| date (UTC) | folder | from | subject | status | tag |\n|---|---|---|---|---|---|\n"
+               "| 11-19 18:54 | INBOX | \"Keith from Refersion\" <helpme@refersion.com> | Re: InayaFlow: questions | read | LISTING |\n"
+               "| 11-19 18:19 | INBOX | Niamh <niamh@x.com> | Out Of Office Re: A free self-check | read |  |\n"
+               "| 11-19 11:50 | INBOX | Refersion <noreply@refersion.com> | A new affiliate | read |  |\n"
+               "| 11-17 10:00 | INBOX | Old <a@b.com> | Re: old thread | read |  |\n")
+        now = dt.datetime(2026, 11, 19, 21, 0, tzinfo=dt.timezone.utc)
+        rows = ir.human_replies(dig, now=now)
+        self.assertEqual([r[0] for r in rows], ["11-19 18:54"])
+        self.assertIn("Refersion", rows[0][1])

@@ -162,6 +162,33 @@ def table(head, rows):
     return "\n".join(out) + "\n"
 
 
+def human_replies(digest_text, now=None, hours=24):
+    """Every reply from a PERSON in the last `hours`, whatever bucket the router gave it (19 Nov 2026: Refersion
+    replies were filed as LISTING and never shown). Source: the Namecheap inbox digest. No AI."""
+    import datetime as _dt
+    now = now or c.now()
+    out = []
+    for r in c.md_rows(digest_text or ""):
+        if len(r) < 4:
+            continue
+        date, frm, subj = r[0], r[2], r[3]
+        if not re.match(r"^\s*(re|aw|sv)\s*:", subj, re.I):
+            continue
+        if re.search(r"no-?reply|mailer-daemon|postmaster|notifications?@|contact@inayaflow\.ai", frm, re.I):
+            continue
+        if re.search(r"out of office|automatic reply|auto-?reply|autoreply|away from", subj, re.I):
+            continue
+        try:
+            d = _dt.datetime.strptime("%d-%s" % (now.year, date.strip()), "%Y-%m-%d %H:%M").replace(tzinfo=_dt.timezone.utc)
+            if d > now + _dt.timedelta(days=1):
+                d = d.replace(year=now.year - 1)
+        except Exception:
+            continue
+        if now - d <= _dt.timedelta(hours=hours):
+            out.append([date, c.cell(frm, 60), c.cell(subj, 90), r[5] if len(r) > 5 else ""])
+    return out
+
+
 def build(inputs, state, digests=(), digest_note="", ai=c.haiku):
     """Pure: (report markdown, new state, counts). `inputs` = dict of file texts."""
     seen = set(state.get("seen", []))
@@ -206,12 +233,14 @@ def build(inputs, state, digests=(), digest_note="", ai=c.haiku):
         for f in fits:
             fit_rows.append([c.cell(subj, 50), f["title"], f["outlet"], f["deadline"], f["why"]])
 
+    people = human_replies(inputs.get("inbox_digest", ""))
     tot = live_totals(live_all)
     t = c.now().strftime("%Y-%m-%d %H:%M")
     L = ["# Inbox + backlinks report", "",
          "Made %s UTC by the report robot (read-only; nothing sent). Since the last report: %s." % (
              t, "first run, everything currently in the logs counts as new" if first else state.get("last_run", "?") + " UTC"), "",
          "## Summary", "",
+         "- Replies from PEOPLE in the last 24 h (any topic, any label; read every one): %d" % len(people),
          "- New outreach replies: %d (swap offers: %d)" % (len(n_replies), len(swaps)),
          "- New LIVE backlinks: %d. Total LIVE: %d (followed %d, nofollow %d, page live but no link %d, other %d). Still pending: %d, gone: %d, could not check: %d." % (
              len(n_live), tot["live"], tot["followed"], tot["nofollow"], tot["no_link"], tot["other_rel"], tot["pending"], tot["gone"], tot["blocked"]),
@@ -221,7 +250,10 @@ def build(inputs, state, digests=(), digest_note="", ai=c.haiku):
          "- Bot mail waiting more than 2 hours: %d" % len(not_handled), ""]
     if digest_note:
         L += ["Note: " + digest_note + ".", ""]
-    L += ["## New outreach replies", "", table(["date", "from domain", "category", "what the replier did", "summary"], n_replies),
+    L += ["## Replies from people, last 24 hours (whatever the label)", "",
+          "Every 'Re:' mail from a real person to contact@ in the last 24 h (no-reply senders and out-of-office left out). The Director reads each one.", "",
+          table(["date (UTC)", "from", "subject", "router label"], people),
+          "## New outreach replies", "", table(["date", "from domain", "category", "what the replier did", "summary"], n_replies),
           "## Swap offers (answer these first)", "", table(["date", "from domain", "category", "what the replier did", "summary"], swaps),
           "## New LIVE backlinks", "", table(["date", "site", "link rel", "listing URL"], n_live),
           "## New listing mails", "", table(["date (UTC)", "directory", "status", "subject"], n_listing),
@@ -240,7 +272,7 @@ def build(inputs, state, digests=(), digest_note="", ai=c.haiku):
     # "seen" = every row that is in the log files right now (rows that left the logs need no memory)
     new_state = {"last_run": t, "seen": sorted(set(keys_all)), "digests": digest_seen[-300:]}
     counts = {"replies": len(n_replies), "swaps": len(swaps), "live_new": len(n_live), "live_total": tot["live"], "followed": tot["followed"],
-              "for_imran": len(n_imran_a) + len(n_imran_f), "digests": n_digests, "fits": len(fit_rows), "waiting": len(not_handled)}
+              "for_imran": len(n_imran_a) + len(n_imran_f), "digests": n_digests, "fits": len(fit_rows), "waiting": len(not_handled), "people_replies": len(people)}
     return "\n".join(L), new_state, counts
 
 
