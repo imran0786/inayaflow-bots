@@ -7,6 +7,9 @@ os.environ["GENIE_MAIN_WORK"] = os.path.join(TMP, "genie")
 os.environ["ANTHROPIC_API_KEY"] = "test"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import runner as r
+assert r.CODE_ROLE_ON is False       # the default is OFF
+OFF_VERDICT = r.validate(r.parse_brief(chr(10).join(["---", "id: a", "role: code", "---", "x" * 30])))
+r.CODE_ROLE_ON = True                # the tests below exercise the role itself
 
 BRIEF = """---
 id: 2026-11-19-code-x
@@ -54,6 +57,9 @@ def make_repo():
 
 
 class CodeRole(unittest.TestCase):
+    def test_role_is_off_by_default(self):
+        self.assertEqual(OFF_VERDICT, "the code role is switched off")
+
     def test_brief(self):
         j = r.parse_brief(BRIEF)
         self.assertEqual((j["model"], j["max_cost"], j["branch"]), ("sonnet", 2.0, "robot/2026-11-19-code-x"))   # always Sonnet, $2 default

@@ -22,6 +22,8 @@ CODE_TURNS = int(os.environ.get("CODE_MAX_TURNS", "70"))
 CODE_SECONDS = int(os.environ.get("CODE_JOB_SECONDS", "1500"))
 NODE_IMAGE = os.environ.get("NODE_IMAGE", "node:24-bookworm-slim")
 MAX_TEST_RUNS = 6
+# Code role: OFF since 19 Nov (failed code QA: sandbox). A code brief is refused as BAD_BRIEF until CODE_ROLE_ON is "true".
+CODE_ROLE_ON = os.environ.get("CODE_ROLE_ON", "false").strip().lower() == "true"
 PREVIEW_PATTERN = "https://genie-git-%s-agentwork.vercel.app"         # Vercel's branch address for this project (expected, not checked here)
 # A code job may never write these (SQL, deploy settings, CI, secrets, git internals):
 FORBIDDEN_PATHS = r"^(\.env|\.git/|\.github/|\.vercel/|vercel\.json|supabase/|ops/|node_modules/|package-lock\.json$|.*\.(pem|key)$)"
@@ -151,6 +153,8 @@ def validate(job):
     if len(job["body"]) < 20:
         return "empty job text"
     if job["role"] == "code":
+        if not CODE_ROLE_ON:
+            return "the code role is switched off"
         if not re.fullmatch(r"robot/[A-Za-z0-9._-]{1,70}", job["branch"]):
             return "code jobs work only on a new branch named robot/<name>"
         if job["asked_cost"] > DAILY_CAP:
