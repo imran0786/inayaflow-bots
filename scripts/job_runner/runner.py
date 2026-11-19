@@ -406,7 +406,7 @@ def write(rel, text):
 
 def clean(text):
     """Drop citation markup the model sometimes copies into its result."""
-    return re.sub(r"[(<]/?cite[^>]*>", "", text or "")
+    return re.sub(r"[(<]/?cite(?:[ ][^>]*)?>", "", text or "")
 
 
 def result_doc(job, status, text, meter, maker, note=""):
