@@ -3,8 +3,8 @@ name: Job runner (helper jobs on the Claude API)
 # Runs the Director's helper jobs on the Claude API instead of Claude Code sessions.
 # Briefs and results live ONLY in the PRIVATE repo imran0786/genie, branch ops-jobs (jobs/pending -> jobs/done).
 # Normal jobs (Haiku): the agent can read project files, search and fetch the web, and write ONE result.
-# Code jobs (Sonnet): SWITCHED OFF since 19 Nov (code QA). A code brief is refused as BAD_BRIEF. To switch on after a
-# passed code QA: add `CODE_ROLE_ON: "true"` to the env of the last step. Design: the agent edits a fresh copy of the app
+# Code jobs (Sonnet): ON since 19 Nov evening (code QA round 2 passed; Imran: yes). Switch off = set CODE_ROLE_ON to "false"
+# in the env of the last step (a code brief is then refused as BAD_BRIEF). Design: the agent edits a fresh copy of the app
 # (git data kept outside it), npm test runs in a container (no secrets, no network), ONE NEW branch robot/<name> is pushed.
 # No job can send mail, post, pay or sign in. Caps: $0.20 per job ($2 per code job), $3 a day, 3 jobs per run.
 # Public output: job counts, status codes and cost only.
@@ -44,6 +44,7 @@ jobs:
           DAILY_COST_CAP: "3.00"
           DEFAULT_JOB_COST_CAP: "0.20"
           CODE_JOB_COST_CAP: "2.00"
+          CODE_ROLE_ON: "true"
           MAX_JOBS_PER_RUN: "3"
         run: |
           echo "::add-mask::$GENIE_LOGS_TOKEN"
