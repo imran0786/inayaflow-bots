@@ -532,12 +532,13 @@ def prepare_code(job):
     if not os.environ.get("GENIE_LOGS_TOKEN"):
         raise RuntimeError("no GENIE_LOGS_TOKEN")
     subprocess.run(["rm", "-rf", CODE_WORK])
-    r = subprocess.run(["git", "ls-remote", "--heads", _token_url(), job["branch"]], capture_output=True, text=True)
+    # cwd outside the checked-out bots repo: its local git config carries the Actions token header for THIS repo only
+    r = subprocess.run(["git", "ls-remote", "--heads", _token_url(), job["branch"]], capture_output=True, text=True, cwd=os.path.dirname(CODE_WORK) or "/")
     if r.returncode != 0:
         raise RuntimeError("cannot reach the app repo")
     if r.stdout.strip():
         return "branch already exists"
-    if subprocess.run(["git", "clone", "-q", "--depth", "1", _token_url(), CODE_WORK], capture_output=True, text=True).returncode != 0:
+    if subprocess.run(["git", "clone", "-q", "--depth", "1", _token_url(), CODE_WORK], capture_output=True, text=True, cwd=os.path.dirname(CODE_WORK) or "/").returncode != 0:
         raise RuntimeError("clone failed")
     git("remote", "set-url", "origin", "https://github.com/%s.git" % PRIVATE, cwd=CODE_WORK)   # the token never stays in the working copy
     git("config", "user.name", "inayaflow-bot", cwd=CODE_WORK)
