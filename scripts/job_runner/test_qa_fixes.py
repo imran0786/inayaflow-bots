@@ -102,6 +102,28 @@ class Meter(unittest.TestCase):
         self.assertGreater(r.affordable_tokens(noweb, r.Meter("haiku"), 3000, 0), a0)
 
 
+class Links(unittest.TestCase):
+    def test_search_and_read_never_follow_a_link_out_of_the_folder(self):
+        shutil.rmtree(r.WORK, ignore_errors=True)
+        docs = os.path.join(r.WORK, "context", "docs")
+        os.makedirs(docs)
+        outside = os.path.join(TMP, "outside-secret.md")
+        with open(outside, "w") as f:
+            f.write("TOPSECRET value")
+        with open(os.path.join(docs, "ok.md"), "w") as f:
+            f.write("TOPSECRET is only a word here")
+        try:
+            os.symlink(outside, os.path.join(docs, "link.md"))
+        except (OSError, NotImplementedError):
+            self.skipTest("this system cannot make symlinks")
+        j = r.parse_brief(BRIEF)
+        out = r.tool_search(j, "docs", "docs", "topsecret")
+        self.assertIn("docs/ok.md:1", out)
+        self.assertNotIn("link.md", out)
+        self.assertNotIn("TOPSECRET value", out)
+        self.assertTrue(r.tool_read(j, "docs", "docs/link.md").startswith("ERROR"))
+
+
 class BadBrief(unittest.TestCase):
     def test_hostile_id_cannot_leave_the_jobs_folder(self):
         for i, evil in enumerate(("../../evil", "..\\..\\evil", "/etc/cron.d/x", "a/b/c", "..", "con:x", "x" * 300)):

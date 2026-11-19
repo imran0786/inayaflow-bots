@@ -228,7 +228,11 @@ def tool_search(job, repo, path, text):
     files = [p] if os.path.isfile(p) else [os.path.join(d, f) for d, _s, fs in os.walk(p) if "/.git" not in d.replace("\\", "/") and "node_modules" not in d
                                            for f in fs if f.endswith((".md", ".txt", ".json", ".ts", ".tsx", ".js", ".mjs", ".sql", ".py", ".yml", ".css"))]
     needle, out = text.lower(), []
+    real_root = os.path.realpath(root)
     for f in sorted(files)[:3000]:
+        rp = os.path.realpath(f)
+        if os.path.islink(f) or not rp.startswith(real_root + os.sep) or os.path.basename(f).startswith(".env"):
+            continue      # never follow a link out of the folder (test code could plant one), never read .env files
         try:
             for i, line in enumerate(open(f, encoding="utf-8", errors="replace"), 1):
                 if needle in line.lower():
