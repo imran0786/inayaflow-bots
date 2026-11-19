@@ -39,6 +39,12 @@ ok(v.decide("Login One Time Password", "bufferapps.com", "Your OTP is 123456", K
 ok(v.decide("Login One Time Password", "bufferapps.com", "Your OTP is 123456", K, "OTHER", 25)[0] == "WAIT", "otp maybe in use")
 ok(v.decide("Your sign-in link", "fivetaco.com", "https://fivetaco.com/auth/magic?token=1", K, None, 60)[0] == "SESSION_ONLY_EXPIRED", "magic link is session only")
 ok(v.decide("Confirm your signup", "fivetaco.com", "https://abc.supabase.co/auth/v1/verify?token=1", K, None, 60)[0] == "LINK_OFF_DOMAIN", "off-domain link not opened")
+SB = "Confirm your email https://abc.supabase.co/auth/v1/verify?token=xyz&type=signup&redirect_to=https://fivetaco.com/welcome"
+ok(v.supabase_site(SB, K) == "fivetaco.com", "supabase confirm link maps back to the known directory")
+ok(v.decide("Confirm your email address", "fivetaco.com", SB, K, None, 60)[0] == "OPEN_LINK", "supabase link back to the same site is opened")
+ok(v.supabase_site(SB.replace("fivetaco.com", "evil.example"), K) == "", "supabase link to an unknown site is not trusted")
+ok(v.decide("Confirm your email address", "fivetaco.com", SB.replace("fivetaco.com", "evil.example"), K, None, 60)[0] == "LINK_OFF_DOMAIN", "supabase link to another site stays closed")
+ok(v.supabase_redirect_domain("https://abc.supabase.co/auth/v1/verify?token=1&redirect_to=http://fivetaco.com/") == "", "plain-http redirect is not trusted")
 ok(v.decide("There's a problem with Your OpenTools Launch", "opentools.ai", "Please fix your listing. Year 2026.", K, None, 400)[0] == "NO_ACTION_FOUND", "problem mail -> human")
 ok(v.decide("There's a problem with Your OpenTools Launch", "opentools.ai", "Your checkout was incomplete. Click here to complete checkout. Code for 20% off", K, None, 400)[0] == "SKIPPED_PAID_OFFER", "unpaid checkout mail closed, never opened")
 ok(v.site_status_for("aiagentslive.com", {"aiagentslive": {"status": "PAID"}}) == "PAID", "state by short name")

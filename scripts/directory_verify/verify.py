@@ -134,14 +134,39 @@ def all_links(text):
     return out
 
 
+SUPABASE_SENDER = "supabase.io"   # Supabase Auth's shared mailer (noreply@mail.app.supabase.io) used by many directories
+
+
+def supabase_redirect_domain(u):
+    """Registered domain a Supabase Auth confirm link sends you back to, or "" when it is not one.
+    Shape: https://<project>.supabase.co/auth/v1/verify?token=...&type=signup&redirect_to=https://<site>/..."""
+    from urllib.parse import parse_qs
+    p = urlparse(u)
+    if p.scheme != "https" or not (p.hostname or "").endswith(".supabase.co") or not p.path.startswith("/auth/v1/verify"):
+        return ""
+    r = (parse_qs(p.query).get("redirect_to") or [""])[0]
+    rp = urlparse(r)
+    return reg_domain(rp.hostname) if rp.scheme == "https" and rp.hostname else ""
+
+
+def supabase_site(text, known):
+    """For a Supabase Auth mail: the known directory its confirm link returns to, else ""."""
+    for u in all_links(text):
+        d = supabase_redirect_domain(u)
+        if d and d in known:
+            return d
+    return ""
+
+
 def confirm_links(text, sender_dom):
-    """(own, off): confirm-looking https links on the sender's OWN registered domain, and confirm-looking links elsewhere."""
+    """(own, off): confirm-looking https links on the sender's OWN registered domain, and confirm-looking links elsewhere.
+    A Supabase Auth verify link counts as own when its redirect_to is on the sender's own domain (19 Nov 2026)."""
     own, off = [], []
     for u in all_links(text):
         if LINK_BAD_RE.search(u) or not LINK_OK_RE.search(u):
             continue
         p = urlparse(u)
-        if p.scheme == "https" and p.hostname and reg_domain(p.hostname) == sender_dom:
+        if (p.scheme == "https" and p.hostname and reg_domain(p.hostname) == sender_dom) or supabase_redirect_domain(u) == sender_dom:
             own.append(u)
         else:
             off.append(u)
@@ -333,7 +358,14 @@ def main():
             except Exception:
                 continue
             typ, data = imap.uid("SEARCH", None, "SINCE", since.strftime("%d-%b-%Y"), "UNKEYWORD", KW_DONE, "UNKEYWORD", KW_SEEN)
-            for uid in (data[0] or b"").split()[-400:]:
+            uids = (data[0] or b"").split()[-400:]
+            try:   # Supabase Auth mails that were set aside before the 19 Nov rule: look again (only an open link changes anything)
+                t2, d2s = imap.uid("SEARCH", None, "SINCE", since.strftime("%d-%b-%Y"), "KEYWORD", KW_SEEN, "UNKEYWORD", KW_DONE, "FROM", SUPABASE_SENDER)
+                recheck = set((d2s[0] or b"").split()) if t2 == "OK" else set()
+            except Exception:
+                recheck = set()
+            uids += [u for u in recheck if u not in uids]
+            for uid in uids:
                 t, d = imap.uid("FETCH", uid, "(FLAGS BODY.PEEK[])")
                 if t != "OK" or not d or not isinstance(d[0], tuple):
                     continue
@@ -351,11 +383,15 @@ def main():
                 subj = re.sub(r"\s+", " ", str(msg.get("Subject", "")))[:120]
                 dom = sender_domain(str(msg.get("From", "")))
                 text = mail_text(msg)
+                if dom == SUPABASE_SENDER:
+                    dom = supabase_site(text, known) or dom   # a directory that sends its mail through Supabase Auth
                 age = (now - md).total_seconds() / 60
                 st = site_status_for(dom, agent_state)
                 outcome, link = decide(subj, dom, text, known, st, age, routed_verify=KW_ROUTE_VERIFY in routes)
                 if outcome in ("IGNORE", "WAIT"):
                     continue
+                if uid in recheck and outcome != "OPEN_LINK":
+                    continue  # still nothing we may do: already listed for a person, do not list it twice
                 detail = ""
                 if outcome == "OPEN_LINK":
                     detail = "link " + link_label(link)
