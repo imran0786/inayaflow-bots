@@ -640,7 +640,9 @@ def result_doc(job, status, text, meter, maker, note=""):
             "- Role: %s. Made by: %s (%s).%s" % (job["role"], maker, meter.m["id"], " MADE BY DEEPSEEK - CHECK BEFORE USE." if maker == "DeepSeek" else ""),
             "- Cost: about $%.4f of the $%.2f job cap (%d model calls, %d tokens in, %d out, %d web searches). Estimate from the token counts." % (
                 meter.cost, job["max_cost"], meter.calls, meter.tin, meter.tout, meter.searches),
-            "- Finished: %s UTC. A cloud helper made this; nothing was sent, posted or changed anywhere." % now().strftime("%Y-%m-%d %H:%M"), ""]
+            "- Finished: %s UTC. A cloud helper made this; %s" % (now().strftime("%Y-%m-%d %H:%M"),
+                "it can only push ONE new robot/ branch of the app (see the facts below); nothing was merged, deployed, sent or posted." if job["role"] == "code"
+                else "nothing was sent, posted or changed anywhere."), ""]
     if status != "DONE":
         head += ["NOT COMPLETE: the job stopped early (%s). What follows is the last text the helper wrote, if any." % status, ""]
     return "\n".join(head) + "\n---\n\n" + (text or "(no result text)") + "\n"
