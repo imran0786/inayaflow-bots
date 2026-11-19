@@ -1,0 +1,46 @@
+name: Heartbeat (keeps the robots running)
+
+# GitHub's own cron is best effort and skipped every run from ~22:35 to 00:39 UTC
+# on 18-19 Nov 2026. This job runs inside GitHub (no PC needed), nudges the inbox
+# robots every 10 minutes, starts the daily robots if their schedule was skipped,
+# and restarts itself before the 6-hour job limit. Imran 19 Nov: "It should be on
+# automation, full stop."
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "11 */3 * * *"   # backup: restarts the heartbeat if a chain ever breaks
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: heartbeat
+  cancel-in-progress: false
+
+jobs:
+  beat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Nudge robots every 10 minutes for ~5h40m, then restart
+        run: |
+          busy() { gh run list --repo "$REPO" --workflow "$1" --limit 5 --json status --jq '[.[]|select(.status=="in_progress" or .status=="queued")]|length'; }
+          ran_today() { gh run list --repo "$REPO" --workflow "$1" --limit 20 --json createdAt,event --jq "[.[]|select(.createdAt|startswith(\"$(date -u +%F)\"))]|length"; }
+          nudge() { if [ "$(busy "$1")" = "0" ]; then gh workflow run "$1" --repo "$REPO" --ref main "${@:2}" && echo "$(date -u +%H:%M) started $1"; else echo "$(date -u +%H:%M) $1 already running"; fi; }
+          end=$((SECONDS+20400))
+          n=0
+          while [ $SECONDS -lt $end ]; do
+            nudge email-replier.yml
+            nudge mail-router.yml
+            if [ $((n % 6)) = 0 ]; then nudge inbox-digest.yml; fi
+            h=$(date -u +%H%M)
+            if [ "$h" -ge 0700 ] && [ "$(ran_today directory-agent.yml)" = "0" ]; then nudge directory-agent.yml -f dry_run=false; fi
+            if [ "$h" -ge 0815 ] && [ "$(ran_today link-checker.yml)" = "0" ]; then nudge link-checker.yml; fi
+            n=$((n+1))
+            sleep 600
+          done
+          gh workflow run heartbeat.yml --repo "$REPO" --ref main && echo "restarted heartbeat"
