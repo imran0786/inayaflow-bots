@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-18",
+ "generated": "2026-11-19",
  "sources": [
   "github.com/s87343472/backlink-pilot targets.yaml (MIT, last push 2026-10-29, file marked DEPRECATED/unmaintained)",
   "github.com/profullstack/link-directories directories.csv (no licence file, 76 rows)"
@@ -23,7 +23,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "AI Tools Masters",
@@ -41,7 +41,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED UNCONFIRMED 2026-11-18"
   },
   {
    "name": "AILib",
@@ -59,7 +59,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED OTHER 2026-11-18"
   },
   {
    "name": "AILibri",
@@ -77,7 +77,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED NO_FORM 2026-11-18"
   },
   {
    "name": "AIToolMall",
@@ -95,7 +95,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED NO_FORM 2026-11-18"
   },
   {
    "name": "Aiai",
@@ -113,7 +113,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED BADGE_REQUIRED 2026-11-18"
   },
   {
    "name": "Appoid",
@@ -131,7 +131,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED PAID 2026-11-18"
   },
   {
    "name": "Apps and Websites",
@@ -149,7 +149,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED PHONE_REQUIRED 2026-11-18"
   },
   {
    "name": "Bestfreetools",
@@ -167,7 +167,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED NO_FORM 2026-11-18"
   },
   {
    "name": "Daily Zaps",
@@ -185,7 +185,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "DataTau",
@@ -203,7 +203,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "Digital Stuff We Love",
@@ -221,7 +221,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "Findseotools",
@@ -239,7 +239,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED OTHER 2026-11-18"
   },
   {
    "name": "Free AI Tools Directory",
@@ -257,7 +257,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "Human or Not",
@@ -275,7 +275,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "Joinly",
@@ -293,7 +293,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED OTHER 2026-11-18"
   },
   {
    "name": "OpenFuture AI",
@@ -311,7 +311,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "StartupRanking",
@@ -329,7 +329,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "Super AI Tools",
@@ -347,7 +347,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "ToolHunter.ai",
@@ -365,7 +365,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "ToolsFine",
@@ -383,7 +383,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "Top Best Alternatives",
@@ -401,7 +401,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "Twelve.tools",
@@ -419,7 +419,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED BADGE_REQUIRED 2026-11-18"
   },
   {
    "name": "Unrola",
@@ -437,7 +437,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED UNCONFIRMED 2026-11-18"
   },
   {
    "name": "Waildworld",
@@ -455,7 +455,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "WebsiteHunt",
@@ -473,7 +473,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "aitoolfor.org",
@@ -491,7 +491,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED PAID 2026-11-18"
   },
   {
    "name": "business-software.com",
@@ -509,7 +509,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "businesstoolvault",
@@ -527,7 +527,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "detectortools.ai",
@@ -545,7 +545,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "digitalcreatorai",
@@ -563,7 +563,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "futureaitoolbox",
@@ -581,7 +581,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "kis.tool",
@@ -599,7 +599,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "once.tools",
@@ -617,7 +617,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "osalt.com",
@@ -635,7 +635,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "saaspirate",
@@ -653,7 +653,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "spiff.store",
@@ -671,7 +671,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "thenextaidirectory",
@@ -689,7 +689,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "tools.landin.page",
@@ -707,7 +707,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "AI Directory",
@@ -725,7 +725,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED PHONE_REQUIRED 2026-11-18"
   },
   {
    "name": "AI Finder",
@@ -743,7 +743,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "AI Tool For Business",
@@ -761,7 +761,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "AIFINDY",
@@ -779,7 +779,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "AIWikiTools",
@@ -797,7 +797,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "AiSuperSmart",
@@ -815,7 +815,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "Aitogrow",
@@ -833,7 +833,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "Alternative.me",
@@ -851,7 +851,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "App Rater",
@@ -869,7 +869,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "BufferApps",
@@ -887,7 +887,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "Changelog",
@@ -905,7 +905,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED NO_FORM 2026-11-18"
   },
   {
    "name": "DropYourAI",
@@ -923,7 +923,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED PAID 2026-11-18"
   },
   {
    "name": "Feedmystartup",
@@ -941,7 +941,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED OTHER 2026-11-18"
   },
   {
    "name": "FiveTaco",
@@ -959,7 +959,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED OTHER 2026-11-19"
   },
   {
    "name": "Foundr.ai",
@@ -977,7 +977,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "Fund a Maker",
@@ -995,7 +995,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "GPTs Hunter",
@@ -1013,7 +1013,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED CAPTCHA 2026-11-18"
   },
   {
    "name": "Indie Tools",
@@ -1031,7 +1031,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "Interested In AI",
@@ -1049,7 +1049,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED OTHER 2026-11-18"
   },
   {
    "name": "Paxi",
@@ -1067,7 +1067,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED NO_FORM 2026-11-18"
   },
   {
    "name": "PoweredbyAI",
@@ -1085,7 +1085,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED PAID 2026-11-18"
   },
   {
    "name": "Prime Indies",
@@ -1103,7 +1103,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "Simple Lister",
@@ -1121,7 +1121,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "SpotTheAI",
@@ -1139,7 +1139,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "Startup Collections",
@@ -1157,7 +1157,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "TechFaster",
@@ -1175,7 +1175,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "The AI Warehouse",
@@ -1193,7 +1193,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "TrackBes",
@@ -1211,7 +1211,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "WhatLaunched.Today",
@@ -1229,7 +1229,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "aiagentslive",
@@ -1247,7 +1247,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED PAID 2026-11-18"
   },
   {
    "name": "aiwith.me",
@@ -1265,7 +1265,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED PAID 2026-11-18"
   },
   {
    "name": "bestsky",
@@ -1283,7 +1283,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED EMAIL_CODE_NOT_RECEIVED 2026-11-18"
   },
   {
    "name": "gptbot",
@@ -1301,7 +1301,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED PAID 2026-11-18"
   },
   {
    "name": "hacktheprompt",
@@ -1319,7 +1319,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "insanelycooltools",
@@ -1337,7 +1337,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED DEAD 2026-11-18"
   },
   {
    "name": "liteworker.ai",
@@ -1355,7 +1355,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED UNCONFIRMED 2026-11-18"
   },
   {
    "name": "projecthunt",
@@ -1373,7 +1373,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED NO_FORM 2026-11-18"
   },
   {
    "name": "saasradius",
@@ -1391,7 +1391,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-18"
   },
   {
    "name": "simplifyaitools",
@@ -1409,7 +1409,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED PAID 2026-11-18"
   },
   {
    "name": "01webdirectory",
@@ -4397,7 +4397,7 @@
    "has_form_on_page": true,
    "quality": "relevant; third-party DR 37 (ideaproof), not checked",
    "usable": true,
-   "status": "TODO"
+   "status": "TRIED SUBMITTED 2026-11-19"
   },
   {
    "name": "See What New AI",
@@ -4416,6 +4416,306 @@
    "quality": "relevant; third-party DR 25 (ideaproof), not checked",
    "usable": false,
    "status": "HOLD manual (free queue only)"
+  },
+  {
+   "name": "Top AI Directories",
+   "domain": "topaidirectories.com",
+   "submit_url": "https://topaidirectories.com/auth",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://topaidirectories.com/",
+   "free_check": "paid",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "unknown",
+   "checked": "2026-11-19",
+   "judge_reason": "Paid submission services and listings; no free listing named. Generic directory-of-directories with sign-up.",
+   "status": "HOLD spam risk",
+   "followed_sample": "0 followed / 0 not",
+   "needs": [
+    "account"
+   ]
+  },
+  {
+   "name": "AI Directory",
+   "domain": "aidirectory.website",
+   "submit_url": "https://aidirectory.website/submit",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://aidirectory.website/",
+   "free_check": "free_with_paid_option",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "mixed",
+   "checked": "2026-11-19",
+   "judge_reason": "Free listing needs your badge on site; paid $9/$99 skips it. Google sign-in required.",
+   "status": "HOLD spam risk",
+   "followed_sample": "63 followed / 9 not",
+   "needs": [
+    "google_login_only",
+    "badge_or_backlink"
+   ]
+  },
+  {
+   "name": "AI Corner",
+   "domain": "aicorner.net",
+   "submit_url": "https://aicorner.net/submit-tool",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://aicorner.net/",
+   "free_check": "free_confirmed_on_page",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-19",
+   "judge_reason": "Lists AI tools with a free $0 startup listing; sells dofollow backlinks, unverified stats, under construction.",
+   "status": "HOLD spam risk",
+   "followed_sample": "4 followed / 0 not",
+   "needs": [
+    "account"
+   ]
+  },
+  {
+   "name": "AI For Developers",
+   "domain": "aifordevelopers.org",
+   "submit_url": "https://aifordevelopers.org/submit",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://aifordevelopers.org/",
+   "free_check": "unclear",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-19",
+   "judge_reason": "Curated directory for developer AI tools; InayaFlow is consumer TikTok creator tooling, and listing cost is unstated.",
+   "status": "HOLD not relevant",
+   "followed_sample": "20 followed / 0 not",
+   "needs": [
+    "account"
+   ]
+  },
+  {
+   "name": "AIMiracle MAG",
+   "domain": "aimiracle.ai",
+   "submit_url": "https://aimiracle.ai",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://www.aimiracle.ai/",
+   "free_check": "unclear",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "unknown",
+   "checked": "2026-11-19",
+   "judge_reason": "Appears to be an AI news blog, not a product directory; no submit page.",
+   "status": "HOLD not a directory",
+   "followed_sample": "0 followed / 0 not",
+   "needs": []
+  },
+  {
+   "name": "ainave",
+   "domain": "ainave.com",
+   "submit_url": "https://ainave.com/submit/products",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://ainave.com/",
+   "free_check": "free_with_paid_option",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-19",
+   "judge_reason": "Listing is free; optional $5 verification ranks products higher. Accepts AI products.",
+   "status": "HOLD manual (free queue with a paid option)",
+   "followed_sample": "2 followed / 0 not",
+   "needs": []
+  },
+  {
+   "name": "AI Agent Store",
+   "domain": "aiagentstore.ai",
+   "submit_url": "https://aiagentstore.ai/claw-setup-files/submit",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://aiagentstore.ai/",
+   "free_check": "unclear",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "relevant",
+   "usable": false,
+   "followed": "mixed",
+   "checked": "2026-11-19",
+   "judge_reason": "AI agent directory with submissions, but no free listing stated; sign-up required.",
+   "status": "HOLD free not confirmed",
+   "followed_sample": "6 followed / 16 not",
+   "needs": [
+    "account"
+   ]
+  },
+  {
+   "name": "AI Agents Marketplace",
+   "domain": "trillionagent.com",
+   "submit_url": "https://trillionagent.com/",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://trillionagent.com/",
+   "free_check": "free_confirmed_on_page",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "relevant",
+   "usable": false,
+   "followed": "unknown",
+   "checked": "2026-11-19",
+   "judge_reason": "AI agent marketplace; home page states 'Free to list your agent'; registration appears required.",
+   "status": "HOLD followed not confirmed (unknown)",
+   "followed_sample": "0 followed / 0 not",
+   "needs": [
+    "account"
+   ]
+  },
+  {
+   "name": "AI Hubs",
+   "domain": "aihubs.ai",
+   "submit_url": "https://aihubs.ai/submit",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://aihubs.ai/",
+   "free_check": "free_with_paid_option",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "mixed",
+   "checked": "2026-11-19",
+   "judge_reason": "Free listing exists but requires a dofollow badge backlink; paid tiers are offered; looks like link exchange.",
+   "status": "HOLD spam risk",
+   "followed_sample": "52 followed / 6 not",
+   "needs": [
+    "account",
+    "badge_or_backlink"
+   ]
+  },
+  {
+   "name": "AI Hunt List",
+   "domain": "aihuntlist.com",
+   "submit_url": "https://aihuntlist.com/submission/new",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://aihuntlist.com/",
+   "free_check": "free_with_paid_option",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-19",
+   "judge_reason": "Free $0 listing exists but requires a badge or text link; paid tiers skip queue.",
+   "status": "HOLD manual (free queue with a paid option)",
+   "followed_sample": "58 followed / 0 not",
+   "needs": [
+    "badge_or_backlink",
+    "account"
+   ]
+  },
+  {
+   "name": "AI Library",
+   "domain": "theailibrary.co",
+   "submit_url": "https://www.theailibrary.co/login",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://www.theailibrary.co/",
+   "free_check": "free_confirmed_on_page",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "relevant",
+   "usable": false,
+   "followed": "unknown",
+   "checked": "2026-11-19",
+   "judge_reason": "Pricing page says free listing via queue; submission requires Google sign-in.",
+   "status": "BLOCKED needs a person (google_login_only)",
+   "followed_sample": "0 followed / 0 not",
+   "needs": [
+    "google_login_only"
+   ]
+  },
+  {
+   "name": "AiMatchPro",
+   "domain": "aimatch.pro",
+   "submit_url": "https://aimatch.pro/list?entry_source=header",
+   "source": "list-builder: best-of-ai/ai-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://aimatch.pro/",
+   "free_check": "paid",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-19",
+   "judge_reason": "Listing costs $29 one-time; no free option named; pages auto-written from websites.",
+   "status": "HOLD spam risk",
+   "followed_sample": "2 followed / 0 not",
+   "needs": [
+    "payment",
+    "badge_or_backlink"
+   ]
   }
  ]
 }
