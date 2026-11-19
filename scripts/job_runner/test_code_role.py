@@ -252,7 +252,7 @@ class CodeRole(unittest.TestCase):
         plant_hook(os.path.join(fake, "hooks"))
         with open(os.path.join(r.CODE_WORK, ".git"), "w") as f:
             f.write("gitdir: %s\n" % fake.replace("\\", "/"))
-        self.assertTrue(r.drop_planted_git())
+        self.assertEqual(r.drop_planted_git(), [".git"])
         shutil.rmtree(fake)
         plant_hook(os.path.join(r.CODE_GIT, "hooks"))                      # worst case: inside the real git dir
         r.tool_edit(j, "tests/example.test.mjs", "// first\n", "// first\n// added by the robot\n")
@@ -282,6 +282,31 @@ class CodeRole(unittest.TestCase):
         self.assertNotIn("test-token-value", blob)
         self.assertNotIn("ANTHROPIC_API_KEY", envs[0])
         self.assertNotIn("GENIE_LOGS_TOKEN", envs[0])
+
+    def test_nested_git_anywhere_is_removed_and_blocks_the_push(self):
+        """Fable QA round 2 note: a `.git` planted DEEPER in the tree (folder, pointer file, even inside node_modules)."""
+        remote = make_repo()
+        j = r.parse_brief(BRIEF)
+        r.tool_edit(j, "tests/example.test.mjs", "// first\n", "// first\n// added by the robot\n")
+        deep = os.path.join(r.CODE_WORK, "lib", "vendor", "thing")
+        plant_hook(os.path.join(deep, ".git", "hooks"))
+        with open(os.path.join(deep, ".git", "config"), "w") as f:
+            f.write("[core]\n\tfsmonitor = /bin/true\n")
+        os.makedirs(os.path.join(r.CODE_WORK, "node_modules", "pkg"))
+        with open(os.path.join(r.CODE_WORK, "node_modules", "pkg", ".git"), "w") as f:
+            f.write("gitdir: /tmp/elsewhere\n")
+        os.makedirs(os.path.join(r.CODE_WORK, "app", "x", ".GIT"))            # another spelling
+        info = r.finish_code(j)
+        self.assertFalse(info["pushed"])
+        self.assertIn("a .git file or folder appeared inside the working copy", info["note"])
+        self.assertIn("lib/vendor/thing/.git", info["note"])
+        left = [os.path.join(d, n) for d, ds, fs in os.walk(r.CODE_WORK) for n in ds + fs if n.lower() == ".git"]
+        self.assertEqual(left, [])                                         # every one is gone
+        self.assertFalse(os.path.exists(MARK))
+        self.assertEqual(sorted(remote_refs(remote)), ["refs/heads/main"])
+        self.assertEqual(r.drop_planted_git(), [])                         # clean tree: nothing found
+        info = r.finish_code(j)                                            # and the same job can then push normally
+        self.assertTrue(info["pushed"], info)
 
     def test_sonnet_cache_price(self):
         m = r.Meter("sonnet")

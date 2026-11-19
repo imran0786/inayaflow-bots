@@ -579,16 +579,25 @@ def code_git(*args, check=True, with_token_url=False):
 
 
 def drop_planted_git():
-    """Remove a `.git` file or folder that appeared INSIDE the working copy (the runner never puts one there)."""
-    planted = os.path.join(CODE_WORK, ".git")
-    if os.path.islink(planted) or os.path.isfile(planted):
-        os.remove(planted)
-        return True
-    if os.path.isdir(planted):
-        import shutil
-        shutil.rmtree(planted, ignore_errors=True)
-        return True
-    return False
+    """Delete EVERY `.git` (file, link or folder) anywhere inside the working copy, at any depth, and return the list of
+    places found. The runner never puts one there (its git data is in CODE_GIT), so after set-up any hit was planted."""
+    import shutil
+    found = []
+    for d, subdirs, files in os.walk(CODE_WORK, topdown=True, followlinks=False):
+        for name in list(subdirs) + list(files):
+            if name.lower() != ".git":
+                continue
+            full = os.path.join(d, name)
+            found.append(os.path.relpath(full, CODE_WORK).replace(os.sep, "/"))
+            if os.path.islink(full) or os.path.isfile(full):
+                try:
+                    os.remove(full)
+                except OSError:
+                    pass
+            else:
+                shutil.rmtree(full, onerror=lambda f, path, e: (os.chmod(path, 0o700), f(path)))
+        subdirs[:] = [x for x in subdirs if x.lower() != ".git"]
+    return found
 
 
 def _token_url():
@@ -618,7 +627,10 @@ def prepare_code(job):
     code, out = docker_node(["npm", "ci", "--no-audit", "--no-fund", "--ignore-scripts"], True, 900)
     if code != 0:
         return "npm ci failed (exit %d)" % code
+    drop_planted_git()            # a package may ship its own .git: clear those now, so a later hit can only be planted
     job["_baseline"] = run_app_tests()
+    if drop_planted_git():
+        return "the baseline test run left a .git inside the working copy"
     return None
 
 
@@ -630,7 +642,7 @@ def finish_code(job):
     names = [n for n in code_git("diff", "--cached", "--name-only").stdout.split("\n") if n.strip()]
     info["files"] = names
     if planted:
-        info["note"] = "REFUSED TO PUSH: a .git file or folder appeared inside the working copy (removed, nothing ran)"
+        info["note"] = "REFUSED TO PUSH: a .git file or folder appeared inside the working copy (%s; removed, nothing ran)" % ", ".join(planted[:5])
         return info
     if not names:
         info["note"] = "no file was changed, nothing pushed"
