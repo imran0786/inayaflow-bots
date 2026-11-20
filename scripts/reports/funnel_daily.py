@@ -51,6 +51,16 @@ def build(data, hist):
     for d in days:
         L.append("| %s | %s | %s | %s | %s |" % (d.get("day"), d.get("signups", 0), d.get("with_source", 0), kv(d.get("buckets")), kv(d.get("from"))))
     diff, since = new_paying(data, hist)
+    L += ["", "## Visitors by source (every visit, not only sign-ups)", "",
+          "Live since 20 Nov 2026 22:35 UTC (table visit_sources). One visit = the first page of a browser tab session. "
+          "Our own test visit of 20 Nov (utm_source director-check) is in that day's number.", "",
+          "| day | visits | by source bucket | AI visits from (top 10) |", "|---|---|---|---|"]
+    for d in days:
+        v = d.get("visits")
+        if not isinstance(v, dict):
+            L.append("| %s | not counted yet | - | - |" % d.get("day"))
+            continue
+        L.append("| %s | %s | %s | %s |" % (d.get("day"), v.get("total", 0), kv(v.get("by_bucket"), 8), kv(v.get("ai_from"), 10)))
     L += ["", "## Paying accounts", "",
           "- Paying accounts now: %s (%s)." % (data.get("paying_total", 0), kv(data.get("paying_by_tier"))),
           "- New paying accounts: %s." % ("not known yet (first run, tomorrow's run compares with today)" if diff is None else "%+d since the %s report" % (diff, since)),

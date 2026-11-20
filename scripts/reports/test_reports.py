@@ -279,6 +279,14 @@ class Funnel(unittest.TestCase):
         self.assertIn("+1 since the 2026-11-18 report", rep)
         self.assertIn("not known yet", fd.build(self.DATA, {}))
 
+    def test_visits_table(self):
+        data = json.loads(json.dumps(self.DATA))
+        rep = fd.build(data, {})
+        self.assertIn("| 2026-11-19 | not counted yet | - | - |", rep)
+        data["days"][0]["visits"] = {"total": 12, "by_bucket": {"ai": 7, "direct": 5}, "ai_from": {"chatgpt / analyze": 4, "chatgpt.com": 3}}
+        rep = fd.build(data, {})
+        self.assertIn("| 2026-11-19 | 12 | ai 7, direct 5 | chatgpt / analyze 4, chatgpt.com 3 |", rep)
+
     def test_rpc_uses_anon_key_and_token_only(self):
         seen = {}
 
