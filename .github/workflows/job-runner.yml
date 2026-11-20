@@ -41,7 +41,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           JOB_DEEPSEEK_FALLBACK: "false"
-          DAILY_COST_CAP: "3.00"
+          DAILY_COST_CAP: "10.00"   # Imran 20 Nov 2026: "Go ahead now" (raise $3 -> $10; API credit expires ~4 Dec)
           DEFAULT_JOB_COST_CAP: "0.20"
           CODE_JOB_COST_CAP: "2.00"
           CODE_ROLE_ON: "true"
