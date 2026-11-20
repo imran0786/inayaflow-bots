@@ -161,19 +161,33 @@ class Batch(unittest.TestCase):
         self.assertEqual(bb.rel_sample(DETAIL_N, "https://dir.example/tool/alpha", "dir.example"), (0, 1))
         self.assertEqual([bb.followed_verdict(*x) for x in ((2, 0), (0, 2), (1, 1), (0, 0))], ["followed", "nofollow", "mixed", "unknown"])
 
-    def test_check_site_usable_only_when_free_and_followed(self):
+    def test_check_site_usable_when_free_followed_or_nofollow(self):
         ai = lambda s, u, m=0: FREE
         row = bb.check_site("Dir", "https://dir.example/", "dir.example", getter(DETAIL_F), ai)
         self.assertTrue(row["usable"])
         self.assertEqual((row["status"], row["followed"], row["submit_url"]), ("TODO", "followed", "https://dir.example/submit"))
         row = bb.check_site("Dir", "https://dir.example/", "dir.example", getter(DETAIL_N), ai)
-        self.assertFalse(row["usable"])
-        self.assertEqual(row["status"], "NOFOLLOW - LATER")
+        self.assertTrue(row["usable"])  # Imran 20 Nov 2026: nofollow is usable too
+        self.assertEqual((row["status"], row["followed"]), ("TODO", "nofollow"))
         paid = lambda s, u, m=0: FREE.replace('"free"', '"paid_only"')
         self.assertEqual(bb.check_site("Dir", "https://dir.example/", "dir.example", getter(DETAIL_F), paid)["status"], "HOLD paid")
         row = bb.check_site("Dir", "https://dir.example/", "dir.example", getter(DETAIL_F, '<form></form><div class="g-recaptcha"></div>'), ai)
         self.assertFalse(row["usable"])
         self.assertTrue(row["status"].startswith("BLOCKED needs a person"))
+        # Imran 20 Nov 2026: free queue next to a paid option is usable; payment / badge needs still stop it
+        fq = lambda s, u, m=0: FREE.replace('"free"', '"free_with_paid_option"')
+        row = bb.check_site("Dir", "https://dir.example/", "dir.example", getter(DETAIL_F), fq)
+        self.assertEqual((row["usable"], row["status"]), (True, "TODO"))
+        fq_pay = lambda s, u, m=0: FREE.replace('"free"', '"free_with_paid_option"').replace('["none"]', '["payment"]')
+        self.assertEqual(bb.check_site("Dir", "https://dir.example/", "dir.example", getter(DETAIL_F), fq_pay)["status"], "HOLD paid")
+        badge = lambda s, u, m=0: FREE.replace('["none"]', '["badge_or_backlink"]')
+        row = bb.check_site("Dir", "https://dir.example/", "dir.example", getter(DETAIL_F), badge)
+        self.assertEqual((row["usable"], row["status"]), (False, "BLOCKED needs a person (badge_or_backlink)"))
+        for needs in ('["phone"]', '["google_login_only"]'):
+            j = lambda s, u, m=0, n=needs: FREE.replace('["none"]', n)
+            self.assertFalse(bb.check_site("Dir", "https://dir.example/", "dir.example", getter(DETAIL_F), j)["usable"])
+        row = bb.check_site("Dir", "https://dir.example/", "dir.example", getter('<p>no links here</p>'), ai)
+        self.assertEqual((row["usable"], row["status"], row["followed"]), (True, "TODO", "unknown"))
         junk = lambda s, u, m=0: "not json"
         self.assertFalse(bb.check_site("Dir", "https://dir.example/", "dir.example", getter(DETAIL_F), junk)["usable"])
         dead = lambda url, timeout=15, limit=0: (0, url, "")

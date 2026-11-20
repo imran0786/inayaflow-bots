@@ -6,7 +6,7 @@
  B. LIST BUILDER: reads public lists of directories, checks each NEW site on its live pages (GET only: home,
     submit page, pricing page, sample listing pages), lets Claude Haiku judge free / paid / relevant, measures
     whether outbound listing links are followed, and adds the site to data/directories_candidates.json.
-    Only free + followed + relevant sites get usable=true (the directory agent then applies to them).
+    Free (or free-queue) + relevant sites get usable=true, followed or nofollow (Imran 20 Nov 2026) (the directory agent then applies to them).
  C. OUTREACH: at most 3 e-mails a day in total. Each one: prospect from the private list, page opened live,
     contact address found on the site's own live pages, exact topic match judged by Haiku, fixed company-voice
     template with true product facts, guardrails in code. The mail is NOT sent here: a job file is written for the
@@ -208,7 +208,7 @@ HUMAN_NEEDS = {"captcha", "phone", "payment", "google_login_only", "badge_or_bac
 
 
 def decide(alive, j, followed, captcha_words):
-    """(usable, status). usable only for: alive + directory + relevant + low spam + free + followed + no human-only step."""
+    """(usable, status). usable for: alive + directory + relevant + low spam + free (or free queue) + no human-only step; followed OR nofollow (Imran 20 Nov 2026)."""
     if not alive:
         return False, "HOLD dead or unreachable"
     if not j["is_directory"]:
@@ -219,17 +219,13 @@ def decide(alive, j, followed, captcha_words):
         return False, "HOLD not relevant"
     if j["free"] == "paid_only" or "payment" in j["needs"]:
         return False, "HOLD paid"
-    if j["free"] == "free_with_paid_option":
-        return False, "HOLD manual (free queue with a paid option)"
-    if j["free"] != "free":
+    # Imran 20 Nov 2026: followed AND nofollow now; a free queue next to a paid option is fine (we never pay).
+    if j["free"] not in ("free", "free_with_paid_option"):
         return False, "HOLD free not confirmed"
     blockers = sorted(set(j["needs"]) & HUMAN_NEEDS) + (["captcha"] if captcha_words and "captcha" not in j["needs"] else [])
     if blockers:
         return False, "BLOCKED needs a person (%s)" % ", ".join(blockers)
-    if followed == "nofollow":
-        return False, "NOFOLLOW - LATER"
-    if followed != "followed":
-        return False, "HOLD followed not confirmed (%s)" % followed
+    # Imran 20 Nov 2026: "be it no follow or forward backlink" -> nofollow / mixed / unknown links are usable too.
     return True, "TODO"
 
 
@@ -677,7 +673,7 @@ def render(flags_changed, n_untried, rows, queued, skipped, human, send, note=""
         L += [note, ""]
     usable = [r for r in rows if r.get("usable")]
     L += ["- Flags: %d candidate rows updated from the directory agent's real results. Untried usable sites now: %d." % (flags_changed, n_untried),
-          "- List builder: %d new sites checked, %d added as usable (free + followed + relevant)." % (len(rows), len(usable)),
+          "- List builder: %d new sites checked, %d added as usable (free + relevant, followed or nofollow)." % (len(rows), len(usable)),
           "- Outreach: %d e-mail(s) %s, %d prospect(s) skipped, %d need a person (form only)." % (
               len(queued), "queued for the outbox robot" if send else "drafted only", len(skipped), len(human)), ""]
     if rows:

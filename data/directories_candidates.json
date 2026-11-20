@@ -4406,7 +4406,7 @@
    "source": "ideaproof-ai-tools-index (18 Nov refill)",
    "their_category": "ai_tools",
    "their_auto_flag": "manual",
-   "their_notes": "Free queue exists but the submit form offers paid credit ($10) on the same page; login required. HOLD: a human must pick the free queue, the agent must not choose paid. Verified 18 Nov by page read.",
+   "their_notes": "Free queue exists but the submit form offers paid credit ($10) on the same page; login required. Free queue OK (Imran 20 Nov 2026); the agent picks the FREE queue only, never the paid credit. Verified 18 Nov by page read.",
    "their_status": null,
    "http": 200,
    "final_url": "https://seewhatnewai.com/submit",
@@ -4414,8 +4414,9 @@
    "captcha_words_on_page": false,
    "has_form_on_page": true,
    "quality": "relevant; third-party DR 25 (ideaproof), not checked",
-   "usable": false,
-   "status": "HOLD manual (free queue only)"
+   "usable": true,
+   "status": "TODO",
+   "why": " | reopened 2026-11-20 (Imran: nofollow + free queue OK)"
   },
   {
    "name": "Top AI Directories",
@@ -4556,13 +4557,14 @@
    "captcha_words_on_page": false,
    "has_form_on_page": false,
    "quality": "relevant",
-   "usable": false,
+   "usable": true,
    "followed": "followed",
    "checked": "2026-11-19",
    "judge_reason": "Listing is free; optional $5 verification ranks products higher. Accepts AI products.",
-   "status": "HOLD manual (free queue with a paid option)",
+   "status": "TODO",
    "followed_sample": "2 followed / 0 not",
-   "needs": []
+   "needs": [],
+   "why": " | reopened 2026-11-20 (Imran: nofollow + free queue OK)"
   },
   {
    "name": "AI Agent Store",
@@ -4604,15 +4606,16 @@
    "captcha_words_on_page": false,
    "has_form_on_page": false,
    "quality": "relevant",
-   "usable": false,
+   "usable": true,
    "followed": "unknown",
    "checked": "2026-11-19",
    "judge_reason": "AI agent marketplace; home page states 'Free to list your agent'; registration appears required.",
-   "status": "HOLD followed not confirmed (unknown)",
+   "status": "TODO",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
-   ]
+   ],
+   "why": " | reopened 2026-11-20 (Imran: nofollow + free queue OK)"
   },
   {
    "name": "AI Hubs",
@@ -4659,12 +4662,13 @@
    "followed": "followed",
    "checked": "2026-11-19",
    "judge_reason": "Free $0 listing exists but requires a badge or text link; paid tiers skip queue.",
-   "status": "HOLD manual (free queue with a paid option)",
+   "status": "BLOCKED needs a person (badge_or_backlink)",
    "followed_sample": "58 followed / 0 not",
    "needs": [
     "badge_or_backlink",
     "account"
-   ]
+   ],
+   "why": ""
   },
   {
    "name": "AI Library",
@@ -5418,12 +5422,13 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free listing requires footer badge and dofollow link; Google sign-in; $9.99 featured option.",
-   "status": "HOLD manual (free queue with a paid option)",
+   "status": "BLOCKED needs a person (badge_or_backlink, google_login_only)",
    "followed_sample": "3 followed / 0 not",
    "needs": [
     "badge_or_backlink",
     "google_login_only"
-   ]
+   ],
+   "why": ""
   },
   {
    "name": "AI Headshot Hub",

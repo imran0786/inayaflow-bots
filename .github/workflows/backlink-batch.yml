@@ -1,8 +1,8 @@
 name: Backlink batch (list builder + outreach, twice a day)
 
 # A. fixes the status flags in data/directories_candidates.json from the directory agent's real results
-# B. list builder: checks NEW directories on their live pages (GET only) and adds them; only free + followed +
-#    relevant ones get usable=true (the directory agent applies to those)
+# B. list builder: checks NEW directories on their live pages (GET only) and adds them; free (or free queue) +
+#    relevant ones get usable=true, followed or nofollow (Imran 20 Nov 2026; the directory agent applies to those)
 # C. outreach: at most 3 e-mails a day, written as job files for the Namecheap outbox robot (never Gmail)
 # Never signs up, never fills a form, never pays, never solves a CAPTCHA: those go to ops/blocked_needs_imran.md.
 # Details: PRIVATE repo imran0786/genie, branch ops-reports. Public output: counts only.
