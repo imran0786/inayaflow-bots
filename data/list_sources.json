@@ -1,8 +1,21 @@
 {
  "note": "Public lists of directories the list builder reads (GET only). Every site is re-checked on its own live pages before it is added. Add a source = add one line.",
  "sources": [
-  {"name": "best-of-ai/ai-directories", "url": "https://raw.githubusercontent.com/best-of-ai/ai-directories/main/README.md"},
-  {"name": "theshubh77/awesome-saas-directories", "url": "https://raw.githubusercontent.com/theshubh77/awesome-saas-directories/master/README.md"},
-  {"name": "Emlyjones/ai-directories", "url": "https://raw.githubusercontent.com/Emlyjones/ai-directories/main/README.md"}
+  {
+   "name": "bulk-2026-11-20 (16 GitHub lists, 2+ mentions)",
+   "url": "https://raw.githubusercontent.com/imran0786/inayaflow-bots/main/data/bulk_candidates_2026-11-20.md"
+  },
+  {
+   "name": "best-of-ai/ai-directories",
+   "url": "https://raw.githubusercontent.com/best-of-ai/ai-directories/main/README.md"
+  },
+  {
+   "name": "theshubh77/awesome-saas-directories",
+   "url": "https://raw.githubusercontent.com/theshubh77/awesome-saas-directories/master/README.md"
+  },
+  {
+   "name": "Emlyjones/ai-directories",
+   "url": "https://raw.githubusercontent.com/Emlyjones/ai-directories/main/README.md"
+  }
  ]
 }

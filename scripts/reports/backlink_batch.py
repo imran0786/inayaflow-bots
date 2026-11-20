@@ -290,7 +290,7 @@ def list_builder(data, known_extra, limit=MAX_NEW_SITES, get=c.http_get, ai=c.ha
             break
         except Exception:
             errors += 1      # not written down: the site is checked again on a later run
-            if errors >= 3:
+            if errors >= max(3, limit // 10):   # bulk runs (Imran 20 Nov) tolerate a few broken sites
                 break
             continue
         row["source"] = "list-builder: " + src

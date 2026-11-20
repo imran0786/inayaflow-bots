@@ -21,6 +21,9 @@ on:
       max_new_sites:
         description: "how many new directories to check"
         default: "15"
+      max_ai_calls:
+        description: "Haiku call cap for this run (about 1 per new site + 15 for outreach)"
+        default: "30"
 
 permissions:
   contents: write
@@ -32,7 +35,7 @@ concurrency:
 jobs:
   batch:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,7 +54,7 @@ jobs:
           DRY_RUN: ${{ github.event.inputs.dry_run || (github.event_name == 'schedule' && 'false') || 'true' }}
           FORCE: ${{ github.event.inputs.force || 'false' }}
           MAX_NEW_SITES: ${{ github.event.inputs.max_new_sites || '15' }}
-          MAX_AI_CALLS: "30"
+          MAX_AI_CALLS: ${{ github.event.inputs.max_ai_calls || '30' }}
           MAX_SENDS_PER_DAY: "3"
         run: |
           echo "::add-mask::$GENIE_LOGS_TOKEN"
