@@ -448,6 +448,68 @@ def revert(deploy_sha, parent_sha, author, why):
     return None, "the revert push was refused three times"
 
 
+def verify_or_revert(deploy_sha, parent_sha, targets, author, e, state, day):
+    """Step 8 + 9 for a commit the robot put on main: Vercel success, live pages; else revert and maybe halt.
+    Fills e["result"] / e["reason"]."""
+    st, desc = wait_vercel(deploy_sha)
+    problems = [] if st == "success" else ["Vercel: %s (%s)" % (st, desc)]
+    if not problems:
+        problems = check_pages(targets, deploy_sha)
+    if not problems:
+        tree = app_git("rev-parse", deploy_sha + "^{tree}").stdout.strip()
+        ping = indexnow([u for t in targets if t["kind"] == "guide" for u in t["urls"]], tree)
+        e["result"], e["reason"] = "DEPLOYED", "Vercel success; %d page(s) checked live; IndexNow %s" % (sum(len(t["urls"]) for t in targets), ping)
+        return
+    rsha, note = revert(deploy_sha, parent_sha, author, problems[0])
+    add_day(state, day, reverts=1)
+    if not rsha:
+        state["halted"] = "REVERT FAILED for %s on %s: %s" % (deploy_sha[:10], e["time"], note)
+        e["result"], e["reason"] = "REVERT FAILED - NEEDS DIRECTOR NOW", "; ".join(problems) + " / " + note
+        return
+    rst, rdesc = wait_vercel(rsha)
+    e["result"], e["reason"] = "REVERTED", "%s / revert %s, Vercel: %s %s" % ("; ".join(problems), rsha[:10], rst, rdesc)
+    if rst != "success":
+        state["halted"] = "the revert %s did not reach 'Vercel success' (%s) on %s" % (rsha[:10], rst, e["time"])
+    elif P.day_counts(state, day)[2] >= CFG["limits"]["reverts_before_halt"]:
+        state["halted"] = "%d reverts on %s" % (P.day_counts(state, day)[2], day)
+
+
+def find_inflight_commit(note, main_sha):
+    """The commit an earlier, broken run pushed: on main, parent = the noted parent, tree = the noted tree. None = never pushed."""
+    for row in app_git("log", "-60", "--format=%H %T %P", main_sha).stdout.splitlines():
+        sha, tree, *parents = row.split()
+        if tree == note.get("tree") and parents == [note.get("parent")]:
+            return sha
+    return None
+
+
+def recover_inflight(state, author):
+    """LIVE only, at the start of a run: finish the checks of a deploy whose run died. Returns a log entry or None."""
+    note = state.get("inflight")
+    if not note:
+        return None
+    day = now().strftime("%Y-%m-%d")
+    e = {"time": now().strftime("%Y-%m-%d %H:%M"), "branch": note.get("branch", "?"), "sha": note.get("sha", ""), "source": "recovery", "mode": "live",
+         "result": "", "reason": "", "files": [], "review_usd": 0.0}
+    try:
+        main_sha = fetch_main()
+        deploy_sha = find_inflight_commit(note, main_sha)
+        if not deploy_sha:
+            state.pop("inflight", None)
+            return None                           # the earlier run stopped before its push: nothing is live, the candidate is tried again
+        if not author:
+            raise RuntimeError("no accepted author to revert with")
+        add_day(state, day, deploys=1)
+        verify_or_revert(deploy_sha, note["parent"], note.get("targets") or [], author, e, state, day)
+        e["reason"] = "(checked late: the run that pushed %s at %s did not finish) %s" % (deploy_sha[:10], note.get("time", "?"), e["reason"])
+        state.setdefault("seen", {})["%s@%s" % (note.get("branch"), note.get("sha"))] = e["result"]
+        state.pop("inflight", None)
+    except Exception as x:
+        state["halted"] = "a deploy from %s was never checked and the late check failed (%s)" % (note.get("time", "?"), type(x).__name__)
+        e["result"], e["reason"] = "UNCHECKED DEPLOY - NEEDS DIRECTOR NOW", state["halted"]
+    return e
+
+
 def indexnow(urls, main_tree, post=post_json):
     try:
         src = blob(main_tree, "scripts/indexnow-ping.mjs") or ""
@@ -687,35 +749,22 @@ def process(cand, md, state, pre):
             return e, "\n".join(D)
         step = "merge"
         author = pre["author"]
+        # Written to the private log BEFORE the push: if this run dies between the push and the checks, the next run
+        # finds the note, checks the pages and reverts if needed (recover_inflight). A deploy is never left unchecked.
+        state["inflight"] = {"tree": view["tree"], "parent": main_sha, "branch": cand["branch"], "sha": cand["sha"], "targets": targets, "time": e["time"]}
+        write(STATE, json.dumps(state, indent=1, sort_keys=True) + "\n")
+        push_ops("ops: deploy robot (about to deploy)")
         deploy_sha = commit_on_main(view["tree"], main_sha, author, message)
         if not deploy_sha:
+            state.pop("inflight", None)
             raise RuntimeError("push to main refused (main moved or the token may not push): will try again next run")
         add_day(state, day, deploys=1)
         e["deploy_sha"] = deploy_sha
         D += ["## Merge", "", "Pushed `%s` on top of `%s` (author %s)." % (deploy_sha, main_sha[:10], mask_email(author[1])), ""]
         step = "verify"
-        st, desc = wait_vercel(deploy_sha)
-        problems = [] if st == "success" else ["Vercel: %s (%s)" % (st, desc)]
-        if not problems:
-            problems = check_pages(targets, deploy_sha)
-        if problems:
-            rsha, note = revert(deploy_sha, main_sha, author, problems[0])
-            add_day(state, day, reverts=1)
-            if not rsha:
-                state["halted"] = "REVERT FAILED for %s on %s: %s" % (deploy_sha[:10], e["time"], note)
-                e["result"], e["reason"] = "REVERT FAILED - NEEDS DIRECTOR NOW", "; ".join(problems) + " / " + note
-            else:
-                rst, rdesc = wait_vercel(rsha)
-                e["result"], e["reason"] = "REVERTED", "%s / revert %s, Vercel: %s %s" % ("; ".join(problems), rsha[:10], rst, rdesc)
-                if rst != "success":
-                    state["halted"] = "the revert %s did not reach 'Vercel success' (%s) on %s" % (rsha[:10], rst, e["time"])
-                elif P.day_counts(state, day)[2] >= CFG["limits"]["reverts_before_halt"]:
-                    state["halted"] = "%d reverts on %s" % (P.day_counts(state, day)[2], day)
-            D += ["## Result", "", e["result"] + ": " + e["reason"], ""]
-            return e, "\n".join(D)
-        ping = indexnow([u for t in targets if t["kind"] == "guide" for u in t["urls"]], view["main_tree"])
-        e["result"], e["reason"] = "DEPLOYED", "Vercel success; %d page(s) checked live; IndexNow %s" % (n_pages, ping)
-        D += ["## Result", "", "DEPLOYED. Pages checked: " + ", ".join(u for t in targets for u in t["urls"]) + ". IndexNow: " + ping, ""]
+        verify_or_revert(deploy_sha, main_sha, targets, author, e, state, day)
+        state.pop("inflight", None)
+        D += ["## Result", "", e["result"] + ": " + e["reason"], "", "Pages: " + ", ".join(u for t in targets for u in t["urls"]), ""]
         return e, "\n".join(D)
     except Refused as r:
         e["result"] = {"REFUSED": "REFUSED", "TESTS": "TESTS FAIL", "QA FAIL": "QA FAIL", "SKIP": "SKIPPED"}[r.kind] + ("" if md == "live" else " (dry run)")
@@ -771,6 +820,11 @@ def main():
     entries, details, pre = [], {}, None
     stamp = now().strftime("%Y-%m-%d %H:%M")
     blocked = ""
+    if md == "live" and state.get("inflight"):
+        late = recover_inflight(state, preflight(fetch_main())[2])
+        if late:
+            entries.append(late)
+            todo = []                                  # this run only finishes the old deploy; candidates wait for the next run
     if todo:
         problems, facts, author = preflight(fetch_main())
         pre = {"problems": problems, "facts": facts, "author": author}
@@ -805,7 +859,7 @@ def main():
     print("auto-deploy: mode=%s candidates=%d waiting=%d deployed=%d would_merge=%d refused=%d tests_fail=%d qa_fail=%d reverted=%d skipped=%d errors=%d review_usd=%.4f halted=%s" % (
         md, len(entries), max(0, len(cands) - len(todo)), c("DEPLOYED"), c("DRY RUN: WOULD"), c("REFUSED"), c("TESTS"), c("QA FAIL"), c("REVERT"), c("SKIPPED"), c("ERROR"),
         sum(e.get("review_usd", 0.0) for e in entries), "yes" if state.get("halted") else "no"))
-    if any(e["result"].startswith(("REVERT", "ERROR")) for e in entries):
+    if any(e["result"].startswith(("REVERT", "ERROR", "UNCHECKED")) for e in entries):
         sys.exit(1)        # a red run in the Actions list = someone should look
 
 

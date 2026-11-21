@@ -116,7 +116,18 @@ class Mode(unittest.TestCase):
         self.assertEqual(calls, [])
 
 
+def reset_main():
+    """Remote main = the very first commit again (tests that deploy leave it moved)."""
+    first = sh("rev-list", "--max-parents=0", "main")
+    sh("checkout", "-q", "main")
+    sh("reset", "-q", "--hard", first)
+    sh("push", "-q", "-f", "origin", "main")
+
+
 class MergeView(unittest.TestCase):
+    def setUp(self):
+        reset_main()
+
     def view(self, name, **kw):
         sha = branch(name, **kw)
         main = fresh()
@@ -204,11 +215,7 @@ class MergeView(unittest.TestCase):
 
 class MergeAndRevert(unittest.TestCase):
     def setUp(self):
-        # every test starts from a fresh remote main = the very first commit
-        first = sh("rev-list", "--max-parents=0", "main")
-        sh("checkout", "-q", "main")
-        sh("reset", "-q", "--hard", first)
-        sh("push", "-q", "-f", "origin", "main")
+        reset_main()
 
     def deploy(self, name, files):
         sha = branch(name, files=files)
@@ -267,6 +274,103 @@ class MergeAndRevert(unittest.TestCase):
         rsha, note = R.revert(d, main, AUTHOR, "x")
         self.assertIsNone(rsha)
         self.assertEqual(remote_main(), later)
+
+    # ---- step 8 + 9 as one unit, with Vercel and the pages faked ----
+    def patched(self, vercel, pages):
+        keep = (R.wait_vercel, R.check_pages, R.indexnow)
+        R.wait_vercel = lambda sha, *a, **k: next(vercel)
+        R.check_pages = lambda targets, sha, *a, **k: pages
+        R.indexnow = lambda urls, tree, *a, **k: "sent (%d)" % len(urls)
+        self.addCleanup(lambda: (setattr(R, "wait_vercel", keep[0]), setattr(R, "check_pages", keep[1]), setattr(R, "indexnow", keep[2])))
+
+    TARGETS = [{"path": "content/blog/new-guide.mdx", "kind": "guide", "urls": ["https://inayaflow.ai/blog/new-guide"], "markers": ["A guide about scheduling posts"]}]
+
+    def entry(self):
+        return {"time": "2026-11-21 10:00", "result": "", "reason": ""}
+
+    def test_verify_ok(self):
+        d, main, _v = self.deploy("autodeploy/v-ok", {"content/blog/new-guide.mdx": GUIDE})
+        self.patched(iter([("success", "")]), [])
+        e, state = self.entry(), {}
+        R.verify_or_revert(d, main, self.TARGETS, AUTHOR, e, state, "2026-11-21")
+        self.assertEqual(e["result"], "DEPLOYED")
+        self.assertEqual(remote_main(), d)
+        self.assertNotIn("halted", state)
+
+    def test_vercel_failure_reverts(self):
+        d, main, _v = self.deploy("autodeploy/v-fail", {"content/blog/new-guide.mdx": GUIDE})
+        self.patched(iter([("failure", "Deployment was blocked"), ("success", "")]), [])
+        e, state = self.entry(), {}
+        R.verify_or_revert(d, main, self.TARGETS, AUTHOR, e, state, "2026-11-21")
+        self.assertEqual(e["result"], "REVERTED")
+        self.assertIn("Deployment was blocked", e["reason"])
+        self.assertEqual(sh("rev-parse", remote_main() + "^{tree}", cwd=REMOTE), sh("rev-parse", main + "^{tree}", cwd=REMOTE))
+        self.assertEqual(P.day_counts(state, "2026-11-21")[2], 1)
+        self.assertNotIn("halted", state)
+
+    def test_page_problem_reverts_and_second_revert_halts(self):
+        d, main, _v = self.deploy("autodeploy/v-page", {"content/blog/new-guide.mdx": GUIDE})
+        self.patched(iter([("success", ""), ("success", "")]), ["https://inayaflow.ai/blog/new-guide: HTTP 404"])
+        e, state = self.entry(), {"days": {"2026-11-21": {"deploys": 1, "review_usd": 0, "reverts": 1}}}
+        R.verify_or_revert(d, main, self.TARGETS, AUTHOR, e, state, "2026-11-21")
+        self.assertEqual(e["result"], "REVERTED")
+        self.assertIn("HTTP 404", e["reason"])
+        self.assertIn("2 reverts", state["halted"])
+
+    def test_timeout_reverts_and_bad_revert_halts(self):
+        d, main, _v = self.deploy("autodeploy/v-time", {"content/blog/new-guide.mdx": GUIDE})
+        self.patched(iter([("timeout", "no status"), ("failure", "blocked")]), [])
+        e, state = self.entry(), {}
+        R.verify_or_revert(d, main, self.TARGETS, AUTHOR, e, state, "2026-11-21")
+        self.assertEqual(e["result"], "REVERTED")
+        self.assertIn("did not reach", state["halted"])
+
+    def test_revert_impossible_halts(self):
+        d, main, _v = self.deploy("autodeploy/v-stuck", {"content/_seo/QUEUE.md": "robot text" + LF})
+        sh("pull", "-q", "origin", "main")
+        put("content/_seo/QUEUE.md", "director rewrote the same file" + LF)
+        sh("commit", "-qam", "same file")
+        sh("push", "-q", "origin", "main")
+        self.patched(iter([("failure", "x")]), [])
+        e, state = self.entry(), {}
+        R.verify_or_revert(d, main, [], AUTHOR, e, state, "2026-11-21")
+        self.assertTrue(e["result"].startswith("REVERT FAILED"))
+        self.assertIn("REVERT FAILED", state["halted"])
+
+    # ---- a run that died between the push and the checks ----
+    def test_recover_finds_and_checks_the_unverified_deploy(self):
+        d, main, v = self.deploy("autodeploy/r-late", {"content/blog/new-guide.mdx": GUIDE})
+        note = {"tree": v["tree"], "parent": main, "branch": "autodeploy/r-late", "sha": "c" * 40, "targets": self.TARGETS, "time": "2026-11-21 09:50"}
+        fresh()
+        self.assertEqual(R.find_inflight_commit(note, R.fetch_main()), d)
+        self.patched(iter([("success", "")]), ["https://inayaflow.ai/blog/new-guide: the new title is not on the page"])
+        R.wait_vercel = lambda sha, *a, **k: ("success", "")
+        state = {"inflight": note}
+        e = R.recover_inflight(state, AUTHOR)
+        self.assertEqual(e["result"], "REVERTED")
+        self.assertIn("checked late", e["reason"])
+        self.assertNotIn("inflight", state)
+        self.assertEqual(state["seen"]["autodeploy/r-late@" + "c" * 40], "REVERTED")
+        self.assertEqual(sh("rev-parse", remote_main() + "^{tree}", cwd=REMOTE), sh("rev-parse", main + "^{tree}", cwd=REMOTE))
+
+    def test_recover_when_nothing_was_pushed(self):
+        main = fresh()
+        tree = R.app_git("rev-parse", main + "^{tree}").stdout.strip()
+        state = {"inflight": {"tree": "0" * 40, "parent": main, "branch": "autodeploy/x", "sha": "c" * 40, "targets": [], "time": "t"}}
+        self.assertIsNone(R.recover_inflight(state, AUTHOR))
+        self.assertNotIn("inflight", state)
+        self.assertNotIn("halted", state)
+        # the first commit itself is not "our deploy" even if the tree matches: the parent must match too
+        self.assertIsNone(R.find_inflight_commit({"tree": tree, "parent": "f" * 40}, main))
+
+    def test_recover_without_author_halts(self):
+        d, main, v = self.deploy("autodeploy/r-noauth", {"content/blog/new-guide.mdx": GUIDE})
+        fresh()
+        state = {"inflight": {"tree": v["tree"], "parent": main, "branch": "autodeploy/r-noauth", "sha": "c" * 40, "targets": [], "time": "t"}}
+        e = R.recover_inflight(state, None)
+        self.assertTrue(e["result"].startswith("UNCHECKED DEPLOY"))
+        self.assertIn("never checked", state["halted"])
+        self.assertIn("inflight", state)
 
 
 class Status(unittest.TestCase):
