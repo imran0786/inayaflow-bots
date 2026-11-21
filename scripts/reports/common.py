@@ -3,7 +3,7 @@
 PUBLIC repo: nothing here may print mail addresses, subjects, bodies, links or tokens. Scripts print counts
 and error TYPE names only. All detail goes to the PRIVATE repo (imran0786/genie, branch ops-reports).
 """
-import datetime, json, os, re, shutil, subprocess, urllib.request
+import datetime, json, os, re, shutil, subprocess, sys, urllib.request
 
 PRIVATE = "imran0786/genie"
 REPORT_BRANCH = "ops-reports"
@@ -167,6 +167,20 @@ def error_notice(path, robot, exc):
         old = ""
     old = re.sub(r"\A(> ROBOT ERROR[^\n]*\n\n)+", "", old)
     write_text(path, line + old)
+
+
+def deploys_section(hours=24):
+    """The 'Deploys by the robot' block for a report: a read-only copy of the deploy robot's log
+    (PRIVATE branch ops-deploy, ops/deploy_log.jsonl). Call it after clone(). Never raises."""
+    head = "## Deploys by the robot, last %d hours" % hours
+    try:
+        d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "deploy_robot")
+        if d not in sys.path:
+            sys.path.insert(0, d)
+        import policy
+        return policy.deploys_section(fetch_file("ops-deploy", "ops/deploy_log.jsonl"), now(), hours)
+    except Exception as e:
+        return "%s\n\nNot read this run (%s).\n" % (head, type(e).__name__)
 
 
 # ---------- markdown tables ----------

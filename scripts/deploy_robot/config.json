@@ -1,0 +1,273 @@
+{
+  "_about": "AUTO-DEPLOY ROBOT limits (CORE_RULES section 7, 21 Nov 2026). Tighten freely; loosening needs the Director + Fable code QA. A path must match NO deny rule and exactly ONE allow rule.",
+  "app_repo": "imran0786/genie",
+  "site": "https://inayaflow.ai",
+  "ops_branch": "ops-deploy",
+  "auto_prefixes": [
+    "autodeploy/",
+    "claude/seo-"
+  ],
+  "auto_max_age_hours": 48,
+  "request_prefixes": [
+    "autodeploy/",
+    "claude/seo-",
+    "robot/",
+    "seo/"
+  ],
+  "limits": {
+    "max_files": 12,
+    "max_changed_lines": 600,
+    "max_diff_bytes": 40000,
+    "max_line_chars": 6000,
+    "deploys_per_day": 8,
+    "new_guides_per_day": 4,
+    "candidates_per_run": 2,
+    "reverts_before_halt": 2
+  },
+  "review": {
+    "model": "claude-fable-5-2",
+    "effort": "medium",
+    "max_tokens": 6000,
+    "price_in_per_m": 8.0,
+    "price_out_per_m": 40.0,
+    "cap_per_review_usd": 0.4,
+    "cap_per_day_usd": 2.0
+  },
+  "post_deploy": {
+    "vercel_wait_seconds": 720,
+    "page_wait_seconds": 240,
+    "poll_seconds": 15
+  },
+  "allow": [
+    {
+      "kind": "guide",
+      "pattern": "^content/blog/[a-z0-9][a-z0-9-]{2,90}\\.mdx$",
+      "status": [
+        "A",
+        "M"
+      ]
+    },
+    {
+      "kind": "notes",
+      "pattern": "^content/_seo/QUEUE\\.md$",
+      "status": [
+        "M"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/coinsToolCopy\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/tools/tiktok-coins-to-usd"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/engagementRateCopy\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/tools/tiktok-engagement-rate-calculator"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/followerToolCopy\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/tools/tiktok-follower-count-checker"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/hashtagGeneratorCopy\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/tools/tiktok-hashtag-generator"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/shadowbanToolCopy\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/tools/tiktok-shadowban-checker"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/usernameToolCopy\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/tools/tiktok-username-generator"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/seoTools2Copy\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/tools",
+        "/tools/tiktok-money-calculator",
+        "/tools/tiktok-hashtag-counter",
+        "/tools/best-time-to-post-on-tiktok-today"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/funnelBarCopy\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/tools/tiktok-money-calculator"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/homeTools\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/",
+        "/tools"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/toolHubLinks\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/tools"
+      ]
+    },
+    {
+      "kind": "copy",
+      "pattern": "^lib/toolCards\\.ts$",
+      "status": [
+        "M"
+      ],
+      "urls": [
+        "/tools"
+      ],
+      "tables": [
+        "GUIDE_TOPIC_TOOLS"
+      ]
+    }
+  ],
+  "deny": [
+    {
+      "why": "database / SQL",
+      "pattern": "(^|/)supabase/|\\.sql$|(^|/)migrations?/|SUPABASE_SCHEMA"
+    },
+    {
+      "why": "payments / checkout / pricing / plans",
+      "pattern": "stripe|checkout|pricing|payment|(^|/)pay(/|$)|paypage|pay-|billing|offer|discount|promo|plans?\\b|tiergate|coupon|affiliate|invoice",
+      "keyword": true
+    },
+    {
+      "why": "sign-up / login / auth / onboarding",
+      "pattern": "auth|signup|sign-up|login|onboarding|password|invite|session|waitlist|welcome",
+      "keyword": true
+    },
+    {
+      "why": "middleware / proxy / PWA",
+      "pattern": "middleware|(^|/)proxy\\.ts$|(^|/)sw\\.js$|manifest|PWAInit|InstallBanner",
+      "keyword": true
+    },
+    {
+      "why": "ChatGPT plugin (approved parts)",
+      "pattern": "^lib/plugin|^lib/chatgptPlugin|^app/api/mcp/|^chatgpt-plugin/|\\.well-known|openai"
+    },
+    {
+      "why": "API routes and server code",
+      "pattern": "^app/api/|route\\.ts$|Server\\.ts$|^lib/supabase|^lib/resend|^lib/push|^lib/tiktokCapi|cron",
+      "keyword": true
+    },
+    {
+      "why": "env / Vercel / CI / build settings",
+      "pattern": "(^|/)\\.env|vercel\\.json|(^|/)\\.vercel|(^|/)\\.github/|(^|/)package(-lock)?\\.json$|next\\.config\\.|tsconfig[^/]*\\.json$|postcss\\.config\\.|tailwind\\.config\\.|eslint\\.config\\.|babel\\.config\\.|\\.babelrc|instrumentation\\.|\\.npmrc$|\\.nvmrc$|\\.(pem|key)$"
+    },
+    {
+      "why": "git internals / robots' own files",
+      "pattern": "(^|/)\\.git|^ops/|(^|/)node_modules/"
+    },
+    {
+      "why": "tests (a candidate may never change what checks it)",
+      "pattern": "^tests/|\\.test\\."
+    },
+    {
+      "why": "translations (pricing and sign-up words live there)",
+      "pattern": "^messages/"
+    },
+    {
+      "why": "site-wide SEO constants, sitemap, robots",
+      "pattern": "^lib/seo\\.ts$|^app/sitemap\\.ts$|^app/robots\\.ts$|^app/layout\\.tsx$"
+    },
+    {
+      "why": "pixel / consent",
+      "pattern": "pixel|consent|cookie",
+      "keyword": true
+    }
+  ],
+  "internal_routes": [
+    "/",
+    "/analyze",
+    "/tools",
+    "/blog",
+    "/pricing",
+    "/signup",
+    "/login",
+    "/contact",
+    "/privacy",
+    "/terms",
+    "/blog/tiktok-study-2026",
+    "/blog/how-we-make-our-guides"
+  ],
+  "copy_hosts_ok": [
+    "inayaflow.ai"
+  ],
+  "banned_added_text": [
+    {
+      "why": "brand: public pages say InayaFlow, never Genie",
+      "pattern": "\\bGenie\\b"
+    },
+    {
+      "why": "Arabic text needs a person (real Saudi transcripts rule)",
+      "pattern": "[\\u0600-\\u06FF\\u0750-\\u077F\\uFB50-\\uFDFF\\uFE70-\\uFEFF]"
+    },
+    {
+      "why": "HTML that can run code",
+      "pattern": "(?i)<\\s*(script|iframe|object|embed|style|link|meta|base|form)\\b|javascript:|data:text/html|\\bon(load|error|click|mouseover)\\s*="
+    },
+    {
+      "why": "text written at the reviewer",
+      "pattern": "(?i)\\b(ignore|disregard|forget)\\b.{0,40}\\b(instructions?|rules?|above|previous|prior)\\b|\\b(reviewer|code review|code qa)\\b.{0,60}\\bPASS\\b|^\\s*(PASS|FAIL)\\s*$"
+    },
+    {
+      "why": "invisible or direction-changing characters",
+      "pattern": "[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2069\\uFEFF]"
+    }
+  ],
+  "keyword_deny_skip_under": [
+    "content/blog/"
+  ],
+  "_keyword_note": "Deny rules marked keyword:true match words anywhere in a path; they are skipped ONLY for files under keyword_deny_skip_under (a guide named how-much-does-tiktok-pay.mdx is still a guide). All other deny rules always apply."
+}

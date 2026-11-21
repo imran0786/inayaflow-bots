@@ -311,6 +311,8 @@ def main():
         if missing:
             note = (note + "; " if note else "") + "missing input files: " + ", ".join(missing)
         report, new_state, n = build(inputs, state, digests, note)
+        # what the deploy robot did (deployed / refused / QA FAIL / reverted): its own log, read-only
+        report = report.replace("## Where this comes from", c.deploys_section(24) + "\n## Where this comes from", 1)
         c.write_text(latest, report)
         c.write_text(os.path.join(work, "ops", "history", "report_%s.md" % c.stamp()), report)
         prune_history(os.path.join(work, "ops", "history"))

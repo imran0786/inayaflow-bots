@@ -119,7 +119,7 @@ def main():
         if not isinstance(data, dict) or "days" not in data:
             raise RuntimeError("unexpected answer")
         hist = c.read_json(os.path.join(work, HIST), {})
-        c.write_text(path, build(data, hist))
+        c.write_text(path, build(data, hist) + "\n" + c.deploys_section(24))
         if not c.DRY and data.get("today"):
             hist[data["today"]] = {"paying_total": data.get("paying_total"), "paying_by_tier": data.get("paying_by_tier")}
             c.write_json(os.path.join(work, HIST), {k: hist[k] for k in sorted(hist)[-400:]})
