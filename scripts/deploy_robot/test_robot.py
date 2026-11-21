@@ -21,9 +21,11 @@ AUTHOR = ("owner-name", "owner@example.test")
 GUIDE = "---" + LF + 'title: "A guide about scheduling posts"' + LF + 'date: "2026-11-21"' + LF + "---" + LF + ("Real words about scheduling. " * 30) + LF
 
 
-def sh(*args, cwd=SRC):
+def sh(*args, cwd=SRC, date=None):
     env = dict(os.environ, GIT_AUTHOR_NAME="dev", GIT_AUTHOR_EMAIL="dev@example.test", GIT_COMMITTER_NAME="dev", GIT_COMMITTER_EMAIL="dev@example.test",
                GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    if date:
+        env.update(GIT_AUTHOR_DATE=date, GIT_COMMITTER_DATE=date)
     r = subprocess.run(["git", "-c", "core.autocrlf=false", "-c", "commit.gpgsign=false", *args], cwd=cwd, capture_output=True, text=True, env=env)
     if r.returncode != 0:
         raise RuntimeError("test git %s failed: %s" % (args[0], r.stderr[-300:]))
@@ -422,6 +424,34 @@ class MergeAndRevert(unittest.TestCase):
         # every commit of this throw-away repo was made today, so "since 00:00" sees all three guide files
         self.assertEqual(R.guides_added_today(main, today), 3)
 
+    def test_guides_added_today_counts_an_old_commit_that_is_merged_today(self):
+        """A guide written three days ago on a side branch and merged today IS new on main today (QA round 1)."""
+        sh("checkout", "-q", "--orphan", "hist")
+        sh("rm", "-rqf", ".")
+        put("content/blog/base-guide.mdx", GUIDE)
+        sh("add", "-A")
+        sh("commit", "-q", "-m", "c1", date="2026-03-05T10:00:00Z")
+        sh("checkout", "-q", "-b", "hist-side")
+        put("content/blog/merged-old-guide.mdx", GUIDE)
+        sh("add", "-A")
+        sh("commit", "-q", "-m", "side, written early", date="2026-03-07T10:00:00Z")
+        sh("checkout", "-q", "hist")
+        put("content/_seo/QUEUE.md", "q" + LF)
+        sh("add", "-A")
+        sh("commit", "-q", "-m", "c2", date="2026-03-08T10:00:00Z")
+        sh("merge", "-q", "--no-ff", "-m", "Merge hist-side", "hist-side", date="2026-03-10T08:00:00Z")
+        put("content/blog/direct-guide.mdx", GUIDE)
+        sh("add", "-A")
+        sh("commit", "-q", "-m", "c3", date="2026-03-10T09:00:00Z")
+        tip = sh("rev-parse", "HEAD")
+        sh("push", "-q", "-f", "origin", "hist")
+        sh("checkout", "-q", "-f", "main")
+        R.init_git()
+        R.app_git("fetch", "-q", REMOTE, "+refs/heads/hist:refs/remotes/o/hist")
+        self.assertEqual(R.guides_added_today(tip, "2026-03-10"), 2)       # the merged one + the direct one
+        self.assertEqual(R.guides_added_today(tip, "2026-03-11"), 0)
+        self.assertEqual(R.guides_added_today(tip, "2026-03-08"), 2)       # counted from the start of 8 March: still those two, not the base guide
+
     def test_recover_without_author_halts(self):
         d, main, v = self.deploy("autodeploy/r-noauth", {"content/blog/new-guide.mdx": GUIDE})
         fresh()
@@ -687,10 +717,12 @@ class Candidates(unittest.TestCase):
         old = (today - datetime.timedelta(days=R.CFG["limits"]["seen_keep_days"] + 5)).strftime("%Y-%m-%d")
         fresh_day = (today - datetime.timedelta(days=3)).strftime("%Y-%m-%d")
         state = {"seen": {"zzz/old@1": {"r": "DEPLOYED", "d": old}, "aaa/new@2": {"r": "REFUSED", "d": fresh_day}, "legacy@3": "DEPLOYED",
-                          "broken@4": {"r": "X"}}}
+                          "broken@4": {"r": "X"}, "aaa/old@5": {"r": "DEPLOYED", "d": old}, "zzz/new@6": {"r": "DEPLOYED", "d": fresh_day}}}
         R.prune_seen(state)
         self.assertNotIn("zzz/old@1", state["seen"])
-        self.assertIn("aaa/new@2", state["seen"])                    # alphabetically first, but young: kept
+        self.assertNotIn("aaa/old@5", state["seen"])                 # old goes, wherever it sorts
+        self.assertIn("zzz/new@6", state["seen"])                    # young stays, wherever it sorts
+        self.assertIn("aaa/new@2", state["seen"])
         self.assertEqual(state["seen"]["legacy@3"], {"r": "DEPLOYED", "d": today.strftime("%Y-%m-%d")})
         self.assertEqual(state["seen"]["broken@4"]["d"], today.strftime("%Y-%m-%d"))
 

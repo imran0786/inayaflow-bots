@@ -146,6 +146,7 @@ class Guides(unittest.TestCase):
     def test_js_frontmatter_refused(self):
         for first in ("---js", "---javascript", "---json", "--- js", "---coffee", "+++"):
             self.assertTrue(self.check(GUIDE.replace("---", first, 1))[0], first)
+            self.assertEqual(P.split_frontmatter(GUIDE.replace("---", first, 1)), (None, None), first)       # the cut itself says no
 
     def test_no_frontmatter_end(self):
         self.assertTrue(self.check("---" + LF + "title: x" + LF + "body" * 200)[0])
@@ -235,6 +236,7 @@ class Guides(unittest.TestCase):
             sneaky = GUIDE.replace('tool: "analyze"' + LF + "---" + LF, 'tool: "analyze"' + LF + closer + LF + 'slug: "tiktok-study-2026"' + LF + "---" + LF)
             self.assertNotEqual(sneaky, GUIDE)
             self.assertTrue(self.check(sneaky)[0], closer)
+            self.assertEqual(P.split_frontmatter(sneaky), (None, None), closer)      # refused by the cut, not only by the line rules
         fm, body = P.split_frontmatter("---" + LF + "title: x" + LF + "---" + LF + "body" + LF + "---" + LF + "more")
         self.assertEqual((fm, body), ("title: x" + LF, "body" + LF + "---" + LF + "more"))
         self.assertEqual(P.split_frontmatter("---" + LF + "---" + LF + "body")[0], "")
