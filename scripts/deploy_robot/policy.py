@@ -380,8 +380,11 @@ def page_shows(page_html, marker):
 
 
 def looks_like_error_page(page_html):
+    """A 200 answer that is not our page (Vercel's "building" page, Next's crash page, a page with no brand on it).
+    NOT a sign: the words "This page could not be found" - Next ships its not-found text inside EVERY normal page
+    (seen on the live site in the 21 Nov dry run). A missing page is caught by its HTTP 404."""
     t = page_html or ""
-    return ("InayaFlow" not in t) or bool(re.search(r"Application error|This page could not be found|Deployment is building|__next_error__", t))
+    return ("InayaFlow" not in t) or bool(re.search(r"Application error: a (client|server)-side exception|Deployment is building|id=\"__next_error__\"", t))
 
 
 def urls_for(rules, guide_infos, copy_reports, cfg):

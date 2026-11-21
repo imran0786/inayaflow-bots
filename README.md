@@ -8,3 +8,5 @@ Small automation bots for InayaFlow, run on free GitHub Actions minutes.
 Code only. Credentials live in GitHub Actions secrets. Run logs are stored in a separate private repository, never here.
 
 - **Report robots** (`scripts/reports/`, 19 Nov 2026): `ops-report.yml` (inbox + backlinks report every 3 h, read-only), `backlink-batch.yml` (directory list builder + at most 3 outreach e-mails a day, queued for the outbox robot) and `funnel-daily.yml` (daily counts through one read-only database function). All three are also started by the heartbeat. Results go to the private repository only.
+
+- **Deploy robot** (`scripts/deploy_robot/`, 21 Nov 2026): `auto-deploy.yml` puts low-risk website changes (guides, tool-page words) live by itself after an allow-list check, a words-only proof for copy files, the app tests in a sandbox, and one AI review; it checks the live pages afterwards and reverts its own commit if anything is wrong. OFF unless the repository variable `AUTO_DEPLOY_ON` is `1`. Limits: `scripts/deploy_robot/config.json`. Logs go to the private repository only.

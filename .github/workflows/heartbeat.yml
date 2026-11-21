@@ -41,6 +41,7 @@ jobs:
             nudge outbox.yml
             nudge reader.yml
             nudge job-runner.yml
+            nudge auto-deploy.yml     # deploy robot (21 Nov): its job is skipped unless the repo variable AUTO_DEPLOY_ON is 1
             if [ $((n % 6)) = 0 ]; then nudge inbox-digest.yml; fi
             h=$(date -u +%H%M)
             if [ "$h" -ge 0700 ] && [ "$(ran_today directory-agent.yml)" = "0" ]; then nudge directory-agent.yml -f dry_run=false; fi

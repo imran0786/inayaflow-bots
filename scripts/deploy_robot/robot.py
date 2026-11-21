@@ -791,6 +791,12 @@ def main():
         settle(cand, e, md, state)
         entries.append(e)
         details["%s/%s_%s.md" % (e["time"][:10], e["time"][11:].replace(":", ""), re.sub(r"[^A-Za-z0-9]+", "-", cand["branch"])[:60])] = d
+    if md == "dry" and not cands:
+        # a dry run with no request file still tells whether the set-up is ready (token rights, accepted author, site up)
+        problems, facts, _a = preflight(fetch_main())
+        entries.append({"time": stamp, "branch": "-", "sha": "", "source": "robot", "mode": md, "files": [], "review_usd": 0.0,
+                        "result": "DRY RUN: PRE-FLIGHT " + ("PROBLEMS" if problems else "OK"),
+                        "reason": " / ".join(problems + ["%s: %s" % (k, v) for k, v in sorted(facts.items())])[:900]})
     if entries or marked or md == "dry":
         save_log(entries, state, details)
         push_ops("ops: deploy robot (%s)" % md)

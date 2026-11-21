@@ -328,6 +328,10 @@ class Live(unittest.TestCase):
         self.assertTrue(P.looks_like_error_page("<html>Deployment is building InayaFlow</html>"))
         self.assertTrue(P.looks_like_error_page("<html>hello</html>"))
         self.assertFalse(P.looks_like_error_page("<html>InayaFlow guide</html>"))
+        self.assertTrue(P.looks_like_error_page('<html id="__next_error__">InayaFlow</html>'))
+        self.assertTrue(P.looks_like_error_page("InayaFlow Application error: a client-side exception has occurred"))
+        # every normal page of the live site carries Next's not-found text in its data: that alone is NOT an error page
+        self.assertFalse(P.looks_like_error_page('<html><title>Guides | InayaFlow</title><script>self.__next_f.push("This page could not be found.")</script></html>'))
 
     def test_urls(self):
         rules = {PATH: P.classify(PATH, CFG)[1], "lib/seoTools2Copy.ts": P.classify("lib/seoTools2Copy.ts", CFG)[1],
