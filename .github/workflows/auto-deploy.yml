@@ -19,8 +19,6 @@ name: Auto-deploy robot (low-risk app changes)
 on:
   schedule:
     - cron: "7,17,27,37,47,57 * * * *"
-  push:
-    branches: ["feat/auto-deploy"]     # TEMPORARY: the 21 Nov dry run of this branch. Removed before code QA.
   workflow_dispatch:
     inputs:
       dry_run:
@@ -36,7 +34,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: vars.AUTO_DEPLOY_ON == '1' || inputs.dry_run == 'true' || github.event_name == 'push'
+    if: vars.AUTO_DEPLOY_ON == '1' || inputs.dry_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -58,8 +56,7 @@ jobs:
           GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AUTO_DEPLOY_ON: ${{ vars.AUTO_DEPLOY_ON }}
-          DEPLOY_DRY: ${{ (github.event_name == 'push' || inputs.dry_run == 'true') && 'true' || 'false' }}
-          REVIEW_DAY_CAP_USD: "0.35"     # TEMPORARY with the push trigger: at most one review in the test run
+          DEPLOY_DRY: ${{ inputs.dry_run == 'true' && 'true' || 'false' }}
           # optional: only if the Director wants a fixed commit identity instead of "copy the last Vercel-accepted author"
           DEPLOY_AUTHOR_NAME: ${{ secrets.DEPLOY_AUTHOR_NAME }}
           DEPLOY_AUTHOR_EMAIL: ${{ secrets.DEPLOY_AUTHOR_EMAIL }}
