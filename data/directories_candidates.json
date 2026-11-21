@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-20",
+ "generated": "2026-11-21",
  "sources": [
   "github.com/s87343472/backlink-pilot targets.yaml (MIT, last push 2026-10-29, file marked DEPRECATED/unmaintained)",
   "github.com/profullstack/link-directories directories.csv (no licence file, 76 rows)"
@@ -59,7 +59,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-18"
+   "status": "TRIED CAPTCHA 2026-11-21"
   },
   {
    "name": "AILibri",
@@ -239,7 +239,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-18"
+   "status": "TRIED CAPTCHA 2026-11-21"
   },
   {
    "name": "Free AI Tools Directory",
@@ -293,7 +293,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-18"
+   "status": "TRIED OTHER 2026-11-21"
   },
   {
    "name": "OpenFuture AI",
@@ -941,7 +941,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-18"
+   "status": "TRIED NO_FORM 2026-11-21"
   },
   {
    "name": "FiveTaco",
@@ -1049,7 +1049,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-18"
+   "status": "TRIED CAPTCHA 2026-11-21"
   },
   {
    "name": "Paxi",
@@ -1283,7 +1283,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED EMAIL_CODE_NOT_RECEIVED 2026-11-18"
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-21"
   },
   {
    "name": "gptbot",
@@ -4415,7 +4415,7 @@
    "has_form_on_page": true,
    "quality": "relevant; third-party DR 25 (ideaproof), not checked",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-21",
    "why": " | reopened 2026-11-20 (Imran: nofollow + free queue OK)"
   },
   {
@@ -4561,7 +4561,7 @@
    "followed": "followed",
    "checked": "2026-11-19",
    "judge_reason": "Listing is free; optional $5 verification ranks products higher. Accepts AI products.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-21",
    "followed_sample": "2 followed / 0 not",
    "needs": [],
    "why": " | reopened 2026-11-20 (Imran: nofollow + free queue OK)"
@@ -4610,7 +4610,7 @@
    "followed": "unknown",
    "checked": "2026-11-19",
    "judge_reason": "AI agent marketplace; home page states 'Free to list your agent'; registration appears required.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -5976,7 +5976,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free product listing offered; requires signup with a business email, not consumer addresses.",
-   "status": "TODO",
+   "status": "TRIED PHONE_REQUIRED 2026-11-21",
    "followed_sample": "1 followed / 0 not",
    "needs": [
     "account"
@@ -6158,7 +6158,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free listing exists with 90+ day queue; paid tiers $49-$99 offered. Ambiguous 'Submit for Free' button.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "2 followed / 0 not",
    "needs": [
     "account"
@@ -6321,7 +6321,7 @@
    "followed": "nofollow",
    "checked": "2026-11-20",
    "judge_reason": "Free curated submissions with manual review; paid featured tier not yet open.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 15 not",
    "needs": []
   },
@@ -6676,7 +6676,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free submission with manual review; optional paid priority review; accepts SaaS, apps, extensions.",
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-21",
    "followed_sample": "3 followed / 0 not",
    "needs": []
   },
@@ -6985,7 +6985,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Says launching is free; 'Promoted' listings suggest a paid option. Requires Google or GitHub sign-in.",
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-21",
    "followed_sample": "10 followed / 8 not",
    "needs": [
     "account"
@@ -7387,7 +7387,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Submissions paused; only email notification offered. Review queue implies free path, skip-queue paid.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-21",
    "followed_sample": "9 followed / 0 not",
    "needs": [
     "account"
@@ -7460,7 +7460,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Basic Launch is free forever with no credit card; paid upgrades are optional. Accepts startup tools.",
-   "status": "TODO",
+   "status": "TRIED EMAIL_CODE_NOT_RECEIVED 2026-11-21",
    "followed_sample": "4 followed / 0 not",
    "needs": [
     "account"
@@ -8475,7 +8475,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free submissions go to a review queue; paid $29 review is optional and not required for listing.",
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-21",
    "followed_sample": "29 followed / 0 not",
    "needs": []
   },
@@ -8844,7 +8844,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Listing is explicitly free with a score; paid credits and Promotion Store exist. Sign-in needed.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-21",
    "followed_sample": "6 followed / 11 not",
    "needs": [
     "account"
@@ -9886,7 +9886,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Submit page says listing is free with no paid tier; sign-in required; AI apps accepted.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-21",
    "followed_sample": "6 followed / 0 not",
    "needs": [
     "account"
@@ -10245,7 +10245,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free queue listing (~30-day review) alongside paid fast-track and promotion options; accepts AI tools.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-21",
    "followed_sample": "6 followed / 63 not",
    "needs": []
   },
@@ -10319,7 +10319,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free queued launch day for any product; paid tiers optional; needs sign-up (Google, GitHub, X or email).",
-   "status": "TODO",
+   "status": "TRIED ALREADY_LISTED 2026-11-21",
    "followed_sample": "1 followed / 30 not",
    "needs": [
     "account"
@@ -10365,7 +10365,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free listing queued up to three months with no-follow link; $49 for immediate do-follow.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-21",
    "followed_sample": "29 followed / 1 not",
    "needs": [
     "account"
@@ -10710,7 +10710,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Free editor-review listing exists; paid faster option; submission requires an offered deal.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -13252,7 +13252,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free community queue offered; paid $79 priority option; accepts software and AI tools.",
-   "status": "TODO",
+   "status": "TRIED PHONE_REQUIRED 2026-11-21",
    "followed_sample": "8 followed / 0 not",
    "needs": []
   },
@@ -13508,7 +13508,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free submissions are paused; paid options are 10 and 99 USD, so no free listing now.",
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-21",
    "followed_sample": "72 followed / 0 not",
    "needs": []
   },
@@ -13667,7 +13667,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free API submission form with 24-hour review; Sponsor Us is the paid option.",
-   "status": "TODO",
+   "status": "TRIED ALREADY_LISTED 2026-11-21",
    "followed_sample": "15 followed / 1 not",
    "needs": []
   },
@@ -13879,7 +13879,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Free $0 public listing for digital products; account signup likely, paid boosts optional.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -15579,7 +15579,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free gallery listing named but marked closed; paid options $15-$30 offered.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-21",
    "followed_sample": "12 followed / 5 not",
    "needs": []
   },
@@ -16291,7 +16291,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free $0 listing with scheduled queue; no backlink; accepts AI tools.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "7 followed / 2 not",
    "needs": []
   },
@@ -16410,7 +16410,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Lists AI tools; free listing with $0 forever; submission requires creating a password.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-21",
    "followed_sample": "12 followed / 0 not",
    "needs": [
     "account"
@@ -16456,7 +16456,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free $0 gallery submission exists; SaaS Tool category fits; paid tiers optional, ~15-day delay.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-21",
    "followed_sample": "57 followed / 33 not",
    "needs": []
   },
@@ -16525,7 +16525,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free listing confirmed; AI tools directory, but submissions paused until 29 November.",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-21",
    "followed_sample": "6 followed / 0 not",
    "needs": []
   },
@@ -16734,7 +16734,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free forever submission for SaaS and software tools; requires a free account to submit.",
-   "status": "TODO",
+   "status": "TRIED EMAIL_CODE_NOT_RECEIVED 2026-11-21",
    "followed_sample": "24 followed / 45 not",
    "needs": [
     "account"
@@ -16782,7 +16782,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free submission tier exists (15-20 day review); paid VIP and Creator Pass speed it up.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "52 followed / 0 not",
    "needs": []
   },
@@ -16951,7 +16951,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Submit page states submitting is free; accepts AI tools; no login or badge requirement stated.",
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-21",
    "followed_sample": "2 followed / 1 not",
    "needs": []
   },
@@ -19133,7 +19133,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Design-inspiration gallery of websites, not a product directory; free submission exists but is slow and off-topic.",
-   "status": "HOLD not a directory",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "84 followed / 9 not",
    "needs": [
     "account"
@@ -19158,7 +19158,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Leaderboard requires Google/Twitter sign-in; only paid sponsor ads ($299-$1,499/month); Shopify e-commerce focus, not a ",
-   "status": "HOLD not a directory",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "google_login_only"
@@ -19183,7 +19183,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Product directory with AI tools listed; no free-listing terms shown, and launching appears to need an account.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "2 followed / 1 not",
    "needs": [
     "account"
@@ -19208,7 +19208,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free $0 listing with paid Premium; dofollow link kept only while badge is shown.",
-   "status": "BLOCKED needs a person (badge_or_backlink)",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "24 followed / 43 not",
    "needs": [
     "account",
@@ -19234,7 +19234,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free launch exists, but requires a badge backlink; footer links to unrelated directory network.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "24 followed / 50 not",
    "needs": [
     "badge_or_backlink"
@@ -19259,7 +19259,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Listing costs $4 one-time; no free option named, and paid dofollow backlink sales.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "3 followed / 0 not",
    "needs": [
     "payment",
@@ -19285,7 +19285,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free Standard launch listed; paid tiers exist, badge only speeds launch, account likely needed",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "4 followed / 21 not",
    "needs": [
     "account"
@@ -19310,7 +19310,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free $0 listing requires embedding its widget and lasts seven days; paid options exist.",
-   "status": "BLOCKED needs a person (badge_or_backlink)",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "13 followed / 1 not",
    "needs": [
     "badge_or_backlink",
@@ -19336,7 +19336,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Submit page charges $19 one-time after approval via Gumroad; no free listing option.",
-   "status": "HOLD paid",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "6 followed / 0 not",
    "needs": [
     "payment"
@@ -19361,7 +19361,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Only a title shown; no submit or pricing page, and no directory evidence.",
-   "status": "HOLD not a directory",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -19384,7 +19384,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Launchpad for tech products; no submit or pricing page found, free status unknown.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -19409,7 +19409,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Submit page says free submission; paid Launch Boost is optional. Accepts SaaS tools.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "18 followed / 63 not",
    "needs": [
     "account"
@@ -19434,7 +19434,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Lists tools and takes submissions, but listing cost is unstated; a mass-submission ad suggests link-farm risk.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "7 followed / 23 not",
    "needs": [
     "account"
@@ -19459,7 +19459,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "AI agent leaderboard; publishing needs a payment-provider revenue key; no free-listing statement.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "14 followed / 0 not",
    "needs": [
     "account"
@@ -19484,7 +19484,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Startup launch directory with a named free forever listing plus paid Pro option.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -19507,7 +19507,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free $0 launch option; accepts indie makers and AI tools. Premium and backlink upsells exist.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "6 followed / 3 not",
    "needs": []
   },
@@ -19530,7 +19530,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Submissions cost $29 with instant publish and no review; sells dofollow backlinks.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "payment"
@@ -19555,7 +19555,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Submission form says free of charge; accepts AI tools. Form text truncated, captcha unseen.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "3 followed / 0 not",
    "needs": []
   },
@@ -19578,7 +19578,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free $0 submission tier exists, but sells paid dofollow backlinks and article mentions, a link-scheme signal.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "2 followed / 0 not",
    "needs": []
   },
@@ -19601,7 +19601,7 @@
    "followed": "nofollow",
    "checked": "2026-11-20",
    "judge_reason": "Startup directory taking submissions; no free listing or pricing stated; account required.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 12 not",
    "needs": [
     "account"
@@ -19626,7 +19626,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Lists SaaS tools, but 'Free to Explore' refers to browsing; no submit page or listing terms found.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "2 followed / 4 not",
    "needs": []
   },
@@ -19649,7 +19649,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Only paid placement packages (50-250 EUR via PayPal); no free listing option shown.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "payment",
@@ -19675,7 +19675,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "FAQ says no listing fee or paid placement; accepts SaaS and AI tools in English.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -19698,7 +19698,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Lists AI tools, but requires a badge backlink, has a 'Backlinks' menu, and never states listing cost.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "2 followed / 0 not",
    "needs": [
     "badge_or_backlink"
@@ -19723,7 +19723,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Has an AI Tools Directory, but no submit page or listing terms were found.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -19748,7 +19748,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Product Hunt-style launch site for indie hackers; profile signup needed, no free-listing statement.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -19773,7 +19773,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free Launch plan at $0 with account sign-in; paid Basic and Pro options also offered.",
-   "status": "BLOCKED needs a person (badge_or_backlink)",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "77 followed / 0 not",
    "needs": [
     "account",
@@ -19799,7 +19799,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Free listing with badge on site; paid Launch options are optional extras.",
-   "status": "BLOCKED needs a person (badge_or_backlink)",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "3 followed / 0 not",
    "needs": [
     "badge_or_backlink"
@@ -19824,7 +19824,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Lists and takes product submissions; free listing not stated, no pricing page found.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "5 followed / 0 not",
    "needs": [
     "account"
@@ -19849,7 +19849,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free launch tier exists, but needs a Sign up and a badge on your site for dofollow.",
-   "status": "BLOCKED needs a person (badge_or_backlink, captcha)",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "571 followed / 20 not",
    "needs": [
     "account",
@@ -19875,7 +19875,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Startup directory offers free listing; paid ranking and growth services are separate options.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "3 followed / 0 not",
    "needs": [
     "account"
@@ -19900,7 +19900,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Curated tool directory with Submit tool link; no listing price or free-tier terms shown.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "3 followed / 0 not",
    "needs": []
   },
@@ -19923,7 +19923,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Curated tool showcase, but no submit or pricing page found; listing terms unknown.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -19946,7 +19946,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "",
-   "status": "HOLD dead or unreachable"
+   "status": "TRIED SUBMITTED 2026-11-21"
   },
   {
    "name": "Submit Here",
@@ -19967,7 +19967,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Has Products and Launchpad sections; no free listing or submit page shown.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -19992,7 +19992,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free submissions, but listings require a public repo and open-source license; InayaFlow is proprietary.",
-   "status": "HOLD not relevant",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "9 followed / 9 not",
    "needs": []
   },
@@ -20015,7 +20015,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "AI tools directory, but no listing fee stated; off-topic listings and a paid submission-service upsell.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "13 followed / 17 not",
    "needs": [
     "google_login_only"
@@ -20040,7 +20040,7 @@
    "followed": "nofollow",
    "checked": "2026-11-20",
    "judge_reason": "Free to apply and claim; paid placement and packages are optional upgrades. Claiming likely needs sign-in.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 33 not",
    "needs": [
     "account"
@@ -20065,7 +20065,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free profiles exist with a backlink or badge; paid skips the wait; sign-in required.",
-   "status": "BLOCKED needs a person (badge_or_backlink)",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "500 followed / 20 not",
    "needs": [
     "badge_or_backlink",
@@ -20091,7 +20091,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Research price index for AI agents; no submit page found, so no listing path.",
-   "status": "HOLD not a directory",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -20114,7 +20114,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Developer GitHub-scoring leaderboard; no submit page; paid sponsor slots only.",
-   "status": "HOLD not a directory",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -20139,7 +20139,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Paid listings from $10; no free option named. Sells DR backlinks and auction-ranked placements.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "9 followed / 0 not",
    "needs": [
     "payment"
@@ -20164,7 +20164,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Research site; tools not yet listed must pay a fee to enter; no free route named.",
-   "status": "HOLD not a directory",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "payment"
@@ -20189,9 +20189,379 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free listing with nofollow backlink; AI tools directory, though heavily upsold.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "12 followed / 4 not",
    "needs": []
+  },
+  {
+   "name": "Submit Here",
+   "domain": "althunt.io",
+   "submit_url": "https://althunt.io/new",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://althunt.io/",
+   "free_check": "free_with_paid_option",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-21",
+   "judge_reason": "Publishes comparison pages, not a product directory; free tier needs badge; SEO link-farm signals.",
+   "status": "HOLD not a directory",
+   "followed_sample": "8 followed / 0 not",
+   "needs": [
+    "badge_or_backlink",
+    "account"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "saasboard.app",
+   "submit_url": "https://saasboard.app/?utm_source=launchdb.vercel.app&via=launchdb",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://saasboard.app/",
+   "free_check": "paid",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "relevant",
+   "usable": false,
+   "followed": "unknown",
+   "checked": "2026-11-21",
+   "judge_reason": "Listings require a one-time payment; no free listing option is named.",
+   "status": "HOLD paid",
+   "followed_sample": "0 followed / 0 not",
+   "needs": [
+    "payment",
+    "account"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "outbid.lol",
+   "submit_url": "https://outbid.lol/?utm_source=launchdb.vercel.app&via=launchdb",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 429,
+   "final_url": "https://outbid.lol/",
+   "free_check": "unknown",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "unknown",
+   "usable": false,
+   "followed": "unknown",
+   "checked": "2026-11-21",
+   "judge_reason": "",
+   "status": "HOLD dead or unreachable"
+  },
+  {
+   "name": "Submit Here",
+   "domain": "brofindai.com",
+   "submit_url": "https://brofindai.com/submit",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://brofindai.com/",
+   "free_check": "free_confirmed_on_page",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "relevant",
+   "usable": true,
+   "followed": "followed",
+   "checked": "2026-11-21",
+   "judge_reason": "Free launch listing stated ('Free, live instantly'); requires sign-in; paid promotion optional.",
+   "status": "TODO",
+   "followed_sample": "3 followed / 0 not",
+   "needs": [
+    "account"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "startfa.st",
+   "submit_url": "https://startfa.st/submit",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://startfa.st/",
+   "free_check": "paid",
+   "captcha_words_on_page": true,
+   "has_form_on_page": true,
+   "quality": "relevant",
+   "usable": false,
+   "followed": "unknown",
+   "checked": "2026-11-21",
+   "judge_reason": "Submit page says listings are paid; plan chosen next, no free option named.",
+   "status": "HOLD paid",
+   "followed_sample": "0 followed / 0 not",
+   "needs": [
+    "payment"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "vantaige.io",
+   "submit_url": "https://vantaige.io/list-your-ai-tool",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://vantaige.io/",
+   "free_check": "paid",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "relevant",
+   "usable": false,
+   "followed": "mixed",
+   "checked": "2026-11-21",
+   "judge_reason": "Submission tiers are $19, $35, $99 with no free listing option named.",
+   "status": "HOLD paid",
+   "followed_sample": "7 followed / 2 not",
+   "needs": [
+    "payment",
+    "account"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "phototoolfinder.com",
+   "submit_url": "https://phototoolfinder.com/submit",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://phototoolfinder.com/",
+   "free_check": "paid",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "mixed",
+   "checked": "2026-11-21",
+   "judge_reason": "Submission requires a minimum $1.50 payment; tool must be image-focused, not video-first.",
+   "status": "HOLD not relevant",
+   "followed_sample": "6 followed / 6 not",
+   "needs": [
+    "payment"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "azn8.com",
+   "submit_url": "https://azn8.com/submit",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://azn8.com/",
+   "free_check": "free_confirmed_on_page",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "relevant",
+   "usable": true,
+   "followed": "followed",
+   "checked": "2026-11-21",
+   "judge_reason": "Free SaaS/AI directory; listing is free forever, requires account signup with email verification.",
+   "status": "TODO",
+   "followed_sample": "14 followed / 0 not",
+   "needs": [
+    "account"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "curlship.com",
+   "submit_url": "https://curlship.com/?utm_source=launchdb.vercel.app&via=launchdb",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://curlship.com/",
+   "free_check": "free_with_paid_option",
+   "captcha_words_on_page": true,
+   "has_form_on_page": false,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "mixed",
+   "checked": "2026-11-21",
+   "judge_reason": "Free $0 nofollow tier exists; human captcha form; dofollow requires badge or paid tier; sells link auctions.",
+   "status": "HOLD spam risk",
+   "followed_sample": "34 followed / 1 not",
+   "needs": [
+    "captcha",
+    "badge_or_backlink"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "develif.com",
+   "submit_url": "https://develif.com/add",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://develif.com/",
+   "free_check": "free_confirmed_on_page",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-21",
+   "judge_reason": "Generic SEO-backlink directory; free listing, no account, but mass-category link-farm pattern.",
+   "status": "HOLD spam risk",
+   "followed_sample": "9 followed / 0 not",
+   "needs": []
+  },
+  {
+   "name": "Submit Here",
+   "domain": "toolworthy.ai",
+   "submit_url": "https://www.toolworthy.ai/submit?tw_entry=header_desktop_nav",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://www.toolworthy.ai/",
+   "free_check": "paid",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "mixed",
+   "checked": "2026-11-21",
+   "judge_reason": "Submissions require a $49 one-time fee; no free listing option is named.",
+   "status": "HOLD spam risk",
+   "followed_sample": "2 followed / 6 not",
+   "needs": [
+    "payment"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "saashive.com",
+   "submit_url": "https://www.saashive.com/join-as-founder?utm_source=launchdb.vercel.app&via=launchdb",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://saashive.com/",
+   "free_check": "unclear",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "unknown",
+   "checked": "2026-11-21",
+   "judge_reason": "Launch/discovery platform for SaaS, but no submit or pricing page; cost unknown.",
+   "status": "HOLD spam risk",
+   "followed_sample": "0 followed / 0 not",
+   "needs": []
+  },
+  {
+   "name": "Submit Here",
+   "domain": "makermap.lol",
+   "submit_url": "https://www.makermap.lol/products?utm_source=launchdb.vercel.app&via=launchdb",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://www.makermap.lol/",
+   "free_check": "unclear",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "relevant",
+   "usable": false,
+   "followed": "unknown",
+   "checked": "2026-11-21",
+   "judge_reason": "Maker/founder map with a Products section; no submit or pricing page found.",
+   "status": "HOLD free not confirmed",
+   "followed_sample": "0 followed / 0 not",
+   "needs": []
+  },
+  {
+   "name": "Submit Here",
+   "domain": "codetrendy.com",
+   "submit_url": "https://codetrendy.com/submit",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://codetrendy.com/",
+   "free_check": "free_confirmed_on_page",
+   "captcha_words_on_page": true,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "mixed",
+   "checked": "2026-11-21",
+   "judge_reason": "Free $0 listing requires our badge on your homepage, a reciprocal backlink trade.",
+   "status": "HOLD spam risk",
+   "followed_sample": "33 followed / 3 not",
+   "needs": [
+    "account",
+    "badge_or_backlink"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "superlaunchlist.com",
+   "submit_url": "https://superlaunchlist.com/submit",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://superlaunchlist.com/",
+   "free_check": "free_with_paid_option",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-21",
+   "judge_reason": "Free listing needs badge and review; paid options skip it. Mixed listings include gaming cheats, suggesting link-farm ri",
+   "status": "HOLD spam risk",
+   "followed_sample": "3 followed / 0 not",
+   "needs": [
+    "badge_or_backlink"
+   ]
   }
  ]
 }
