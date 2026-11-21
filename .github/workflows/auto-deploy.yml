@@ -2,20 +2,29 @@ name: Auto-deploy robot (low-risk app changes)
 
 # Puts LOW-RISK changes of the InayaFlow app on main by itself (CORE_RULES section 7, 21 Nov 2026):
 # guides, tool-page words, the guide/tool topic table. Everything else is refused with "NEEDS DIRECTOR".
-# Limits: scripts/deploy_robot/config.json (allow-list, deny-list, size, caps). Code: scripts/deploy_robot/.
+# Limits: scripts/deploy_robot/config.json (allow-list, deny-list, size, caps, timeouts). Code: scripts/deploy_robot/.
 #
 # KILL SWITCH: the repo variable AUTO_DEPLOY_ON must be exactly 1 (Settings > Secrets and variables > Actions >
 # Variables). Missing or anything else = OFF: the scheduled job is skipped and nothing is read.
-# LIVE also needs this workflow to run from the main branch of this repo (checked in the code).
-# DRY RUN (Run workflow > dry_run = true): every check + the Fable review on the pending request files, then
-# "WOULD MERGE". Nothing is pushed to the app; works with the switch off.
+#
+# SECRETS LIVE IN THE GITHUB ENVIRONMENT "auto-deploy", NOT in the repo-wide secrets:
+#   DEPLOY_GENIE_TOKEN        fine-grained token for imran0786/genie: Contents read+write, Commit statuses read
+#   DEPLOY_ANTHROPIC_API_KEY  the key that pays for the one Fable review per deploy
+# The environment is restricted to the branch main (Settings > Environments > auto-deploy > Deployment branches
+# > Selected branches > main). A run from any other branch is stopped by GitHub before a step starts, so a
+# feature branch can never read these two secrets, never deploy and never spend review money.
+# The code checks the branch again (LIVE and the review call both need refs/heads/main).
+#
+# DRY RUN (Run workflow from main > dry_run = true): every check + the Fable review (real money, capped) on the
+# pending request files, then "WOULD MERGE". Nothing is pushed to the app; works with the switch off.
 #
 # Candidates and logs live ONLY in the PRIVATE repo imran0786/genie:
 #   candidates: branches autodeploy/* and claude/seo-* (the push is the request), or a request file
 #               deploy/pending/<id>.json on branch ops-deploy for any other allowed branch (robot/*, seo/*)
-#   log:        branch ops-deploy, ops/deploy_log.md (+ ops/deploys/<day>/ one file per attempt)
+#   log:        branch ops-deploy, ops/deploy_log.md (+ ops/deploys/<day>/ one file per attempt, ops/deploy_errors.md)
 # Public output of this job: counts and result codes only.
-# Caps: 8 deploys a day, 4 new guides a day, $0.40 per review, $2 a day for reviews, 2 candidates per run.
+# Caps: 8 deploys a day, 4 new guides a day, $0.40 per review, $2 a day for reviews, 1 candidate per run.
+# Time: one candidate with every wait at its limit needs 55 minutes (config timeouts); the job limit is 75.
 on:
   schedule:
     - cron: "7,17,27,37,47,57 * * * *"
@@ -37,6 +46,7 @@ jobs:
     if: vars.AUTO_DEPLOY_ON == '1' || inputs.dry_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    environment: auto-deploy
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,12 +59,12 @@ jobs:
         run: |
           python3 -W ignore scripts/deploy_robot/test_policy.py
           python3 -W ignore scripts/deploy_robot/test_robot.py
-          npm install --prefix /tmp/tsdep --no-audit --no-fund --ignore-scripts typescript@5
+          npm install --prefix /tmp/tsdep --no-audit --no-fund --ignore-scripts typescript@5.9.3
           NODE_PATH=/tmp/tsdep/node_modules REQUIRE_TS=1 python3 -W ignore scripts/deploy_robot/test_ts_check.py
       - name: Deploy robot (details go to the private log, never here)
         env:
-          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GENIE_LOGS_TOKEN: ${{ secrets.DEPLOY_GENIE_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.DEPLOY_ANTHROPIC_API_KEY }}
           AUTO_DEPLOY_ON: ${{ vars.AUTO_DEPLOY_ON }}
           DEPLOY_DRY: ${{ inputs.dry_run == 'true' && 'true' || 'false' }}
           # optional: only if the Director wants a fixed commit identity instead of "copy the last Vercel-accepted author"
@@ -62,4 +72,5 @@ jobs:
           DEPLOY_AUTHOR_EMAIL: ${{ secrets.DEPLOY_AUTHOR_EMAIL }}
         run: |
           echo "::add-mask::$GENIE_LOGS_TOKEN"
+          # stderr is not shown in this PUBLIC log; the robot itself writes errors (secrets cut out) to the private log
           python3 scripts/deploy_robot/robot.py 2>/dev/null

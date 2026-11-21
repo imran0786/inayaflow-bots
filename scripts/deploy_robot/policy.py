@@ -9,7 +9,9 @@ import datetime, difflib, html, json, os, re
 HERE = os.path.dirname(os.path.abspath(__file__))
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 BRANCH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{1,120}")
-LOCKED_KEYS = {"slug", "path", "url", "canonical", "id", "icon", "key", "src", "image", "type", "locale", "lang"}
+# string values under these keys are addresses, ids or event names, never copy: a change to one is refused
+LOCKED_KEYS = {"slug", "path", "url", "canonical", "id", "icon", "key", "src", "image", "type", "locale", "lang",
+               "href", "to", "link", "links", "event", "events", "eventname", "target", "rel", "action"}
 DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -160,13 +162,53 @@ def check_banned(path, lines, cfg):
 # ---------- guides (content/blog/*.mdx) ----------
 
 def split_frontmatter(text):
-    """(frontmatter, body) or (None, None). The first line must be exactly '---': gray-matter runs '---js' as code."""
+    """(frontmatter, body) or (None, None).
+    Same cut as gray-matter (the app's loader): the block opens with the first line '---' and CLOSES AT THE FIRST
+    line that starts with '---', whatever follows on that line. We accept only the plain form: first line exactly
+    '---' ('---js' would run as code at build time) and the closing line exactly '---'. Anything else gray-matter
+    would cut differently from us, so it is refused."""
     if not text.startswith("---\n"):
         return None, None
-    end = text.find("\n---\n", 3)
-    if end < 0:
+    end = text.find("\n---", 3)                    # gray-matter: indexOf('\n---') after the opening delimiter
+    if end < 0 or text[end + 4:end + 5] != "\n":
         return None, None
     return text[4:end + 1], text[end + 5:]
+
+
+FM_KEY_LINE = re.compile(r"([A-Za-z][A-Za-z0-9_]*):( .*)?")
+FM_BAD_VALUE_START = tuple("|>&*!%@`?")
+
+
+def check_frontmatter(path, fm):
+    """The frontmatter is DATA for the page (title, description and FAQ also go into JSON-LD script blocks), so it
+    must be the plainest YAML there is. Refused: a backslash (YAML escapes such as \\x3C make a '<'), '<' or '>',
+    a tab, any top-level line that is not `key: value` / `key:` / a list item, quoted or spaced keys ("slug":, slug :),
+    '?' keys, '<<' merges, anchors, aliases, tags, block scalars, comments, a key written twice."""
+    R, seen = [], set()
+    for ch, name in (("\\", "a backslash"), ("<", "'<'"), (">", "'>'"), ("\t", "a tab")):
+        if ch in fm:
+            R.append("NEEDS DIRECTOR: %s frontmatter contains %s (not allowed in the automatic lane: it can become HTML in the page's script blocks)" % (path, name))
+    for ln in fm.split("\n"):
+        if not ln.strip():
+            continue
+        if ln[0] == " ":
+            inner = ln.strip()
+            if inner.startswith(("? ", "<<", "- ? ", "- <<")) or inner in ("?", "- ?"):
+                R.append("NEEDS DIRECTOR: %s frontmatter uses a YAML '?' key or '<<' merge" % path)
+            continue
+        if ln.startswith("- "):
+            continue
+        m = FM_KEY_LINE.fullmatch(ln)
+        if not m:
+            R.append("NEEDS DIRECTOR: %s frontmatter has a line that is not a plain `key: value` (%s)" % (path, cell(ln, 50)))
+            continue
+        key, val = m.group(1), (m.group(2) or "").strip()
+        if key in seen:
+            R.append("NEEDS DIRECTOR: %s frontmatter has '%s:' twice" % (path, key))
+        seen.add(key)
+        if val.startswith(FM_BAD_VALUE_START):
+            R.append("NEEDS DIRECTOR: %s frontmatter value of '%s' starts with a YAML special sign" % (path, key))
+    return R[:8]
 
 
 def fm_value(fm, key):
@@ -200,9 +242,7 @@ def check_guide(path, old, new, today, cfg):
         return ["NEEDS DIRECTOR: %s must start with a plain '---' frontmatter block (a '---js' block would run as code at build time)" % path], info
     if re.search(r"(?m)(^|[\s\[{,:-])!(!|<|[A-Za-z])", fm):
         R.append("NEEDS DIRECTOR: %s frontmatter uses a YAML tag ('!...')" % path)
-    for key in ("title", "date", "slug", "updated", "tool"):
-        if fm_value(fm, key)[0] > 1:
-            R.append("NEEDS DIRECTOR: %s frontmatter has '%s:' twice" % (path, key))
+    R += check_frontmatter(path, fm)
     n, title = fm_value(fm, "title")
     if n != 1 or not (10 <= len(title) <= 120):
         R.append("NEEDS DIRECTOR: %s needs one title of 10 to 120 characters" % path)
@@ -239,6 +279,13 @@ def check_guide(path, old, new, today, cfg):
     return R, info
 
 
+def check_notes(path, old, new, cfg):
+    """The SEO queue file (never served): same text rules as a guide's added lines."""
+    if "\r" in new or "\0" in new:
+        return ["NEEDS DIRECTOR: %s has Windows line ends or a NUL byte" % path]
+    return check_banned(path, added_lines(old, new), cfg)
+
+
 def new_guide_count(changes):
     return sum(1 for c in changes if c["status"] == "A" and re.fullmatch(r"content/blog/[^/]+\.mdx", c["path"]))
 
@@ -249,12 +296,14 @@ def hosts_in(text):
     return {h.lower() for h in re.findall(r"https?://([A-Za-z0-9.-]+)", text or "")}
 
 
-def check_copy(path, report, old_text, routes, today, cfg):
+def check_copy(path, report, old_text, new_text, routes, today, cfg):
     """`report` = what ts_strings_only.cjs printed for this file: {ok, reason, changed: [{old, new, key, kind}]}.
-    The checker proved that ONLY the text inside string literals changed; this decides which string changes are fine."""
+    The checker proved that ONLY the text inside string literals changed; this decides which string changes are fine.
+    Comments are not code, but the reviewer reads them: every ADDED line of the file (comments too) passes the banned-text rules."""
     if not isinstance(report, dict) or not report.get("ok"):
         return ["NEEDS DIRECTOR: %s changes code, not only words (%s)" % (path, str((report or {}).get("reason", "no checker report"))[:200])]
     R, old_hosts = [], hosts_in(old_text) | set(cfg.get("copy_hosts_ok", []))
+    R += check_banned(path, added_lines(old_text, new_text), cfg)
     changed = report.get("changed") or []
     if not changed and not report.get("table_changed"):
         return ["NEEDS DIRECTOR: %s changed but no string or table row did (comments or layout only: nothing to deploy)" % path]

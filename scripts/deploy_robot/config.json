@@ -21,8 +21,10 @@
     "max_line_chars": 6000,
     "deploys_per_day": 8,
     "new_guides_per_day": 4,
-    "candidates_per_run": 2,
-    "reverts_before_halt": 2
+    "candidates_per_run": 1,
+    "reverts_before_halt": 2,
+    "dry_candidates_per_run": 2,
+    "seen_keep_days": 180
   },
   "review": {
     "model": "claude-fable-5-2",
@@ -34,8 +36,8 @@
     "cap_per_day_usd": 2.0
   },
   "post_deploy": {
-    "vercel_wait_seconds": 720,
-    "page_wait_seconds": 240,
+    "vercel_wait_seconds": 600,
+    "page_wait_seconds": 180,
     "poll_seconds": 15
   },
   "allow": [
@@ -264,10 +266,24 @@
     {
       "why": "invisible or direction-changing characters",
       "pattern": "[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2069\\uFEFF]"
+    },
+    {
+      "why": "text that imitates the review prompt's own markers",
+      "pattern": "(?i)<\\s*/?\\s*(diff|product_facts|content_rules)\\b"
     }
   ],
   "keyword_deny_skip_under": [
     "content/blog/"
   ],
-  "_keyword_note": "Deny rules marked keyword:true match words anywhere in a path; they are skipped ONLY for files under keyword_deny_skip_under (a guide named how-much-does-tiktok-pay.mdx is still a guide). All other deny rules always apply."
+  "_keyword_note": "Deny rules marked keyword:true match words anywhere in a path; they are skipped ONLY for files under keyword_deny_skip_under (a guide named how-much-does-tiktok-pay.mdx is still a guide). All other deny rules always apply.",
+  "timeouts": {
+    "_about": "seconds; test_robot.py checks that one whole candidate (plus the revert) fits inside run_budget, and run_budget inside the workflow's timeout-minutes",
+    "npm_ci": 420,
+    "checker": 120,
+    "tests": 480,
+    "review": 240,
+    "fetch_and_export": 180,
+    "run_budget": 3900
+  },
+  "node_image": "node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54"
 }
