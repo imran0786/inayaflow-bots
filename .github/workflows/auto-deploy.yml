@@ -25,7 +25,7 @@ name: Auto-deploy robot (low-risk app changes)
 # Public output of this job: counts and result codes only.
 # Caps: 8 deploys a day, 4 new guides a day, $0.40 per review, $2 a day for reviews, 1 candidate per run.
 # Time: every outside call has a limit (config timeouts). One candidate with EVERY wait and retry at its limit
-# needs 115 minutes; the run budget is 140 minutes and the job limit 150 (a unit test proves the sums). A normal
+# needs about 116 minutes; the run budget is 140 minutes and the job limit 150 (a unit test proves the sums). A normal
 # deploy takes about 5 to 8 minutes.
 on:
   schedule:
