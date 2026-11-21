@@ -56,6 +56,17 @@ def branch(name, files=None, delete=(), rename=None, base="main"):
     return sha
 
 
+def force_rmtree(path):
+    """Remove a folder even when git left read-only files in it (Windows)."""
+    import stat
+
+    def fix(func, p, _exc):
+        os.chmod(p, stat.S_IWRITE)
+        func(p)
+    if os.path.exists(path):
+        shutil.rmtree(path, onerror=fix)
+
+
 def setUpModule():
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", REMOTE], check=True, capture_output=True)
     os.makedirs(SRC)
@@ -198,9 +209,7 @@ class MergeView(unittest.TestCase):
     def test_routes_and_non_utf8(self):
         main = fresh()
         tree = R.app_git("rev-parse", main + "^{tree}").stdout.strip()
-        routes = R.known_routes(tree)
-        self.assertIn("/blog/old-guide", routes)
-        self.assertIn("/tools/tiktok-money-calculator", routes)
+        self.assertEqual(R.blob(tree, "content/_seo/QUEUE.md").strip(), "queue")
         sh("checkout", "-q", "-B", "autodeploy/t-bin", "main")
         with open(os.path.join(SRC, "content/blog/bin-guide.mdx"), "wb") as f:
             f.write(b"---\ntitle: x\n---\n\xff\xfe broken")
@@ -523,8 +532,25 @@ class Pages(unittest.TestCase):
 
     def run_check(self, pages, targets=None):
         t = [0]
-        get = lambda url: pages.get(url.split("?")[0], (404, ""))
+        get = lambda url, timeout=None: pages.get(url.split("?")[0], (404, ""))
         return R.check_pages(targets or self.T, "abcdef1234567", get, sleep=lambda s: t.__setitem__(0, t[0] + s), clock=lambda: t[0])
+
+    def test_wall_clock_limit_no_request_after_it(self):
+        """Every request hangs for the whole time it is given. The page checks must end AT the limit: each request
+        gets only what is left, and none is started when nothing is left (QA round 2)."""
+        limit = R.CFG["post_deploy"]["page_wait_seconds"]
+        t, calls = [0.0], []
+
+        def slow_get(url, timeout=None):
+            calls.append((t[0], timeout))
+            t[0] += timeout
+            return 0, ""
+        targets = [{"path": "p%d" % i, "kind": "copy", "urls": ["https://inayaflow.ai/a%d" % i, "https://inayaflow.ai/b%d" % i], "markers": []} for i in range(6)]
+        problems = R.check_pages(targets, "abcdef1234567", slow_get, sleep=lambda s: t.__setitem__(0, t[0] + s), clock=lambda: t[0])
+        self.assertLessEqual(t[0], limit)                                   # not one second over
+        self.assertTrue(all(start < limit and given <= R.TMO["http"] and start + given <= limit for start, given in calls), calls[-3:])
+        self.assertTrue(any("not checked" in p for p in problems))          # pages that got no turn are reported, not passed
+        self.assertEqual(len(problems), 12)
 
     GOOD = {"https://inayaflow.ai/blog/a": (200, "<title>My New Title | InayaFlow</title>"), "https://inayaflow.ai/tools": (200, "InayaFlow tools"),
             "https://inayaflow.ai/tools/x": (200, "InayaFlow x")}
@@ -643,7 +669,7 @@ class ReviewGate(unittest.TestCase):
 
 class Candidates(unittest.TestCase):
     def setUp(self):
-        shutil.rmtree(R.OPS, ignore_errors=True)
+        force_rmtree(R.OPS)
         os.makedirs(os.path.join(R.OPS, "deploy", "pending"))
 
     def req(self, name, d):
@@ -729,7 +755,7 @@ class Candidates(unittest.TestCase):
 
 class Log(unittest.TestCase):
     def test_save_log_and_day_counts(self):
-        shutil.rmtree(R.OPS, ignore_errors=True)
+        force_rmtree(R.OPS)
         os.makedirs(R.OPS)
         state = {}
         R.add_day(state, "2026-11-21", deploys=1, review_usd=0.12)
@@ -756,7 +782,7 @@ class Log(unittest.TestCase):
 
 class State(unittest.TestCase):
     def setUp(self):
-        shutil.rmtree(R.OPS, ignore_errors=True)
+        force_rmtree(R.OPS)
         os.makedirs(os.path.join(R.OPS, "ops"))
 
     def put_state(self, text):
@@ -809,13 +835,160 @@ class State(unittest.TestCase):
 class Budget(unittest.TestCase):
     def test_one_candidate_fits_the_run_and_the_run_fits_the_job(self):
         import re as _re
-        worst = R.pre_merge_worst() + R.post_merge_worst()
-        self.assertLessEqual(worst, R.TMO["run_budget"])
+        self.assertLessEqual(R.candidate_worst("live"), R.TMO["run_budget"])
+        self.assertLessEqual(R.CFG["limits"]["dry_candidates_per_run"] * R.candidate_worst("dry"), R.TMO["run_budget"])
         wf = open(os.path.join(os.path.dirname(os.path.abspath(R.__file__)), "..", "..", ".github", "workflows", "auto-deploy.yml"), encoding="utf-8").read()
         job_seconds = int(_re.search(r"timeout-minutes:\s*(\d+)", wf).group(1)) * 60
-        self.assertLessEqual(R.TMO["run_budget"] + 300, job_seconds)             # 5 minutes for set-up and the unit tests
+        self.assertLessEqual(R.TMO["run_budget"] + 600, job_seconds)             # 10 minutes for set-up and the unit tests
         self.assertEqual(R.CFG["limits"]["candidates_per_run"], 1)
-        self.assertLessEqual(R.CFG["limits"]["dry_candidates_per_run"] * R.pre_merge_worst(), R.TMO["run_budget"])
+        # the single limits of the pre-merge steps: none is longer than the phase they run in
+        for k in ("npm_ci", "checker", "fm_reader", "tests", "review", "git_net", "tar"):
+            self.assertLessEqual(R.TMO[k], R.TMO["pre_merge_budget"], k)
+
+    def virtual(self):
+        """Replace the robot's clock and sleep by a virtual clock; returns the list holding the time."""
+        t = [1000.0]
+        keep = (R.CLOCK, R.SLEEP)
+        R.CLOCK, R.SLEEP = (lambda: t[0]), (lambda s: t.__setitem__(0, t[0] + s))
+        self.addCleanup(lambda: (setattr(R, "CLOCK", keep[0]), setattr(R, "SLEEP", keep[1])))
+        return t
+
+    def test_cap_cuts_every_call_to_the_phase(self):
+        t = self.virtual()
+        keep = R.PHASE_END
+        self.addCleanup(lambda: setattr(R, "PHASE_END", keep))
+        R.PHASE_END = None
+        self.assertEqual(R.cap(480), 480)                       # no phase: the call's own limit
+        R.PHASE_END = t[0] + 100
+        self.assertEqual(R.cap(480), 100)                       # 100 s left in the phase: the call gets 100, not 480
+        self.assertEqual(R.cap(30), 30)
+        t[0] += 100
+        with self.assertRaises(R.Refused) as cm:                # phase over: the call is not started
+            R.cap(30)
+        self.assertEqual(cm.exception.kind, "SKIP")
+        self.assertIn("TIME:", str(cm.exception))
+
+    def test_pre_merge_phase_cannot_run_past_its_budget(self):
+        """Every pre-merge step hangs until its timeout. Whatever the single limits are, the phase ends at pre_merge_budget."""
+        t = self.virtual()
+        keep = (R.PHASE_END, R.subprocess.run)
+        self.addCleanup(lambda: (setattr(R, "PHASE_END", keep[0]), setattr(R.subprocess, "run", keep[1])))
+
+        def hang(cmd, **kw):
+            t[0] += kw["timeout"]
+            raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+        R.subprocess.run = hang
+        start = t[0]
+        R.PHASE_END = start + R.TMO["pre_merge_budget"]
+        steps = 0
+        with self.assertRaises(R.Refused):
+            while True:                                           # far more hanging steps than a real candidate has
+                for call in (lambda: R.app_git("fetch", "x", check=False), lambda: R.run_killable(["docker", "run"], "n", R.cap(R.TMO["tests"])),
+                             lambda: R.app_git("diff-tree", "x", check=False), lambda: R.run_killable(["docker", "run"], "n", R.cap(R.TMO["npm_ci"]))):
+                    call()
+                    steps += 1
+        self.assertGreater(steps, 3)
+        self.assertLessEqual(t[0] - start, R.TMO["pre_merge_budget"] + 4 * R.TMO["docker_kill"])      # the kills of the last round are the only overshoot
+
+    def test_post_merge_worst_case_is_really_the_worst(self):
+        """After a push: Vercel never answers 'success', every page request hangs, every revert push is refused, every
+        git call takes its full limit. The virtual time used must stay inside post_merge_worst()."""
+        t = self.virtual()
+        keep = (R.vercel_status, R.http_get, R.app_git, R.fetch_main, R.indexnow)
+        self.addCleanup(lambda: [setattr(R, n, f) for n, f in zip(("vercel_status", "http_get", "app_git", "fetch_main", "indexnow"), keep)])
+
+        def slow_status(sha, api=None):
+            t[0] += R.TMO["api"]
+            return "pending", ""
+
+        def slow_git(*args, **kw):
+            t[0] += R.TMO[R.GIT_LIMIT.get(args[0], "git_local")]
+            out = "a" * 40 + chr(10)
+            return subprocess.CompletedProcess(args, 1 if args[0] == "push" else 0, out, "")
+
+        def slow_fetch():
+            t[0] += R.TMO["git_net"]
+            return "b" * 40
+        R.vercel_status, R.app_git, R.fetch_main = slow_status, slow_git, slow_fetch
+        start = t[0]
+        e, state = {"time": "2026-11-21 10:00", "result": "", "reason": ""}, {}
+        R.verify_or_revert("c" * 40, "d" * 40, [], AUTHOR, e, state, "2026-11-21")
+        self.assertTrue(e["result"].startswith("REVERT FAILED"))
+        spent_timeout_path = t[0] - start
+        self.assertLessEqual(spent_timeout_path, R.post_merge_worst())
+        # second path: the deploy times out, the revert is pushed at the LAST try, then its own Vercel wait times out too
+        pushes = [0]
+
+        def git_last_push_ok(*args, **kw):
+            t[0] += R.TMO[R.GIT_LIMIT.get(args[0], "git_local")]
+            if args[0] == "push":
+                pushes[0] += 1
+            code = 1 if (args[0] == "push" and pushes[0] < R.REVERT_TRIES) else 0
+            return subprocess.CompletedProcess(args, code, "a" * 40 + chr(10), "")
+        R.app_git = git_last_push_ok
+        start = t[0]
+        e, state = {"time": "2026-11-21 10:00", "result": "", "reason": ""}, {}
+        R.verify_or_revert("c" * 40, "d" * 40, [], AUTHOR, e, state, "2026-11-21")
+        self.assertEqual(e["result"], "REVERTED")
+        self.assertIn("did not reach", state["halted"])
+        self.assertLessEqual(t[0] - start, R.post_merge_worst())
+        self.assertGreater(t[0] - start, spent_timeout_path)            # this is the longer path, and it still fits
+
+    def test_wait_vercel_overshoot_is_inside_the_formula(self):
+        t = self.virtual()
+
+        def slow_api(path):
+            t[0] += R.TMO["api"]
+            return 200, {"statuses": [{"context": "Vercel", "state": "pending"}]}
+        start = t[0]
+        self.assertEqual(R.wait_vercel("s", slow_api)[0], "timeout")
+        pd = R.CFG["post_deploy"]
+        self.assertLessEqual(t[0] - start, pd["vercel_wait_seconds"] + R.TMO["api"] + pd["poll_seconds"])
+
+    def test_git_and_tar_have_real_timeouts(self):
+        seen = []
+        keep = R.subprocess.run
+        self.addCleanup(lambda: setattr(R.subprocess, "run", keep))
+
+        def hang(cmd, **kw):
+            seen.append((cmd[0], kw.get("timeout")))
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+        R.subprocess.run = hang
+        with self.assertRaises(RuntimeError) as cm:
+            R.app_git("fetch", "x")
+        self.assertIn("did not finish", str(cm.exception))
+        self.assertEqual(R.app_git("push", "x", check=False).returncode, 124)
+        self.assertEqual(R.app_git("rev-parse", "x", check=False).returncode, 124)
+        self.assertEqual([x[1] for x in seen], [R.TMO["git_net"], R.TMO["git_push"], R.TMO["git_local"]])
+        with self.assertRaises(RuntimeError):
+            R.ops_git("push", "origin", "x")
+        self.assertEqual(R.ops_git("status", check=False).returncode, 124)
+        self.assertEqual([x[1] for x in seen[3:]], [R.TMO["ops_git_net"], R.TMO["ops_git_local"]])
+        R.subprocess.run = keep
+        keep_git = R.app_git
+        self.addCleanup(lambda: setattr(R, "app_git", keep_git))
+        R.app_git = lambda *a, **k: subprocess.CompletedProcess(a, 0, b"", b"")
+        R.subprocess.run = hang
+        with self.assertRaises(RuntimeError) as cm:
+            R.export_tree("x", os.path.join(TMP, "export_test"))
+        self.assertIn("did not finish", str(cm.exception))
+        self.assertEqual(seen[-1], ("tar", R.TMO["tar"]))
+
+    def test_container_is_killed_on_timeout(self):
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append((cmd[:3], kw.get("timeout")))
+            if cmd[1] == "run":
+                raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        code, out, err = R.run_killable(["docker", "run", "--rm", "--name", "deploy-robot-1-1", "image"], "deploy-robot-1-1", 480, run=fake_run)
+        self.assertEqual(code, 124)
+        self.assertIn("container killed", err)
+        self.assertEqual(calls[1], (["docker", "kill", "deploy-robot-1-1"], R.TMO["docker_kill"]))
+        # the container always gets a name the kill can use
+        src = open(os.path.join(os.path.dirname(os.path.abspath(R.__file__)), "robot.py"), encoding="utf-8").read()
+        self.assertIn('"--name", name', src)
 
     def test_no_time_left_means_skip_not_start(self):
         keep = R.time_left
@@ -853,6 +1026,107 @@ class Budget(unittest.TestCase):
             self.assertTrue(R.on_main())
         finally:
             os.environ.pop("GITHUB_REF")
+
+
+class LogPush(unittest.TestCase):
+    """push_ops against a real throw-away remote (QA round 2): a failed pull is undone, True means 'the remote has it'."""
+    def setUp(self):
+        self.remote = os.path.join(TMP, "ops_remote_%d.git" % id(self))
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "ops-deploy", self.remote], check=True, capture_output=True)
+        force_rmtree(R.OPS)
+        os.makedirs(R.OPS)
+        self.og("init", "-q", "-b", "ops-deploy")
+        self.og("remote", "add", "origin", self.remote)
+        for k, v in (("user.name", "bot"), ("user.email", "bot@example.test"), ("core.autocrlf", "false"), ("commit.gpgsign", "false")):
+            self.og("config", k, v)
+        R.write("ops/deploy_state.json", "{}" + LF)
+        self.og("add", "-A")
+        self.og("commit", "-q", "-m", "start")
+        self.og("push", "-q", "origin", "ops-deploy")
+
+    def og(self, *args, cwd=None):
+        r = subprocess.run(["git", "-C", cwd or R.OPS, *args], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError("test git %s: %s" % (args[0], r.stderr[-200:]))
+        return r.stdout.strip()
+
+    def other_writer(self, rel, text):
+        """Someone else (another run) pushes to the log branch behind our back."""
+        d = os.path.join(TMP, "ops_other_%d" % id(self))
+        force_rmtree(d)
+        subprocess.run(["git", "clone", "-q", self.remote, d], check=True, capture_output=True)
+        for k, v in (("user.name", "other"), ("user.email", "other@example.test"), ("core.autocrlf", "false")):
+            self.og("config", k, v, cwd=d)
+        os.makedirs(os.path.dirname(os.path.join(d, rel)), exist_ok=True)
+        with open(os.path.join(d, rel), "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        self.og("add", "-A", cwd=d)
+        self.og("commit", "-q", "-m", "other writer", cwd=d)
+        self.og("push", "-q", "origin", "ops-deploy", cwd=d)
+
+    def remote_head(self):
+        return self.og("rev-parse", "refs/heads/ops-deploy", cwd=self.remote)
+
+    def test_plain_push_is_confirmed(self):
+        R.write("ops/deploy_log.md", "one" + LF)
+        self.assertTrue(R.push_ops("ops: one"))
+        self.assertEqual(self.remote_head(), self.og("rev-parse", "HEAD"))
+        self.assertFalse(R.push_ops("ops: nothing new"))
+
+    def test_other_writer_then_rebase_and_push(self):
+        self.other_writer("ops/other.md", "theirs" + LF)
+        R.write("ops/deploy_log.md", "mine" + LF)
+        self.assertTrue(R.push_ops("ops: mine"))
+        self.assertEqual(self.remote_head(), self.og("rev-parse", "HEAD"))
+        self.assertEqual(self.og("show", "HEAD:ops/other.md"), "theirs")
+        self.assertEqual(self.og("show", "HEAD:ops/deploy_log.md"), "mine")
+
+    def test_failed_pull_is_aborted_and_not_called_success(self):
+        self.other_writer("ops/deploy_state.json", '{"theirs": 1}' + LF)
+        R.write("ops/deploy_state.json", '{"mine": 1}' + LF)                 # same file, other content: the rebase must conflict
+        before = self.remote_head()
+        with self.assertRaises(RuntimeError) as cm:
+            R.push_ops("ops: conflict")
+        self.assertIn("not on the remote", str(cm.exception))
+        self.assertEqual(self.remote_head(), before)                           # nothing of ours got there
+        git_dir = os.path.join(R.OPS, ".git")
+        self.assertFalse(os.path.exists(os.path.join(git_dir, "rebase-merge")) or os.path.exists(os.path.join(git_dir, "rebase-apply")))
+        self.assertEqual(self.og("status", "--porcelain"), "")                 # the clone is not left half-rebased
+        self.assertIn('"mine"', self.og("show", "HEAD:ops/deploy_state.json"))  # our commit is still there, on our branch
+
+    def test_push_that_says_ok_but_is_not_on_the_remote(self):
+        """A push answers 0, but the remote branch does not hold our commit (and never will): must NOT return True."""
+        real = R.ops_git
+        self.addCleanup(lambda: setattr(R, "ops_git", real))
+
+        def lying(*args, check=True):
+            if args[0] == "push":
+                return subprocess.CompletedProcess(args, 0, "", "")           # says ok, pushes nothing
+            return real(*args, check=check)
+        R.ops_git = lying
+        R.write("ops/deploy_log.md", "never arrives" + LF)
+        before = self.remote_head()
+        with self.assertRaises(RuntimeError):
+            R.push_ops("ops: lost")
+        self.assertEqual(self.remote_head(), before)
+
+    def test_remote_moved_on_after_our_push_still_counts(self):
+        """Our commit landed, then another writer pushed on top before we looked: our commit is in the remote's history = True."""
+        real = R.ops_git
+        self.addCleanup(lambda: setattr(R, "ops_git", real))
+        done = []
+
+        def racing(*args, check=True):
+            r = real(*args, check=check)
+            if args[0] == "push" and r.returncode == 0 and not done:
+                done.append(1)
+                self.other_writer("ops/other.md", "right after ours" + LF)
+            return r
+        R.ops_git = racing
+        R.write("ops/deploy_log.md", "ours first" + LF)
+        self.assertTrue(R.push_ops("ops: ours"))
+        self.assertNotEqual(self.remote_head(), self.og("rev-parse", "HEAD"))
+        self.assertEqual(subprocess.run(["git", "-C", self.remote, "merge-base", "--is-ancestor", self.og("rev-parse", "HEAD"), "refs/heads/ops-deploy"]).returncode, 0)
 
 
 class Hardening(unittest.TestCase):

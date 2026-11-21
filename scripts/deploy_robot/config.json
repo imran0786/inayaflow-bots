@@ -277,13 +277,23 @@
   ],
   "_keyword_note": "Deny rules marked keyword:true match words anywhere in a path; they are skipped ONLY for files under keyword_deny_skip_under (a guide named how-much-does-tiktok-pay.mdx is still a guide). All other deny rules always apply.",
   "timeouts": {
-    "_about": "seconds; test_robot.py checks that one whole candidate (plus the revert) fits inside run_budget, and run_budget inside the workflow's timeout-minutes",
+    "_about": "seconds. EVERY outside call has a limit (git, tar, containers, HTTP). Before the merge all of them are also cut by the phase limit pre_merge_budget. test_robot.py Budget proves: pre_merge_budget + post-merge worst case + saves <= run_budget <= the workflow's timeout-minutes.",
+    "git_local": 30,
+    "git_net": 120,
+    "git_push": 60,
+    "tar": 120,
+    "docker_kill": 30,
+    "ops_git_local": 15,
+    "ops_git_net": 45,
+    "http": 25,
+    "api": 30,
     "npm_ci": 420,
     "checker": 120,
+    "fm_reader": 60,
     "tests": 480,
     "review": 240,
-    "fetch_and_export": 180,
-    "run_budget": 3900
+    "pre_merge_budget": 2400,
+    "run_budget": 8400
   },
   "node_image": "node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54"
 }

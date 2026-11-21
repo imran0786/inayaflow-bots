@@ -24,7 +24,9 @@ name: Auto-deploy robot (low-risk app changes)
 #   log:        branch ops-deploy, ops/deploy_log.md (+ ops/deploys/<day>/ one file per attempt, ops/deploy_errors.md)
 # Public output of this job: counts and result codes only.
 # Caps: 8 deploys a day, 4 new guides a day, $0.40 per review, $2 a day for reviews, 1 candidate per run.
-# Time: one candidate with every wait at its limit needs 55 minutes (config timeouts); the job limit is 75.
+# Time: every outside call has a limit (config timeouts). One candidate with EVERY wait and retry at its limit
+# needs 115 minutes; the run budget is 140 minutes and the job limit 150 (a unit test proves the sums). A normal
+# deploy takes about 5 to 8 minutes.
 on:
   schedule:
     - cron: "7,17,27,37,47,57 * * * *"
@@ -45,7 +47,7 @@ jobs:
   deploy:
     if: vars.AUTO_DEPLOY_ON == '1' || inputs.dry_run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 150
     environment: auto-deploy
     steps:
       - uses: actions/checkout@v4
@@ -59,8 +61,9 @@ jobs:
         run: |
           python3 -W ignore scripts/deploy_robot/test_policy.py
           python3 -W ignore scripts/deploy_robot/test_robot.py
-          npm install --prefix /tmp/tsdep --no-audit --no-fund --ignore-scripts typescript@5.9.3
+          npm install --prefix /tmp/tsdep --no-audit --no-fund --ignore-scripts typescript@5.9.3 gray-matter@4.0.3
           NODE_PATH=/tmp/tsdep/node_modules REQUIRE_TS=1 python3 -W ignore scripts/deploy_robot/test_ts_check.py
+          NODE_PATH=/tmp/tsdep/node_modules REQUIRE_TS=1 python3 -W ignore scripts/deploy_robot/test_fm_app_read.py
       - name: Deploy robot (details go to the private log, never here)
         env:
           GENIE_LOGS_TOKEN: ${{ secrets.DEPLOY_GENIE_TOKEN }}

@@ -174,6 +174,50 @@ class Checker(unittest.TestCase):
         self.assertEqual(rep["changed"][0]["new"], "How much is one coin, it's asked a lot?")
         self.bad(BASE.replace("'How much is one coin?'", "'a" + BS + BS + "', evil: require('child_process'), b: 'c'"))
 
+    # ---- link targets and quoted keys (QA round 2): the checker reports them so policy.check_copy can refuse them ----
+    LINKS = LF.join([
+        "const ORIGIN = 'https://inayaflow.ai'",
+        "export const ER_TOOL_PATH = '/tools/tiktok-engagement-rate-calculator'",
+        "export const schema = {",
+        "  '@context': 'https://schema.org',",
+        '  "@type": \'FAQPage\',',
+        "  itemListElement: [{ position: 1, name: 'TikTok Growth Guides', item: `${ORIGIN}/blog` }],",
+        "  'href': '/tools',",
+        "}",
+        ""])
+
+    def policy_refuses(self, rep):
+        import datetime
+        sys.path.insert(0, HERE)
+        import policy as P
+        return P.check_copy("lib/x.ts", rep, self.LINKS, self.LINKS, datetime.date(2026, 11, 21), P.load_config())
+
+    def test_variable_that_holds_a_path(self):
+        rep = self.ok(self.LINKS.replace("'/tools/tiktok-engagement-rate-calculator'", "'/tools/tiktok-money-calculator'"), base=self.LINKS)
+        self.assertEqual((rep["changed"][0]["key"], rep["changed"][0]["old"]), ("ER_TOOL_PATH", "/tools/tiktok-engagement-rate-calculator"))
+        self.assertTrue(any("link target" in r for r in self.policy_refuses(rep)))
+
+    def test_breadcrumb_item_template(self):
+        rep = self.ok(self.LINKS.replace("`${ORIGIN}/blog`", "`${ORIGIN}/pricing`"), base=self.LINKS)
+        self.assertEqual((rep["changed"][0]["key"], rep["changed"][0]["kind"], rep["changed"][0]["old"]), ("item", "template", "/blog"))
+        self.assertTrue(self.policy_refuses(rep))
+
+    def test_quoted_keys_are_reported_without_their_quotes(self):
+        rep = self.ok(self.LINKS.replace("'https://schema.org'", "'https://evil.example'"), base=self.LINKS)
+        self.assertEqual(rep["changed"][0]["key"], "@context")
+        self.assertTrue(self.policy_refuses(rep))
+        rep = self.ok(self.LINKS.replace("'FAQPage'", "'Thing here'"), base=self.LINKS)
+        self.assertEqual(rep["changed"][0]["key"], "@type")
+        self.assertTrue(any("address or id" in r for r in self.policy_refuses(rep)))
+        rep = self.ok(self.LINKS.replace("'href': '/tools'", "'href': '/pricing'"), base=self.LINKS)
+        self.assertEqual(rep["changed"][0]["key"], "href")
+        self.assertTrue(self.policy_refuses(rep))
+
+    def test_plain_words_next_to_links_still_pass(self):
+        rep = self.ok(self.LINKS.replace("'TikTok Growth Guides'", "'TikTok growth guides for creators'"), base=self.LINKS)
+        self.assertEqual(rep["changed"][0]["key"], "name")
+        self.assertEqual(self.policy_refuses(rep), [])
+
     # ---- the topic table ----
     def test_table_row_added_changed_removed(self):
         t = ("GUIDE_TOPIC_TOOLS",)

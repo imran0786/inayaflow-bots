@@ -41,6 +41,9 @@ OPS = os.path.join(WORK, "ops")                 # clone of the private log branc
 NODE_IMAGE = CFG["node_image"]                  # pinned by digest in config.json
 TMO = CFG["timeouts"]
 RUN_T0 = time.time()
+CLOCK, SLEEP = time.time, time.sleep            # the tests replace these with a virtual clock
+PHASE_END = None                                # while set: no outside call may run past this moment (the pre-merge phase)
+REVERT_TRIES, PUSH_TRIES = 3, 3
 UA = "inayaflow-deploy-robot"
 STATE, LOG_MD, LOG_JSONL, ERRORS = "ops/deploy_state.json", "ops/deploy_log.md", "ops/deploy_log.jsonl", "ops/deploy_errors.md"
 
@@ -76,16 +79,45 @@ def on_main():
 
 def time_left():
     """Seconds of this run's budget that are still free (config timeouts.run_budget, well inside the job's own limit)."""
-    return TMO["run_budget"] - (time.time() - RUN_T0)
+    return TMO["run_budget"] - (CLOCK() - RUN_T0)
 
 
 def pre_merge_worst():
-    return TMO["fetch_and_export"] + TMO["npm_ci"] + TMO["checker"] + 2 * TMO["tests"] + TMO["review"]
+    """Everything before the merge (fetch, install, checkers, tests, review) is cut off by ONE phase limit: cap()."""
+    return TMO["pre_merge_budget"] + TMO["docker_kill"]        # + the kill of a container that hit the limit at the very end
 
 
 def post_merge_worst():
+    """The longest the steps AFTER a push to main can take, every wait and every try at its limit:
+    push, wait for Vercel, pages, up to REVERT_TRIES reverts, the revert's own Vercel wait, IndexNow."""
     pd = CFG["post_deploy"]
-    return pd["vercel_wait_seconds"] + pd["page_wait_seconds"] + pd["vercel_wait_seconds"]      # deploy wait + pages + the revert's own wait
+    push = TMO["git_local"] + TMO["git_push"]                                          # commit-tree + push
+    wait = pd["vercel_wait_seconds"] + TMO["api"] + pd["poll_seconds"]                  # the last poll may start just inside the limit
+    pages = pd["page_wait_seconds"]                                                     # hard wall-clock limit, no overshoot
+    revert_all = REVERT_TRIES * (TMO["git_net"] + TMO["git_local"] + push)              # fetch main + merge-tree + commit + push
+    return push + wait + pages + revert_all + wait + TMO["http"] + 2 * TMO["git_local"]
+
+
+def save_worst():
+    """The longest one save of the private log can take (push_ops with every try at its limit)."""
+    one_try = 3 * TMO["ops_git_local"] + 4 * TMO["ops_git_net"]                         # rev-parse, merge-base, rebase --abort + push, ls-remote, fetch, pull
+    return 3 * TMO["ops_git_local"] + PUSH_TRIES * one_try                              # add, diff, commit + the tries
+
+
+def candidate_worst(md):
+    """Seconds one candidate may need: pre-merge phase + (live) the post-merge steps + the saves around them."""
+    return pre_merge_worst() + ((post_merge_worst() + 3 * save_worst()) if md == "live" else 2 * save_worst())
+
+
+def cap(limit):
+    """The time limit for ONE outside call: its own limit, cut to what is left of the current phase.
+    When the phase is over, the call is not started at all."""
+    if PHASE_END is None:
+        return limit
+    left = PHASE_END - CLOCK()
+    if left <= 0:
+        raise Refused("SKIP", "TIME: the %d seconds this run allows for the checks before a merge are used up; it is taken in the next run" % TMO["pre_merge_budget"])
+    return max(1, min(limit, left))
 
 
 def scrub(text, limit=400):
@@ -113,6 +145,9 @@ def token_url():
 
 # ---------- hardened git for the app repo (trusts nothing, shows nothing) ----------
 
+GIT_LIMIT = {"fetch": "git_net", "ls-remote": "git_net", "clone": "git_net", "push": "git_push"}
+
+
 def app_git(*args, check=True, extra_env=None, binary=False, stdin=None):
     env = {"PATH": os.environ.get("PATH", ""), "HOME": os.path.join(WORK, "home"), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
            "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0", "GIT_ATTR_NOSYSTEM": "1"}
@@ -121,7 +156,13 @@ def app_git(*args, check=True, extra_env=None, binary=False, stdin=None):
     env.update(extra_env or {})
     cmd = ["git", "--git-dir=" + GITDIR, "-c", "core.hooksPath=" + os.devnull, "-c", "core.fsmonitor=false", "-c", "protocol.ext.allow=never",
            "-c", "credential.helper=", "-c", "core.attributesFile=" + os.devnull, "-c", "gc.auto=0", *args]
-    r = subprocess.run(cmd, capture_output=True, text=not binary, env=env, cwd=WORK, input=stdin)
+    limit = cap(TMO[GIT_LIMIT.get(args[0], "git_local")])
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=not binary, env=env, cwd=WORK, input=stdin, timeout=limit)
+    except subprocess.TimeoutExpired:
+        if not check:
+            return subprocess.CompletedProcess(cmd, 124, b"" if binary else "", b"" if binary else "timeout")
+        raise RuntimeError("git %s did not finish in %d seconds" % (args[0], limit))
     if check and r.returncode != 0:
         err = r.stderr if isinstance(r.stderr, str) else (r.stderr or b"").decode("utf-8", "replace")
         raise RuntimeError("git %s failed: %s" % (args[0], scrub(err, 200)))      # the error text goes to the private log only, token cut out
@@ -177,7 +218,10 @@ def export_tree(tree, dest):
     shutil.rmtree(dest, ignore_errors=True)
     os.makedirs(dest)
     a = app_git("archive", "--format=tar", tree, binary=True)
-    r = subprocess.run(["tar", "-x", "-C", dest], input=a.stdout, capture_output=True)
+    try:
+        r = subprocess.run(["tar", "-x", "-C", dest], input=a.stdout, capture_output=True, timeout=cap(TMO["tar"]))
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("export of the tree did not finish in %d seconds" % TMO["tar"])
     if r.returncode != 0:
         raise RuntimeError("export failed")
 
@@ -202,19 +246,6 @@ def merged_view(main_sha, cand_sha):
             "patch": patch.decode("utf-8", "replace"), "patch_bytes": len(patch)}
 
 
-def known_routes(tree):
-    routes = set(CFG["internal_routes"])
-    names = app_git("ls-tree", "-r", "--name-only", tree, "--", "content/blog", "app/[locale]/tools").stdout.splitlines()
-    for n in names:
-        m = re.fullmatch(r"content/blog/([a-z0-9-]+)\.mdx", n)
-        if m:
-            routes.add("/blog/" + m.group(1))
-        m = re.fullmatch(r"app/\[locale\]/tools/([a-z0-9-]+)/page\.tsx", n)
-        if m:
-            routes.add("/tools/" + m.group(1))
-    return routes
-
-
 def guides_added_today(main_sha, day):
     """NEW guide files on main since the start of the UTC day, however they arrived (plain commit, merge commit,
     squash): the tree at the last first-parent commit before 00:00 UTC is compared with the tree now."""
@@ -227,18 +258,34 @@ def guides_added_today(main_sha, day):
 
 # ---------- container (tests and the words-only checker): no secrets, only the mounts named here ----------
 
+_CONTAINER_N = 0
+
 def docker_node(args, mounts, network, timeout, env=None):
-    cmd = ["docker", "run", "--rm", "--user", "%d:%d" % (os.getuid(), os.getgid()), "-e", "HOME=/tmp", "-e", "CI=true", "-e", "npm_config_cache=/tmp/.npm"]
+    """Run node / npm in a container. On a timeout the CONTAINER is killed (stopping the docker command alone would
+    leave it running), so nothing keeps working or holding the folders after the limit."""
+    global _CONTAINER_N
+    _CONTAINER_N += 1
+    name = "deploy-robot-%d-%d" % (os.getpid(), _CONTAINER_N)
+    cmd = ["docker", "run", "--rm", "--name", name, "--user", "%d:%d" % (os.getuid(), os.getgid()), "-e", "HOME=/tmp", "-e", "CI=true", "-e", "npm_config_cache=/tmp/.npm"]
     for k, v in (env or {}).items():
         cmd += ["-e", "%s=%s" % (k, v)]
     for host, inside, ro in mounts:
         cmd += ["-v", "%s:%s%s" % (host, inside, ":ro" if ro else "")]
     cmd += ["-w", "/w"] + ([] if network else ["--network", "none"]) + [NODE_IMAGE] + args
+    return run_killable(cmd, name, cap(timeout))
+
+
+def run_killable(cmd, name, timeout, run=None):
+    run = run or subprocess.run
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        r = run(cmd, capture_output=True, text=True, timeout=timeout)
         return r.returncode, (r.stdout or ""), (r.stderr or "")
     except subprocess.TimeoutExpired:
-        return 124, "", "TIMEOUT"
+        try:
+            run(["docker", "kill", name], capture_output=True, text=True, timeout=TMO["docker_kill"])
+        except Exception:
+            pass
+        return 124, "", "TIMEOUT after %d seconds (container killed)" % timeout
 
 
 def install_packages():
@@ -257,13 +304,37 @@ def run_tests(folder):
     return t
 
 
+def run_guide_reader(view, rules):
+    """Ask THE APP's own parser (gray-matter + js-yaml from the app's node_modules, as installed from main's lock file)
+    what it reads from each guide's frontmatter. Container: no network, files read-only, before any test ran.
+    Returns {path: report}; policy.compare_app_read refuses on any difference from the robot's own reading."""
+    guides = sorted(p for p, r in rules.items() if r["kind"] == "guide")
+    if not guides:
+        return {}
+    os.makedirs(CHECK_IN, exist_ok=True)
+    shutil.copy(os.path.join(HERE, "fm_app_read.cjs"), os.path.join(CHECK_IN, "fm_app_read.cjs"))
+    manifest = []
+    for i, p in enumerate(guides):
+        with open(os.path.join(CHECK_IN, "g%d.new" % i), "w", encoding="utf-8", newline="") as f:
+            f.write(blob(view["tree"], p) or "")
+        manifest.append({"path": p, "file": "g%d.new" % i})
+    with open(os.path.join(CHECK_IN, "fm_manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f)
+    code, out, _err = docker_node(["node", "/in/fm_app_read.cjs", "/in"], [(BASE, "/w", True), (CHECK_IN, "/in", True)], False, TMO["fm_reader"],
+                                  env={"NODE_PATH": "/w/node_modules"})
+    try:
+        files = json.loads(out).get("files", {}) if code == 0 else {}
+    except Exception:
+        files = {}
+    return {p: files.get(p) or {"ok": False, "reason": "the app parser gave no answer for this file"} for p in guides}
+
+
 def run_copy_checker(view, rules):
     """Words-only proof for the TypeScript copy files. Runs BEFORE any test, on a fresh install, files mounted read-only."""
     copy = sorted(p for p, r in rules.items() if r["kind"] == "copy")
     if not copy:
         return {}
-    shutil.rmtree(CHECK_IN, ignore_errors=True)
-    os.makedirs(CHECK_IN)
+    os.makedirs(CHECK_IN, exist_ok=True)
     shutil.copy(os.path.join(HERE, "ts_strings_only.cjs"), os.path.join(CHECK_IN, "ts_strings_only.cjs"))
     manifest = []
     for i, p in enumerate(copy):
@@ -288,7 +359,7 @@ def gh_api(path):
     req = urllib.request.Request("https://api.github.com/repos/%s/%s" % (REPO, path), headers={
         "Authorization": "Bearer " + token(), "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": UA})
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with urllib.request.urlopen(req, timeout=TMO["api"]) as r:
             return r.status, json.load(r)
     except urllib.error.HTTPError as e:
         return e.code, {}
@@ -308,7 +379,8 @@ def vercel_status(sha, api=gh_api):
     return "none", "no Vercel status on this commit yet"
 
 
-def http_get(url, timeout=25):
+def http_get(url, timeout=None):
+    timeout = TMO["http"] if timeout is None else max(1, timeout)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA, "Cache-Control": "no-cache", "Accept": "text/html,*/*;q=0.5"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -430,8 +502,9 @@ def review(view, state, day, post=post_json):
     body = {"model": r["model"], "max_tokens": r["max_tokens"], "output_config": {"effort": r["effort"]},
             "system": system, "messages": [{"role": "user", "content": prompt}]}
     headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+    limit = cap(TMO["review"])
     try:
-        data = post("https://api.anthropic.com/v1/messages", body, headers, timeout=TMO["review"])
+        data = post("https://api.anthropic.com/v1/messages", body, headers, timeout=limit)
     except Exception as e:
         add_day(state, day, review_usd=worst)        # unknown spend: book the worst case
         raise RuntimeError("review call failed (%s)" % type(e).__name__)
@@ -451,7 +524,8 @@ def commit_on_main(tree, parent, author, message):
     return sha if r.returncode == 0 else None
 
 
-def wait_vercel(sha, api=gh_api, sleep=time.sleep, clock=time.time):
+def wait_vercel(sha, api=gh_api, sleep=None, clock=None):
+    sleep, clock = sleep or SLEEP, clock or CLOCK
     pd, t0 = CFG["post_deploy"], clock()
     st, desc = "pending", ""
     while clock() - t0 < pd["vercel_wait_seconds"]:
@@ -462,14 +536,22 @@ def wait_vercel(sha, api=gh_api, sleep=time.sleep, clock=time.time):
     return "timeout", "no 'Vercel success' after %d seconds (last: %s %s)" % (pd["vercel_wait_seconds"], st, desc)
 
 
-def check_pages(targets, sha, get=http_get, sleep=time.sleep, clock=time.time):
-    """Every changed page: HTTP 200, a real InayaFlow page, and (guides, changed titles) the new title on it. Returns problems."""
-    pd, t0, problems = CFG["post_deploy"], clock(), []
+def check_pages(targets, sha, get=http_get, sleep=None, clock=None):
+    """Every changed page: HTTP 200, a real InayaFlow page, and (guides, changed titles) the new title on it. Returns problems.
+    Hard wall-clock limit (post_deploy.page_wait_seconds) for ALL pages together: every request gets only the time
+    that is left, and when the clock has run out no further request is started."""
+    sleep, clock = sleep or SLEEP, clock or CLOCK
+    pd = CFG["post_deploy"]
+    end, problems = clock() + pd["page_wait_seconds"], []
     for t in targets:
         while True:
             bad, shown = [], not t["markers"]
             for url in t["urls"]:
-                code, page = get("%s?_deploy=%s" % (url, sha[:10]))
+                left = end - clock()
+                if left <= 0:
+                    bad.append("%s: not checked, the %d seconds for the page checks were used up" % (url, pd["page_wait_seconds"]))
+                    continue
+                code, page = get("%s?_deploy=%s" % (url, sha[:10]), timeout=min(TMO["http"], left))
                 if code != 200:
                     bad.append("%s: HTTP %s" % (url, code))
                 elif P.looks_like_error_page(page):
@@ -478,8 +560,8 @@ def check_pages(targets, sha, get=http_get, sleep=time.sleep, clock=time.time):
                     shown = True
             if not bad and not shown:
                 bad.append("%s: the new title is not on the page" % t["urls"][0])
-            if not bad or clock() - t0 > pd["page_wait_seconds"]:
-                break
+            if not bad or end - clock() <= pd["poll_seconds"]:
+                break                                   # good, or no time for another round
             sleep(pd["poll_seconds"])
         problems += bad
     return problems
@@ -487,7 +569,7 @@ def check_pages(targets, sha, get=http_get, sleep=time.sleep, clock=time.time):
 
 def revert(deploy_sha, parent_sha, author, why):
     """Undo exactly our commit on top of whatever main is now. Returns (revert sha or None, note)."""
-    for _try in range(3):
+    for _try in range(REVERT_TRIES):
         cur = fetch_main()
         r = app_git("merge-tree", "--write-tree", "--no-messages", "--merge-base=" + deploy_sha, cur, parent_sha, check=False)
         if r.returncode != 0:
@@ -603,7 +685,7 @@ def indexnow(urls, main_tree, post=post_json):
         if not m or not urls:
             return "not sent"
         post("https://api.indexnow.org/indexnow", {"host": host, "key": m.group(1), "keyLocation": "%s/%s.txt" % (CFG["site"], m.group(1)), "urlList": urls},
-             {"Content-Type": "application/json; charset=utf-8", "User-Agent": UA}, timeout=30)
+             {"Content-Type": "application/json; charset=utf-8", "User-Agent": UA}, timeout=TMO["http"])
         return "sent (%d)" % len(urls)
     except Exception as e:
         return "failed (%s, not fatal)" % type(e).__name__
@@ -611,10 +693,20 @@ def indexnow(urls, main_tree, post=post_json):
 
 # ---------- the private log branch ----------
 
+OPS_NET = ("push", "pull", "fetch", "ls-remote", "clone")
+
+
 def ops_git(*args, check=True):
-    r = subprocess.run(["git", "-C", OPS, *args], capture_output=True, text=True)
+    """git on the clone of the private log branch, with a time limit. A timeout counts as a failed command."""
+    limit = TMO["ops_git_net"] if args[0] in OPS_NET else TMO["ops_git_local"]
+    try:
+        r = subprocess.run(["git", "-C", OPS, *args], capture_output=True, text=True, timeout=limit)
+    except subprocess.TimeoutExpired:
+        if check:
+            raise RuntimeError("git %s did not finish in %d seconds (log branch)" % (args[0], limit))
+        return subprocess.CompletedProcess(args, 124, "", "timeout")
     if check and r.returncode != 0:
-        raise RuntimeError("git %s failed (log branch)" % args[0])
+        raise RuntimeError("git %s failed (log branch): %s" % (args[0], scrub(r.stderr, 160)))
     return r
 
 
@@ -623,13 +715,13 @@ def clone_ops():
     b = CFG["ops_branch"]
     shutil.rmtree(OPS, ignore_errors=True)
     existed = True
-    r = subprocess.run(["git", "clone", "-q", "--branch", b, "--depth", "1", token_url(), OPS], capture_output=True, text=True, cwd=WORK)
+    r = subprocess.run(["git", "clone", "-q", "--branch", b, "--depth", "1", token_url(), OPS], capture_output=True, text=True, cwd=WORK, timeout=TMO["git_net"])
     if r.returncode != 0:
         heads = remote_heads()
         if b in heads:
             raise RuntimeError("clone of the log branch failed although it exists: " + scrub(r.stderr, 160))
         existed = False
-        if subprocess.run(["git", "clone", "-q", "--depth", "1", token_url(), OPS], capture_output=True, text=True, cwd=WORK).returncode != 0:
+        if subprocess.run(["git", "clone", "-q", "--depth", "1", token_url(), OPS], capture_output=True, text=True, cwd=WORK, timeout=TMO["git_net"]).returncode != 0:
             raise RuntimeError("clone of the log branch failed")
         ops_git("checkout", "-q", "--orphan", b)
         ops_git("rm", "-rqf", ".", check=False)
@@ -678,15 +770,26 @@ def prune_seen(state):
 
 
 def push_ops(msg):
+    """Commit and push the private log. Returns True only when the REMOTE branch really holds the new commit
+    (a push that reports success is checked with ls-remote; if others pushed meanwhile, our commit must be in their
+    history). A pull that fails is undone with `rebase --abort`, so the clone is never left half-rebased."""
+    b = CFG["ops_branch"]
     ops_git("add", "-A")
     if ops_git("diff", "--cached", "--quiet", check=False).returncode == 0:
         return False
     ops_git("commit", "-q", "-m", msg)
-    for _ in range(4):
-        if ops_git("push", "-q", "origin", "HEAD:refs/heads/" + CFG["ops_branch"], check=False).returncode == 0:
-            return True
-        ops_git("pull", "-q", "--rebase", "origin", CFG["ops_branch"], check=False)
-    raise RuntimeError("push of the log failed")
+    for _ in range(PUSH_TRIES):
+        head = ops_git("rev-parse", "HEAD").stdout.strip()
+        if ops_git("push", "-q", "origin", "HEAD:refs/heads/" + b, check=False).returncode == 0:
+            seen = ops_git("ls-remote", "origin", "refs/heads/" + b, check=False)
+            if seen.returncode == 0 and seen.stdout.split()[:1] == [head]:
+                return True
+            if ops_git("fetch", "-q", "origin", b, check=False).returncode == 0 and \
+                    ops_git("merge-base", "--is-ancestor", head, "FETCH_HEAD", check=False).returncode == 0:
+                return True
+        if ops_git("pull", "-q", "--rebase", "origin", b, check=False).returncode != 0:
+            ops_git("rebase", "--abort", check=False)
+    raise RuntimeError("push of the log failed: the new commit is not on the remote log branch")
 
 
 def read_json(rel, default):
@@ -794,12 +897,15 @@ def process(cand, md, state, pre):
     D = ["# Deploy attempt: %s" % cand["branch"], "", "- Time: %s UTC. Mode: %s. Source: %s %s" % (e["time"], md.upper(), cand["source"], cand["req"]),
          "- Candidate commit: `%s`" % cand["sha"]]
     step = "start"
+    global PHASE_END
+    PHASE_END = None
     try:
         if cand.get("bad"):
             raise Refused("REFUSED", "bad request file: " + cand["bad"])
-        need = pre_merge_worst() + (post_merge_worst() if md == "live" else 0)
+        need = candidate_worst(md)
         if time_left() < need:
             raise Refused("SKIP", "TIME: %d s left in this run, one candidate can need %d s; it is taken in the next run" % (max(0, time_left()), need))
+        PHASE_END = CLOCK() + TMO["pre_merge_budget"]          # from here to the merge, no outside call runs past this moment (cap)
         step = "fetch"
         main_sha = fetch_main()
         fetch_candidate(cand["branch"], cand["sha"])
@@ -839,11 +945,21 @@ def process(cand, md, state, pre):
         step = "install"
         export_tree(view["main_tree"], BASE)
         install_packages()
+        step = "the app's own reading of the frontmatter"
+        shutil.rmtree(CHECK_IN, ignore_errors=True)
+        app_reads = run_guide_reader(view, rules)
+        for p, rep in app_reads.items():
+            fm, _body = P.split_frontmatter(blob(view["tree"], p) or "")
+            reasons += P.compare_app_read(p, fm or "", rep)
+        if app_reads:
+            D += ["## Frontmatter as the app itself reads it (gray-matter + js-yaml from the app)", "",
+                  "SAME as the robot's reading (keys, slug, title, date, updated, description)" if not reasons else "\n".join("- " + r for r in reasons), ""]
+        if reasons:
+            raise Refused("REFUSED", reasons)
         step = "words-only check"
         reports = run_copy_checker(view, rules)
-        routes = known_routes(view["tree"])
         for p, rep in reports.items():
-            reasons += P.check_copy(p, rep, blob(view["main_tree"], p) or "", blob(view["tree"], p) or "", routes, today, CFG)
+            reasons += P.check_copy(p, rep, blob(view["main_tree"], p) or "", blob(view["tree"], p) or "", today, CFG)
         if reports:
             D += ["## Words-only proof (TypeScript copy files)", "", "PASS" if not reasons else "\n".join("- " + r for r in reasons), ""]
         if reasons:
@@ -892,8 +1008,10 @@ def process(cand, md, state, pre):
             D += ["## Result", "", "WOULD MERGE (dry run: nothing was pushed to the app).", "", "Commit message it would use:", "", "```", message, "```", ""]
             return e, "\n".join(D)
         step = "merge"
-        if time_left() < post_merge_worst():
-            raise Refused("SKIP", "TIME: %d s left in this run, the checks after a deploy can need %d s; it is taken in the next run" % (max(0, time_left()), post_merge_worst()))
+        PHASE_END = None                                        # the steps after a push must run to their end, each with its own limit
+        after = post_merge_worst() + 2 * save_worst()
+        if time_left() < after:
+            raise Refused("SKIP", "TIME: %d s left in this run, the steps after a deploy can need %d s; it is taken in the next run" % (max(0, time_left()), after))
         author = pre["author"]
         # Written to the private log BEFORE the push: if this run dies between the push and the checks, the next run
         # finds the note, checks the pages and reverts if needed (recover_inflight). A deploy is never left unchecked.
@@ -919,6 +1037,8 @@ def process(cand, md, state, pre):
         e["result"] = "ERROR" + ("" if md == "live" else " (dry run)")
         e["reason"] = "step '%s': %s" % (step, re.sub(r"x-access-token:[^@\s]*@", "", str(x))[:160] or type(x).__name__)
         D += ["## Result", "", "ERROR at step '%s' (%s). Nothing was deployed by this attempt unless a Merge section is shown above." % (step, type(x).__name__), ""]
+    finally:
+        PHASE_END = None
     return e, "\n".join(D)
 
 

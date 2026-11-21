@@ -51,11 +51,18 @@ function maskable(node) {
   return false
 }
 
+// The name a string sits under: the nearest property or variable. For a quoted property name ('@context', "href")
+// this is the name WITHOUT its quotes, so the robot's key lock cannot be dodged by quoting the key (QA round 2).
+function nameText(name) {
+  if (name && (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name) || ts.isNumericLiteral(name))) return String(name.text)
+  return name ? name.getText() : ''
+}
+
 function keyOf(node) {
   let p = node.parent
   while (p) {
-    if (ts.isPropertyAssignment(p)) return p.name.getText()
-    if (ts.isVariableDeclaration(p)) return p.name.getText()
+    if (ts.isPropertyAssignment(p)) return nameText(p.name)
+    if (ts.isVariableDeclaration(p)) return nameText(p.name)
     p = p.parent
   }
   return ''

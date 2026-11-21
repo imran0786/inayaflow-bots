@@ -204,6 +204,68 @@ class Guides(unittest.TestCase):
                      "{slug: tiktok-study-2026}", "<<: {slug: tiktok-study-2026}", "# a comment", "!!map {slug: x}", "slug\u003a x"):
             self.assertTrue(self.check(self.fm(line))[0], line)
 
+    FABLE_SAMPLE = LF.join([
+        "---",
+        '  slug: "tiktok-seo"',
+        '  title: "Any other title here"',
+        '  date: "2020-01-01"',
+        '  tool: "analyze"',
+        "  description: 'x",
+        'title: "Title the robot reads"',
+        'date: "2026-11-21"',
+        'slug: "new-guide"',
+        "  y'",
+        "---",
+        ""]) + ("Real words about scheduling. " * 30) + LF
+
+    def test_fable_sample_hidden_real_keys(self):
+        """QA round 2: an indented root block + a multi-line single-quoted value. js-yaml reads slug tiktok-seo; the
+        robot's line reader saw slug new-guide. Refused because the first frontmatter line is not at column 0."""
+        r, info = P.check_guide("content/blog/new-guide.mdx", None, self.FABLE_SAMPLE, TODAY, CFG)
+        self.assertTrue(any("must begin with a `key: value` line" in x for x in r), r)
+
+    def test_first_line_must_be_a_key_at_column_zero(self):
+        for first in ('  title: "A guide about things"', "", "- item", "  ", " slug: x"):
+            g = GUIDE.replace("---" + LF, "---" + LF + first + LF, 1)
+            self.assertTrue(any("must begin with" in x for x in self.check(g)[0]), repr(first))
+
+    def test_quote_must_close_on_its_own_line(self):
+        for bad in ("description2: 'x", 'description2: "x', "description2: 'x' y", "description2: 'it's'", 'description2: "a" b"', "description2: '", 'description2: "'):
+            self.assertTrue(any("opens a quote" in x for x in self.check(self.fm(bad))[0]), bad)
+        for good in ("description2: 'x'", "description2: 'it''s fine'", 'description2: "x"', "description2: ''", "description2: plain words"):
+            self.assertEqual(self.check(self.fm(good))[0], [], good)
+        # the same trick with a column-0 first line: the open quote is refused on its own
+        sneaky = GUIDE.replace('tool: "analyze"', "tool: 'analyze" + LF + 'slug: "tiktok-seo"' + LF + "  x'")
+        self.assertTrue(self.check(sneaky)[0])
+
+    def app(self, **values):
+        base = {"slug": ("string", "how-to-schedule-tiktok-posts"), "title": ("string", "How to schedule TikTok posts in TikTok Studio"),
+                "date": ("string", "2026-11-21"), "updated": ("missing", ""), "description": ("string", "Step by step.")}
+        base.update(values)
+        return {"ok": True, "reason": "", "keys": ["title", "description", "slug", "date", "tool"],
+                "values": {k: {"type": t, "value": v} for k, (t, v) in base.items()}}
+
+    def test_compare_app_read_same(self):
+        fm, _ = P.split_frontmatter(GUIDE)
+        self.assertEqual(P.compare_app_read(PATH, fm, self.app()), [])
+        self.assertEqual(P.compare_app_read(PATH, fm, self.app(date=("date", "2026-11-21"))), [])      # an unquoted date is a Date for the app
+
+    def test_compare_app_read_any_difference_refuses(self):
+        fm, _ = P.split_frontmatter(GUIDE)
+        for change in ({"slug": ("string", "tiktok-seo")}, {"title": ("string", "Any other title here")}, {"date": ("string", "2020-01-01")},
+                       {"updated": ("string", "2026-11-21")}, {"description": ("string", "x\ny")}, {"description": ("missing", "")},
+                       {"slug": ("missing", "")}, {"title": ("number", "5")}, {"title": ("date", "How to schedule TikTok posts in TikTok Studio")},
+                       {"title": ("array", "[]")}, {"date": ("date", "2026-11-22")}):
+            self.assertTrue(P.compare_app_read(PATH, fm, self.app(**change)), change)
+        other_keys = self.app()
+        other_keys["keys"] = ["title", "description", "slug", "date", "tool", "hidden"]
+        self.assertTrue(P.compare_app_read(PATH, fm, other_keys))
+        fewer = self.app()
+        fewer["keys"] = ["title", "slug", "date", "tool"]
+        self.assertTrue(P.compare_app_read(PATH, fm, fewer))
+        for broken in (None, {}, {"ok": False, "reason": "the app parser failed"}, "text", {"ok": True}):
+            self.assertTrue(P.compare_app_read(PATH, fm, broken), broken)
+
     def test_nested_question_key_and_merge(self):
         self.assertTrue(self.check(self.fm("faq:" + LF + "  ? question" + LF + "  : answer"))[0])
         self.assertTrue(self.check(self.fm("extra:" + LF + "  <<: *base"))[0])
@@ -265,14 +327,14 @@ class Copy(unittest.TestCase):
 
     def check(self, changed, ok=True, table=False, new_text=None):
         return P.check_copy("lib/coinsToolCopy.ts", {"ok": ok, "reason": "code changed near x", "changed": changed, "table_changed": table},
-                            self.OLD, self.OLD if new_text is None else new_text, self.ROUTES, TODAY, CFG)
+                            self.OLD, self.OLD if new_text is None else new_text, TODAY, CFG)
 
     def c(self, old, new, key="blurb", kind="string"):
         return {"old": old, "new": new, "key": key, "kind": kind}
 
     def test_code_change_refused(self):
         self.assertTrue(self.check([], ok=False))
-        self.assertTrue(P.check_copy("lib/x.ts", None, "", "", set(), TODAY, CFG))
+        self.assertTrue(P.check_copy("lib/x.ts", None, "", "", TODAY, CFG))
 
     def test_prose_ok(self):
         self.assertEqual(self.check([self.c("Turn TikTok coins into dollars.", "Turn TikTok coins and gifts into dollars.")]), [])
@@ -293,8 +355,9 @@ class Copy(unittest.TestCase):
         self.assertTrue(self.check([self.c("Some words here", "")]))
 
     def test_routes(self):
-        self.assertEqual(self.check([self.c("/tools", "/blog/tiktok-hashtags-guide", key="more")]), [])
-        self.assertEqual(self.check([self.c("/tools", "/tools/tiktok-money-calculator#faq", key="more")]), [])
+        # QA round 2: a string that is nothing but an address never changes, whatever its key is called
+        self.assertTrue(self.check([self.c("/tools", "/blog/tiktok-hashtags-guide", key="more")]))
+        self.assertTrue(self.check([self.c("/tools", "/tools/tiktok-money-calculator#faq", key="more")]))
         self.assertTrue(self.check([self.c("/tools", "/admin/costs", key="more")]))
         self.assertTrue(self.check([self.c("/tools", "//evil.example/x", key="more")]))
         self.assertTrue(self.check([self.c("Some words here", "/tools", key="more")]))
@@ -318,6 +381,31 @@ class Copy(unittest.TestCase):
         self.assertTrue(self.check([self.c("Plain words here", "Plain <b>words</b> here")]))
         self.assertTrue(self.check([self.c("Plain words here", "Ask Genie about it")]))
         self.assertTrue(self.check([self.c("Plain words here", "x </script><script>alert(1)</script>")]))
+
+    def test_bare_addresses_under_any_key(self):
+        # the variable ER_TOOL_PATH = '/tools/...': the key is the variable's name, the value is a bare path
+        self.assertTrue(self.check([self.c("/tools/tiktok-engagement-rate-calculator", "/tools/tiktok-money-calculator", key="ER_TOOL_PATH")]))
+        # a breadcrumb `item: `${ORIGIN}/blog`` template: the changed part is "/blog"
+        self.assertTrue(self.check([self.c("/blog", "/pricing", key="item", kind="template")]))
+        self.assertTrue(self.check([self.c("/blog", "/pricing", key="whatever", kind="template")]))
+        for old, new in (("https://schema.org", "https://evil.example"), ("https://www.tiktok.com/coin", "https://www.tiktok.com/other"),
+                         ("http://x.example/a", "https://x.example/a"), ("//cdn.example/x.js", "//cdn.example/y.js"), ("www.tiktok.com", "www.tiktok.com/x"),
+                         ("/", "/tools"), ("Some words here", "/tools"), ("Some words here", "https://www.tiktok.com/coin"), ("", "/tools")):
+            self.assertTrue(self.check([self.c(old, new, key="note")]), (old, new))
+        # an address INSIDE a sentence is still judged by the site rule, not refused outright
+        self.assertEqual(self.check([self.c("Read https://www.tiktok.com/coin now", "See https://www.tiktok.com/coin today")]), [])
+
+    def test_quoted_keys_are_still_locked(self):
+        for key in ("'@context'", '"@context"', "@context", "'href'", '"href"', "`href`", " 'slug' ", "'@type'", "@id", "'item'", "sameAs"):
+            self.assertTrue(self.check([self.c("some old words", "some new words", key=key)]), key)
+        self.assertEqual(P.clean_key("'@context'"), "@context")
+        self.assertEqual(P.clean_key('"Href"'), "href")
+
+    def test_bare_address(self):
+        for t in ("/tools", "/", "https://x.example", "HTTP://x", "//x.example", "www.x.example", " /tools "):
+            self.assertTrue(P.bare_address(t), t)
+        for t in ("", "tools", "See /tools now", "a/b", "TikTok money calculator", "2026-11-21"):
+            self.assertFalse(P.bare_address(t), t)
 
     def test_added_comment_lines_are_checked_too(self):
         good = [self.c("Turn TikTok coins into dollars.", "Turn TikTok coins and gifts into dollars.")]

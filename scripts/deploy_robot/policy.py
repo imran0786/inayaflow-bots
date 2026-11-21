@@ -11,7 +11,8 @@ SHA_RE = re.compile(r"[0-9a-f]{40}")
 BRANCH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{1,120}")
 # string values under these keys are addresses, ids or event names, never copy: a change to one is refused
 LOCKED_KEYS = {"slug", "path", "url", "canonical", "id", "icon", "key", "src", "image", "type", "locale", "lang",
-               "href", "to", "link", "links", "event", "events", "eventname", "target", "rel", "action"}
+               "href", "to", "link", "links", "event", "events", "eventname", "target", "rel", "action",
+               "@context", "@type", "@id", "item", "sameas", "mainentityofpage", "logo"}
 DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -179,12 +180,63 @@ FM_KEY_LINE = re.compile(r"([A-Za-z][A-Za-z0-9_]*):( .*)?")
 FM_BAD_VALUE_START = tuple("|>&*!%@`?")
 
 
+def quoted_on_one_line(val):
+    """True when a value that starts with a quote is ONE complete quoted text on its line (nothing after the closing quote).
+    A quote left open would swallow the following lines into the value."""
+    q = val[:1]
+    if len(val) < 2 or val[-1] != q:
+        return False
+    inner = val[1:-1]
+    if q == "'":
+        inner = inner.replace("''", "")
+    return q not in inner
+
+
+APP_KEYS = ("slug", "title", "date", "updated", "description")
+
+
+def top_level_keys(fm):
+    return [m.group(1) for m in (FM_KEY_LINE.fullmatch(ln) for ln in (fm or "").split("\n")) if m]
+
+
+def compare_app_read(path, fm, app):
+    """`app` = what fm_app_read.cjs printed for this file: the frontmatter as THE APP's own parser (gray-matter +
+    js-yaml from the app's node_modules) reads it. The robot refuses on any difference from its own line reader:
+    the set of top-level keys, and slug / title / date / updated / description value by value."""
+    keys, values = (app.get("keys"), app.get("values")) if isinstance(app, dict) else (None, None)
+    if not isinstance(app, dict) or app.get("ok") is not True or not isinstance(keys, list) or not isinstance(values, dict):
+        why = app.get("reason", "no answer") if isinstance(app, dict) else "no answer"
+        return ["NEEDS DIRECTOR: %s: the app's own parser could not confirm the frontmatter (%s)" % (path, cell(why or "answer in the wrong shape", 160))]
+    R = []
+    mine, theirs = sorted(top_level_keys(fm)), sorted(str(k) for k in keys)
+    if mine != theirs:
+        odd = sorted(set(mine) ^ set(theirs))
+        R.append("NEEDS DIRECTOR: %s: the app reads other frontmatter keys than the robot does (differ: %s)" % (path, cell(", ".join(odd), 120) or "order or count"))
+    for key in APP_KEYS:
+        n, val = fm_value(fm, key)
+        got = values.get(key) if isinstance(values.get(key), dict) else {}
+        kind, text = got.get("type"), got.get("value")
+        if n == 0:
+            same = kind == "missing"
+        else:
+            same = n == 1 and text == val and (kind == "string" or (kind == "date" and key in ("date", "updated")))
+        if not same:
+            R.append("NEEDS DIRECTOR: %s: the app reads %s = %s (%s) but the robot read %s" % (
+                path, key, cell(repr(text), 70), kind, cell(repr(val), 70) if n else "no such line"))
+    return R
+
+
 def check_frontmatter(path, fm):
     """The frontmatter is DATA for the page (title, description and FAQ also go into JSON-LD script blocks), so it
     must be the plainest YAML there is. Refused: a backslash (YAML escapes such as \\x3C make a '<'), '<' or '>',
     a tab, any top-level line that is not `key: value` / `key:` / a list item, quoted or spaced keys ("slug":, slug :),
     '?' keys, '<<' merges, anchors, aliases, tags, block scalars, comments, a key written twice."""
     R, seen = [], set()
+    first = fm.split("\n", 1)[0]
+    if not FM_KEY_LINE.fullmatch(first):
+        # an indented first line makes YAML read the whole block one level in: the lines the robot reads at column 0
+        # could then sit inside a quoted value and never be keys at all (QA round 2)
+        R.append("NEEDS DIRECTOR: %s frontmatter must begin with a `key: value` line at the very start of a line (found: %s)" % (path, cell(first, 40) or "an empty line"))
     for ch, name in (("\\", "a backslash"), ("<", "'<'"), (">", "'>'"), ("\t", "a tab")):
         if ch in fm:
             R.append("NEEDS DIRECTOR: %s frontmatter contains %s (not allowed in the automatic lane: it can become HTML in the page's script blocks)" % (path, name))
@@ -208,6 +260,8 @@ def check_frontmatter(path, fm):
         seen.add(key)
         if val.startswith(FM_BAD_VALUE_START):
             R.append("NEEDS DIRECTOR: %s frontmatter value of '%s' starts with a YAML special sign" % (path, key))
+        if val[:1] in ("'", '"') and not quoted_on_one_line(val):
+            R.append("NEEDS DIRECTOR: %s frontmatter value of '%s' opens a quote that does not close cleanly on the same line" % (path, key))
     return R[:8]
 
 
@@ -296,7 +350,18 @@ def hosts_in(text):
     return {h.lower() for h in re.findall(r"https?://([A-Za-z0-9.-]+)", text or "")}
 
 
-def check_copy(path, report, old_text, new_text, routes, today, cfg):
+def clean_key(key):
+    """Key name for the lock lookup: quotes and spaces off, lower case ('@context' written with quotes is still @context)."""
+    return str(key or "").strip().strip("'\"`").strip().lower()
+
+
+def bare_address(text):
+    """A string that is nothing but an address: starts with / or http(s): or // or www. and has no space in it."""
+    t = str(text or "").strip()
+    return bool(t) and not re.search(r"\s", t) and bool(re.match(r"(?i)(/|https?:|www\.)", t))
+
+
+def check_copy(path, report, old_text, new_text, today, cfg):
     """`report` = what ts_strings_only.cjs printed for this file: {ok, reason, changed: [{old, new, key, kind}]}.
     The checker proved that ONLY the text inside string literals changed; this decides which string changes are fine.
     Comments are not code, but the reviewer reads them: every ADDED line of the file (comments too) passes the banned-text rules."""
@@ -310,8 +375,13 @@ def check_copy(path, report, old_text, new_text, routes, today, cfg):
     for ch in changed:
         old, new, key = str(ch.get("old", "")), str(ch.get("new", "")), str(ch.get("key") or "")
         label = "%s (%s)" % (path, key or "text")
-        if key.lower() in LOCKED_KEYS:
+        if clean_key(key) in LOCKED_KEYS:
             R.append("NEEDS DIRECTOR: %s is an address or id, not copy" % label)
+            continue
+        if bare_address(old) or bare_address(new):
+            # a path or URL on its own (ER_TOOL_PATH = '/tools/...', a breadcrumb `item:` template part, '@context'):
+            # that is a link target, whatever the key is called
+            R.append("NEEDS DIRECTOR: %s is a link target or address ('%s'), not copy" % (label, cell(old or new, 50)))
             continue
         if len(new) > 2500:
             R.append("NEEDS DIRECTOR: %s is longer than 2,500 characters" % label)
@@ -323,11 +393,6 @@ def check_copy(path, report, old_text, new_text, routes, today, cfg):
             bare_www = "www." in new.lower() and "www." not in old.lower()
             if bad or plain_http or bare_www:
                 R.append("NEEDS DIRECTOR: %s adds a link to a site this file did not link before, or a non-https link (%s)" % (label, ", ".join(bad)[:120] or "unclear address"))
-            continue
-        if old.startswith("/") or new.startswith("/"):
-            target = new.split("#")[0].rstrip("/") or "/"
-            if not (old.startswith("/") and new.startswith("/") and target in routes and re.fullmatch(r"/[A-Za-z0-9/_-]*(#[a-z0-9-]+)?", new)):
-                R.append("NEEDS DIRECTOR: %s points to %s, which is not a page the robot knows" % (label, new[:80]))
             continue
         if DATE_RE.fullmatch(old) or DATE_RE.fullmatch(new):
             o, n = _day(old), _day(new)
