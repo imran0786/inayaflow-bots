@@ -42,11 +42,60 @@ def new_paying(data, hist):
     return int(data.get("paying_total", 0)) - int(prev), days[-1]
 
 
+ALERT_RATIO = 0.5      # alert when today's same-hours calls are below 50% of the previous days' average
+ALERT_MIN_AVG = 5      # ...and that average is at least 5 (no alarm on tiny numbers)
+
+
+def same_hours_rows(data):
+    """[(day, same-hours calls, same-hours callers, new callers, returning callers)] newest first, or None when the
+    database function has no same_hours numbers yet (SQL v4 not run). Real ChatGPT callers only (caller_kind subject)."""
+    out = []
+    for d in data.get("days", []):
+        sh = (d.get("plugin") or {}).get("same_hours")
+        if not isinstance(sh, dict):
+            return None
+        out.append((d.get("day"), int(sh.get("calls", 0) or 0), int(sh.get("callers", 0) or 0),
+                    int(sh.get("new_callers", 0) or 0), int(sh.get("returning_callers", 0) or 0)))
+    return out or None
+
+
+def same_hours_check(rows):
+    """Compare today (first row) with the average of the previous days that have data (days before the first
+    day with any plugin call are skipped: no data there is not a quiet day). -> (today_calls, avg or None, n_prev, alert bool)."""
+    if not rows:
+        return 0, None, 0, False
+    today_calls, prev = rows[0][1], rows[1:]
+    # drop leading (oldest) days with no calls at all: the log did not exist yet
+    while prev and prev[-1][1] == 0:
+        prev = prev[:-1]
+    prev = prev[:7]
+    if not prev:
+        return today_calls, None, 0, False
+    avg = sum(r[1] for r in prev) / float(len(prev))
+    return today_calls, avg, len(prev), (avg >= ALERT_MIN_AVG and today_calls < ALERT_RATIO * avg)
+
+
+def alert_line(data):
+    rows = same_hours_rows(data)
+    today_calls, avg, n, alert = same_hours_check(rows)
+    if not alert:
+        return ""
+    return ("**ALERT: ChatGPT plugin calls so far today (00:00 to %s UTC) = %d, below half of the usual %.1f for the same hours "
+            "(average of the previous %d days).**" % (run_time(data), today_calls, avg, n))
+
+
+def run_time(data):
+    return str(data.get("now_utc") or c.now().strftime("%H:%M"))
+
+
 def build(data, hist):
     days = data.get("days", [])
     L = ["# Daily funnel numbers", "",
-         "Made %s UTC by the funnel robot (read-only, counts only). Days are UTC; today is not finished yet." % c.now().strftime("%Y-%m-%d %H:%M"), "",
-         "## Sign-ups", "",
+         "Made %s UTC by the funnel robot (read-only, counts only). Days are UTC; today is not finished yet." % c.now().strftime("%Y-%m-%d %H:%M"), ""]
+    al = alert_line(data)
+    if al:
+        L += [al, ""]
+    L += ["## Sign-ups", "",
          "| day | sign-ups | with a source record | by source bucket | came from (funnel_from) |", "|---|---|---|---|---|"]
     for d in days:
         L.append("| %s | %s | %s | %s | %s |" % (d.get("day"), d.get("signups", 0), d.get("with_source", 0), kv(d.get("buckets")), kv(d.get("from"))))
@@ -80,6 +129,25 @@ def build(data, hist):
         L.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
             d.get("day"), p.get("calls", 0), p.get("ok", 0), (p.get("by_outcome") or {}).get("invalid_input", 0), p.get("callers", 0),
             p.get("no_answer_callers", 0), p.get("handles", 0), p.get("outside_calls", 0), kv(p.get("by_tool"), 8), kv(p.get("by_outcome"), 8)))
+
+    L += ["", "### ChatGPT plugin: same hours and new vs returning callers (real ChatGPT callers only)", ""]
+    rows = same_hours_rows(data)
+    if rows is None:
+        L += ["Not available yet: the database function has no same-hours numbers until the SQL update "
+              "(ROBOTS_FUNNEL_READER_v4_same_hours.sql) is run.", ""]
+    else:
+        t_calls, avg, n, alert = same_hours_check(rows)
+        L += ["Same hours = 00:00 UTC to %s UTC (this report's time) on every day, so a quiet night is compared with quiet nights. "
+              "New caller = first call ever on that day; returning = seen on an earlier day. New/returning cover the whole day "
+              "(today so far)." % run_time(data), "",
+              "- Today same hours: %d calls. Previous %d days' same-hours average: %s. %s" % (
+                  t_calls, n, "not enough days yet" if avg is None else "%.1f" % avg,
+                  "BELOW the alert line (under 50%% of the average, average at least %d)." % ALERT_MIN_AVG if alert else "No alert."),
+              "",
+              "| day | calls, same hours | callers, same hours | new callers (whole day) | returning callers (whole day) |",
+              "|---|---|---|---|---|"]
+        for day, calls, callers, new, ret in rows:
+            L.append("| %s | %d | %d | %d | %d |" % (day, calls, callers, new, ret))
     L += ["", "## Agents outside ChatGPT (30-day trial, Imran 19 Nov: report every day)", "",
           "Programs other than ChatGPT that called the plugin (Claude, Cursor, scripts...). The program name is what the caller says it is.", "",
           "| day | agents (different callers) | calls | by program |", "|---|---|---|---|"]
