@@ -311,6 +311,14 @@ def main():
         if missing:
             note = (note + "; " if note else "") + "missing input files: " + ", ".join(missing)
         report, new_state, n = build(inputs, state, digests, note)
+        try:  # ACTION TRACKER (22 Nov 2026): a failure here never breaks the rest of the report
+            import action_tracker as at
+            report, ts = at.run(work, report)
+            n["action_needed"], n["action_unread"] = ts["needed"], ts["unread"]
+            print("action tracker: candidates=%(candidates)d needed=%(needed)d unread=%(unread)d ai_calls=%(ai_calls)d failed=%(failed)d" % ts)
+        except Exception as e:
+            report = report.replace("\n", "\n\n> ACTION TRACKER ERROR: not built this run (%s).\n" % type(e).__name__, 1)
+            print("action tracker: FAILED %s" % type(e).__name__)
         c.write_text(latest, report)
         c.write_text(os.path.join(work, "ops", "history", "report_%s.md" % c.stamp()), report)
         prune_history(os.path.join(work, "ops", "history"))

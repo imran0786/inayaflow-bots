@@ -29,14 +29,17 @@ jobs:
         with:
           python-version: "3.12"
       - name: Unit tests (a failure stops the run)
-        run: python3 -W ignore scripts/reports/test_reports.py
+        run: |
+          python3 -W ignore scripts/reports/test_reports.py
+          python3 -W ignore scripts/reports/test_action_tracker.py
       - name: Build and save the report (private repo, never here)
         env:
           GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-          MAX_AI_CALLS: "4"
+          MAX_AI_CALLS: "12"
+          MAX_ACTION_CALLS: "8"
         run: |
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           python3 scripts/reports/inbox_report.py 2>/dev/null
