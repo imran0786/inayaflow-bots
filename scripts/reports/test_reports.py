@@ -314,11 +314,17 @@ class Funnel(unittest.TestCase):
                 "calls": n, "callers": max(0, n - 1), "new_callers": nw[0], "returning_callers": nw[1]}}})
         return {"today": today, "now_utc": "05:00", "days": out}
 
-    def test_same_hours_no_alert_normal_night(self):
+    def test_same_hours_alert_only_when_below_half_of_average(self):
         data = self._days([2, 12, 5, 20, 8, 9, 7, 6])      # avg of prev 7 = 9.57; 2 < 4.78 -> alert
         self.assertIn("ALERT", fd.alert_line(data))
         data = self._days([6, 12, 5, 20, 8, 9, 7, 6])      # 6 >= 4.78 -> no alert
         self.assertEqual(fd.alert_line(data), "")
+
+    def test_same_hours_alert_needs_3_previous_days(self):
+        # only 2 earlier days with data (avg 10): no alert even at 0
+        self.assertEqual(fd.alert_line(self._days([0, 10, 10, 0, 0, 0, 0, 0])), "")
+        # 3 earlier days with data: alert
+        self.assertIn("ALERT", fd.alert_line(self._days([0, 10, 10, 10, 0, 0, 0, 0])))
 
     def test_same_hours_alert_threshold_exact(self):
         # previous 7 days all 10 -> avg 10; alert only when today < 5

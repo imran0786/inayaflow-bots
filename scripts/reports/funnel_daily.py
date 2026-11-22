@@ -44,6 +44,7 @@ def new_paying(data, hist):
 
 ALERT_RATIO = 0.5      # alert when today's same-hours calls are below 50% of the previous days' average
 ALERT_MIN_AVG = 5      # ...and that average is at least 5 (no alarm on tiny numbers)
+ALERT_MIN_DAYS = 3     # ...and at least 3 previous days with data
 
 
 def same_hours_rows(data):
@@ -72,7 +73,7 @@ def same_hours_check(rows):
     if not prev:
         return today_calls, None, 0, False
     avg = sum(r[1] for r in prev) / float(len(prev))
-    return today_calls, avg, len(prev), (avg >= ALERT_MIN_AVG and today_calls < ALERT_RATIO * avg)
+    return today_calls, avg, len(prev), (len(prev) >= ALERT_MIN_DAYS and avg >= ALERT_MIN_AVG and today_calls < ALERT_RATIO * avg)
 
 
 def alert_line(data):

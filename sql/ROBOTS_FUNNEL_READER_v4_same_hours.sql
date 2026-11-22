@@ -5,7 +5,7 @@
 -- Undo: run v3 again.
 --
 -- NEW, inside each day's 'plugin' object, a 'same_hours' object (counts only, never ids):
---   calls             : calls from REAL ChatGPT callers (caller_kind = 'subject', env production) made between 00:00 UTC and
+--   calls             : calls from REAL ChatGPT callers (real callers = caller_kind not 'outside', env production) made between 00:00 UTC and
 --                       the time of day it is NOW (UTC), on that day. Today and each earlier day use the same window.
 --   callers           : different callers in that same window.
 --   new_callers       : different callers that day (whole day) whose first-ever call was on that day.
@@ -104,10 +104,11 @@ begin
       select (p.created_at at time zone 'utc')::date as day, p.outcome, count(*) as n
       from public.plugin_calls p where p.env = 'production' and p.created_at >= v_from and coalesce(p.caller_kind, '') <> 'outside' and not (p.created_at >= timestamptz '2026-11-19 13:28:00+00' and p.created_at < timestamptz '2026-11-19 13:30:00+00') group by 1, 2) x group by day
   ),
-  shfs as (   -- v4: first day each real caller was ever seen (whole table, so 'returning' sees older days)
+  shfs as (   -- v4: first day each real caller was seen, looking back 180 days (bounded scan; the plugin is days old, so this equals 'ever' for now)
     select p.caller_hash, min((p.created_at at time zone 'utc')::date) as fday
     from public.plugin_calls p
-    where p.env = 'production' and p.caller_kind = 'subject' and p.caller_hash is not null
+    where p.env = 'production' and coalesce(p.caller_kind, '') <> 'outside' and p.caller_hash is not null
+      and p.created_at >= ((now() at time zone 'utc')::date - 180)::timestamptz
       and not (p.created_at >= timestamptz '2026-11-19 13:28:00+00' and p.created_at < timestamptz '2026-11-19 13:30:00+00')
     group by 1
   ),
@@ -118,7 +119,7 @@ begin
            count(distinct p.caller_hash) filter (where f.fday = (p.created_at at time zone 'utc')::date) as new_callers,
            count(distinct p.caller_hash) filter (where f.fday < (p.created_at at time zone 'utc')::date) as returning_callers
     from public.plugin_calls p left join shfs f on f.caller_hash = p.caller_hash
-    where p.env = 'production' and p.created_at >= v_from and p.caller_kind = 'subject'
+    where p.env = 'production' and p.created_at >= v_from and coalesce(p.caller_kind, '') <> 'outside'
       and not (p.created_at >= timestamptz '2026-11-19 13:28:00+00' and p.created_at < timestamptz '2026-11-19 13:30:00+00')
     group by 1
   ),
