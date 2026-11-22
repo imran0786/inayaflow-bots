@@ -68,7 +68,7 @@ class Listings(unittest.TestCase):
 
 class Budget(unittest.TestCase):
     def test_defaults_match_the_workflow(self):
-        self.assertEqual(ag.RUN_SECONDS, 9000)
+        self.assertEqual(ag.RUN_SECONDS, 8400)                 # below the 150-minute step timeout
         self.assertEqual(ag.USD_CAP, 6.0)
 
     def test_dollar_cap_counts_priced_and_unpriced_attempts(self):
@@ -97,6 +97,34 @@ class Budget(unittest.TestCase):
             if fails >= ag.MAX_FAILS_IN_A_ROW:
                 break
         self.assertEqual(order, [0, 1, 2])
+
+
+class ManualRuns(unittest.TestCase):
+    def test_manual_batch_runs_respect_the_dollar_cap_before_every_attempt(self):
+        import tempfile, io, contextlib
+        d = tempfile.mkdtemp()
+        batch = os.path.join(d, "batch.json")
+        json.dump({"sites": [{"name": "S%d" % i, "url": "https://s%d.example/submit" % i} for i in range(5)]}, open(batch, "w"))
+        saved = (ag.STATE_PATH, ag.SPEND_PATH, ag.LOG_PATH, ag.SUMMARY_PATH, ag.OLD_STATE_PATH, ag.VSTATE_PATH, ag.USD_CAP, ag.run_one, ag.WITH_TOOLS, ag.ROOT)
+        calls = []
+
+        def fake(s, product=None):
+            calls.append((s["name"], product["id"] if product else "homepage"))
+            return {"status": "SUBMITTED", "note": "", "secs": 1, "cost": 0.4, "cost_estimated": False, "steps": 1, "usage": None, "flags": [], "model": "m"}
+        ag.STATE_PATH, ag.SPEND_PATH = os.path.join(d, "ops", "state.json"), os.path.join(d, "ops", "spend.json")
+        ag.LOG_PATH, ag.SUMMARY_PATH = os.path.join(d, "ops", "log.md"), os.path.join(d, "ops", "sum.md")
+        ag.OLD_STATE_PATH, ag.VSTATE_PATH = os.path.join(d, "ops", "old.json"), os.path.join(d, "ops", "v.json")
+        ag.USD_CAP, ag.run_one, ag.WITH_TOOLS = 0.5, fake, True
+        os.environ["BATCH_FILE"] = batch
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                ag.main()
+        finally:
+            os.environ.pop("BATCH_FILE", None)
+            (ag.STATE_PATH, ag.SPEND_PATH, ag.LOG_PATH, ag.SUMMARY_PATH, ag.OLD_STATE_PATH, ag.VSTATE_PATH, ag.USD_CAP, ag.run_one, ag.WITH_TOOLS, ag.ROOT) = saved
+        self.assertEqual(len(calls), 2, calls)          # homepage 0.4, first tool 0.8 >= 0.5: nothing more, tool or site
+        spend = json.load(open(os.path.join(d, "ops", "spend.json")))
+        self.assertAlmostEqual(sum(spend.values()), 0.8)  # the spend file was updated after each attempt
 
 
 if __name__ == "__main__":

@@ -39,7 +39,8 @@ CONTROL = "ops/robots_control.json"
 MAX_NEW_SITES = int(os.environ.get("MAX_NEW_SITES", "15"))
 MAX_SENDS_DAY = min(int(os.environ.get("MAX_SENDS_PER_DAY", "15")), 15)   # hard ceiling 15 (22 Nov 2026, Imran: 3 -> up to 15)
 MAX_SENDS_RUN = min(int(os.environ.get("MAX_SENDS_PER_RUN", "2")), 8)     # hourly runs (23 Nov): at most 2 per run, spread over the day
-AI_CALLS_PER_DAY = int(os.environ.get("AI_CALLS_PER_DAY", "600"))   # shared by all hourly runs (Director budget, 23 Nov 2026)
+AI_CALLS_PER_DAY = int(os.environ.get("AI_CALLS_PER_DAY", "600"))
+AI_USD_PER_DAY = float(os.environ.get("AI_USD_PER_DAY", "1.50"))   # Haiku 5.5 $0.10 in / $0.50 out per M tokens (official pricing page, read 19 Nov 2026)   # shared by all hourly runs (Director budget, 23 Nov 2026)
 MAX_PROSPECT_TRIES = int(os.environ.get("MAX_PROSPECT_TRIES", "20"))
 FOLLOWUP_DAYS = int(os.environ.get("FOLLOWUP_DAYS", "7"))
 MIN_GAP_HOURS = float(os.environ.get("MIN_GAP_HOURS", "3"))
@@ -800,7 +801,17 @@ def main():
         used = state.setdefault("ai_calls", {})
         for k in [k for k in used if k < (c.now() - datetime.timedelta(days=3)).strftime("%Y-%m-%d")]:
             del used[k]
-        c.MAX_AI_CALLS = max(0, min(c.MAX_AI_CALLS, AI_CALLS_PER_DAY - used.get(c.today(), 0)))   # daily cap shared by every hourly run
+        usd = state.setdefault("ai_usd", {})
+        for k in [k for k in usd if k < (c.now() - datetime.timedelta(days=3)).strftime("%Y-%m-%d")]:
+            del usd[k]
+        base_calls, base_usd = used.get(c.today(), 0), usd.get(c.today(), 0.0)
+        c.MAX_AI_CALLS = max(0, min(c.MAX_AI_CALLS, AI_CALLS_PER_DAY - base_calls))   # daily caps shared by every hourly run: calls AND dollars
+        c.USD_LIMIT = max(0.0, AI_USD_PER_DAY - base_usd)
+
+        def record_calls():
+            """What this run has used so far goes into the state. Called on EVERY exit path, so a crash cannot reset the daily cap."""
+            state.setdefault("ai_calls", {})[c.today()] = base_calls + c.USAGE["calls"]
+            state.setdefault("ai_usd", {})[c.today()] = round(base_usd + c.cost_usd(), 5)
         control = c.read_json(os.path.join(work, CONTROL), {})
         send = (not c.DRY) and control.get("outreach_send") is True
         note = "" if send or c.DRY else "Outreach sending is OFF (ops/robots_control.json outreach_send is not true): drafts only."
@@ -831,7 +842,7 @@ def main():
             hunt["verified"] = len(verify_unchecked(data))
             if hunt.get("prospects") and not c.DRY:
                 c.write_json(os.path.join(work, PROSPECTS), prospects)
-            if hunt.get("directories") and not c.DRY:
+            if (hunt.get("directories") or hunt.get("verified")) and not c.DRY:
                 with open(CANDS, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=1, ensure_ascii=False)
                     f.write(chr(10))
@@ -855,7 +866,7 @@ def main():
             pass
         c.write_text(os.path.join(work, LOG), ("# Backlink batch log (newest first)\n\n" + section + "\n" + re.sub(r"\A# Backlink batch log[^\n]*\n\n", "", old_log))[:200000])
         c.write_text(os.path.join(work, BLOCKED), render_blocked(state))
-        state.setdefault("ai_calls", {})[c.today()] = state.get("ai_calls", {}).get(c.today(), 0) + c.USAGE["calls"]
+        record_calls()
         if not c.DRY:
             state["last_run"] = c.now().isoformat()
         c.write_json(os.path.join(work, STATE), state)
@@ -876,6 +887,9 @@ def main():
     except Exception as e:
         print("batch: FAILED %s" % type(e).__name__)
         try:
+            if "record_calls" in locals():
+                record_calls()
+                c.write_json(os.path.join(work, STATE), state)      # the day's AI use survives a crash
             c.error_notice(latest, "backlink batch", e)
             c.commit_push("ops: backlink batch error notice")
         except Exception:

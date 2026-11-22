@@ -18,6 +18,7 @@ PRICE_OUT = float(os.environ.get("PRICE_OUT_PER_M", "0.50"))
 MAX_AI_CALLS = int(os.environ.get("MAX_AI_CALLS", "25"))        # hard cap per run
 MAX_AI_INPUT_CHARS = int(os.environ.get("MAX_AI_INPUT_CHARS", "60000"))  # per call (about 15K tokens)
 USAGE = {"calls": 0, "in": 0, "out": 0}
+USD_LIMIT = None   # when set (batch: what is left of the day's dollar cap), haiku() stops once this run has spent that much
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 
 
@@ -127,7 +128,57 @@ def read_tree(branch, prefixes, work=None, name_has=""):
     return out
 
 
+_RANK = {"replied": 4, "sent": 3, "queued": 2, "skipped": 1}
+
+
+def merge_state(ours, theirs, key=""):
+    """Merge two versions of a JSON state file, key by key. Nothing is lost and nothing is blindly overwritten:
+    numbers (counters) take the larger value; lists are joined without repeats; an outreach entry that exists on both sides keeps the
+    one that is further along (replied > sent > queued > skipped), then the newer date, then ours; timestamps (last_run) take the newer."""
+    if isinstance(ours, dict) and isinstance(theirs, dict):
+        if "status" in ours and "status" in theirs:
+            a, b = (_RANK.get(str(ours.get("status")), 0), str(ours.get("date", ""))), (_RANK.get(str(theirs.get("status")), 0), str(theirs.get("date", "")))
+            return ours if a >= b else theirs
+        out = dict(theirs)
+        for k, v in ours.items():
+            out[k] = merge_state(v, theirs[k], k) if k in theirs else v
+        return out
+    if isinstance(ours, list) and isinstance(theirs, list):
+        seen, out = set(), []
+        for x in theirs + ours:
+            r = json.dumps(x, sort_keys=True)
+            if r not in seen:
+                seen.add(r)
+                out.append(x)
+        return out
+    if isinstance(ours, (int, float)) and isinstance(theirs, (int, float)) and not isinstance(ours, bool):
+        return max(ours, theirs)
+    if key in ("last_run", "generated") and isinstance(ours, str) and isinstance(theirs, str):
+        return max(ours, theirs)
+    return ours
+
+
+def merge_json(ours, theirs):
+    """Candidates file ({"sites": [...]}) -> merge_candidates (newer checked row wins); prospect lists (rows with "site") -> union by site
+    and page, theirs first; anything else -> merge_state."""
+    if isinstance(ours, dict) and isinstance(theirs, dict) and "sites" in ours and "sites" in theirs:
+        import merge_candidates
+        return merge_candidates.merge(ours, theirs)
+    if isinstance(ours, list) and isinstance(theirs, list) and all(isinstance(x, dict) and "site" in x for x in ours + theirs):
+        seen, out = set(), []
+        for x in theirs + ours:
+            k = (str(x.get("site")), str(x.get("page")))
+            if k not in seen:
+                seen.add(k)
+                out.append(x)
+        return out
+    return merge_state(ours, theirs)
+
+
 def commit_push(msg, branch=REPORT_BRANCH, work=None):
+    """Commit everything in `work` and push `branch`. On a push race: rebase; if the rebase conflicts, abort it, fetch, reset to the remote
+    branch and RE-APPLY our change by merging each JSON file we touched with the remote version (merge_json), then commit and push again.
+    Up to 3 tries; then RuntimeError (callers treat that as "nothing was saved")."""
     work = work or WORK
     if FIXTURE_DIR:
         return False
@@ -140,7 +191,29 @@ def commit_push(msg, branch=REPORT_BRANCH, work=None):
             return True
         if git("pull", "-q", "--rebase", "origin", branch, check=False, cwd=work).returncode != 0:
             git("rebase", "--abort", check=False, cwd=work)     # a conflict never leaves a half-done rebase behind
-            git("fetch", "-q", "origin", branch, check=False, cwd=work)
+            names = git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD", cwd=work).stdout.split()
+            ours = {}
+            for n in names:
+                r = git("show", "HEAD:" + n, check=False, cwd=work)
+                if r.returncode == 0:
+                    ours[n] = r.stdout
+            git("fetch", "-q", "origin", branch, cwd=work)
+            git("reset", "-q", "--hard", "FETCH_HEAD", cwd=work)
+            for n, text in ours.items():
+                path = os.path.join(work, n)
+                merged = text
+                if n.endswith(".json") and os.path.exists(path):
+                    try:
+                        merged = json.dumps(merge_json(json.loads(text), json.load(open(path, encoding="utf-8"))), indent=1, ensure_ascii=False, sort_keys=True)
+                    except Exception:
+                        merged = text
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(merged)
+            git("add", "-A", cwd=work)
+            if git("diff", "--cached", "--quiet", check=False, cwd=work).returncode == 0:
+                return True                                     # the remote already holds everything we wanted to save
+            git("commit", "-q", "-m", msg + " (merged)", cwd=work)
     raise RuntimeError("push failed")
 
 
@@ -210,6 +283,8 @@ def haiku(system, user, max_tokens=3000, post=None):
     """One capped Haiku call. Returns the text. Raises BudgetExceeded past MAX_AI_CALLS."""
     if USAGE["calls"] >= MAX_AI_CALLS:
         raise BudgetExceeded("AI call cap reached")
+    if USD_LIMIT is not None and cost_usd() >= USD_LIMIT:
+        raise BudgetExceeded("AI dollar cap reached")
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("no ANTHROPIC_API_KEY")

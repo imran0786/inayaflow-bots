@@ -240,6 +240,85 @@ class Caps(unittest.TestCase):
         self.assertIn(bb.MATCH[queued[0]["_match"]][0], queued[0]["body"])
 
 
+class Safety(unittest.TestCase):
+    """23 Nov 2026 QA round 2: a failed state push can never cause a send; a crash cannot reset the AI caps."""
+    Q = {"id": "2026-11-19-robot-outreach-fresh.com", "to": ["ed@fresh.com"], "cc": [], "subject": "S", "body": "B", "_key": "fresh.com", "_kind": "first",
+         "_title": "T", "_page": "https://fresh.com/p", "_match": "hashtags"}
+
+    def prep(self):
+        shutil.rmtree(TMP, ignore_errors=True)
+        work = os.environ["REPORTS_WORK"]
+        os.makedirs(os.path.join(work, "ops"), exist_ok=True)
+        json.dump({"outreach_send": True}, open(os.path.join(work, "ops", "robots_control.json"), "w"))
+        cands = os.path.join(TMP, "cands.json")
+        json.dump({"sites": []}, open(cands, "w"))
+        return work, cands
+
+    def test_failed_state_push_means_no_outbox_file_so_no_second_send(self):
+        work, cands = self.prep()
+        events = []
+
+        def fake_outreach(work_, state, send, get=None, ai=None):
+            state.setdefault("outreach", {})["fresh.com"] = {"status": "queued", "id": self.Q["id"], "date": c.today(), "to": "ed@fresh.com"}
+            return [self.Q], [], []
+
+        def push_fails(msg, branch=c.REPORT_BRANCH, work=None):
+            events.append("save")
+            raise RuntimeError("push failed")
+        real = (bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY)
+        bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY = fake_outreach, push_fails, (lambda q: events.append("outbox") or 1), (lambda d, k: []), cands, False
+        try:
+            with self.assertRaises(SystemExit):
+                bb.main()
+        finally:
+            bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY = real
+        self.assertNotIn("outbox", events)        # the outbox file is written only AFTER the state push worked
+        # and if a file exists anyway (written by anyone), every run dedupes by file name, address and domain before queueing
+        idx = bb.outbox_index({"outbox/pending/%s.json" % self.Q["id"]: json.dumps({"to": ["ed@fresh.com"]})})
+        self.assertTrue(bb.in_outbox("fresh.com", ["other@fresh.com"], idx))
+
+    def test_ai_use_is_saved_even_when_the_run_crashes(self):
+        work, cands = self.prep()
+        saved = []
+
+        def boom(d, k):
+            c.USAGE["calls"] += 7
+            c.USAGE["in"] += 1_000_000
+            raise ValueError("crash")
+        real = (bb.c.commit_push, bb.list_builder, bb.CANDS, bb.c.DRY, dict(c.USAGE))
+        bb.c.commit_push, bb.list_builder, bb.CANDS, bb.c.DRY = (lambda msg, branch=c.REPORT_BRANCH, work=None: saved.append(msg) or True), boom, cands, False
+        c.USAGE.update({"calls": 0, "in": 0, "out": 0})
+        try:
+            with self.assertRaises(SystemExit):
+                bb.main()
+            st = json.load(open(os.path.join(work, bb.STATE)))
+            self.assertEqual(st["ai_calls"][c.today()], 7)
+            self.assertAlmostEqual(st["ai_usd"][c.today()], 0.10, places=4)       # 1M input tokens x $0.10
+        finally:
+            bb.c.commit_push, bb.list_builder, bb.CANDS, bb.c.DRY = real[:4]
+            c.USAGE.update(real[4])
+            c.USD_LIMIT = None
+            c.MAX_AI_CALLS = 25
+
+    def test_daily_dollar_and_call_caps(self):
+        self.assertEqual((bb.AI_CALLS_PER_DAY, bb.AI_USD_PER_DAY), (600, 1.5))
+        c.USAGE.update({"calls": 0, "in": 2_000_000, "out": 0})        # $0.20 spent in this run
+        c.USD_LIMIT = 0.15
+        try:
+            with self.assertRaises(c.BudgetExceeded):
+                c.haiku("s", "u", post=lambda *a: {})
+        finally:
+            c.USD_LIMIT = None
+            c.USAGE.update({"calls": 0, "in": 0, "out": 0})
+
+    def test_guard_signature_is_the_real_one(self):
+        import inspect
+        self.assertEqual(str(inspect.signature(bb.guard)), "(subject, body, covers='')")
+        end = " The InayaFlow team" + chr(10) + "contact@inayaflow.ai"
+        self.assertEqual(bb.guard("Subject", "We think so, see https://example.org/x." + end, "It covers a thing."), "foreign link")
+        self.assertEqual(bb.guard("Subject", "We hope it helps me." + end, "It covers a thing."), "not company voice (I / me / my)")
+
+
 if __name__ == "__main__":
     try:
         unittest.main()

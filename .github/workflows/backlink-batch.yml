@@ -50,6 +50,7 @@ jobs:
           python3 -W ignore scripts/reports/test_targets.py
           python3 -W ignore scripts/reports/test_hunter.py
           python3 -W ignore scripts/reports/test_merge.py
+          python3 -W ignore scripts/reports/test_pushmerge.py
       - name: Run the batch
         env:
           GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}

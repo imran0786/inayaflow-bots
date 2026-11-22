@@ -18,7 +18,7 @@ FALLBACK_MODEL = os.environ.get("FALLBACK_MODEL", "claude-sonnet-5-5")  # used w
 SUCCESS_CAP = int(os.environ.get("DAILY_SUCCESS_CAP", "30"))   # 22 Nov 2026: 10 -> 30 (Imran: increase the limit as much as you want)
 ATTEMPT_CAP = int(os.environ.get("DAILY_ATTEMPT_CAP", "150"))  # site attempts per UTC day, all runs together (was 10 / 50 before 22-23 Nov 2026)
 TOOL_ATTEMPT_CAP = int(os.environ.get("DAILY_TOOL_ATTEMPT_CAP", "200"))  # extra per-tool listings a day, on top of the site attempts
-RUN_SECONDS = int(os.environ.get("RUN_SECONDS", "9000"))   # per run (same value as the workflow)
+RUN_SECONDS = int(os.environ.get("RUN_SECONDS", "8400"))   # per run (same value as the workflow)
 USD_CAP = float(os.environ.get("DAILY_USD_CAP", "6"))      # Director budget 23 Nov 2026: this robot may spend at most $6 a UTC day, all runs together
 UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "0.25"))  # ASSUMPTION used only when the library gives no price for an attempt
 SPEND_PATH = os.path.join(ROOT, "ops", "directory_agent_spend.json")
@@ -565,7 +565,7 @@ def main():
         todo = product_todo(state, s, products, today)
         fails = 0
         for i, p in enumerate(todo):
-            if not manual and (tool_att >= TOOL_ATTEMPT_CAP or stop_now()):
+            if tool_att >= TOOL_ATTEMPT_CAP or stop_now():
                 break
             tool_att += 1
             r = do(s, p)
@@ -584,7 +584,7 @@ def main():
                 break  # captcha / paid / login wall etc.: the same wall applies to every tool
 
     for s in sites:
-        if not manual and (succ >= SUCCESS_CAP or att >= ATTEMPT_CAP or stop_now()):
+        if succ >= SUCCESS_CAP or att >= ATTEMPT_CAP or stop_now():
             break
         r = do(s, None)
         att += 1
