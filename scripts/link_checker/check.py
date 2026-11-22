@@ -68,6 +68,19 @@ def is_ours(href):
     return h in OURS or h.endswith(".inayaflow.ai")
 
 
+def our_page(links):
+    """Which of OUR pages the link points to (path, '/' = homepage): the first link of the strongest kind. '' when there is none."""
+    ours = [(h, r) for h, r in links if is_ours(h)]
+    if not ours:
+        return ""
+    best = rel_of([r for _h, r in ours])
+    for h, r in ours:
+        if rel_of([r]) == best:
+            path = urllib.parse.urlparse(h).path or "/"
+            return "/" if path.strip("/") == "" else "/" + path.strip("/")
+    return ""
+
+
 def analyse(html):
     p = Links()
     try:
@@ -151,9 +164,9 @@ def check_site(site):
         body = fetch(u)
         if body is None:
             return None
-        rel, _ = analyse(body)
+        rel, lk = analyse(body)
         if rel:
-            return {"status": "LIVE", "rel": rel, "url": u}
+            return {"status": "LIVE", "rel": rel, "url": u, "page": our_page(lk)}
         if "inayaflow" in body.lower() and u.rstrip("/") != base:
             pages.append(u)
         return None
@@ -289,7 +302,7 @@ def load_prev():
     for line in read(os.path.join(OPS, "live_links.md")).splitlines():
         c = [x.strip() for x in line.strip().strip("|").split("|")]
         if len(c) >= 6 and c[0] not in ("site", "---") and not c[0].startswith(("-", "#")) and "." in c[0]:
-            prev[c[0]] = {"status": c[1], "rel": c[2], "url": c[3], "first": c[4], "last": c[5]}
+            prev[c[0]] = {"status": c[1], "rel": c[2], "url": c[3], "first": c[4], "last": c[5], "page": c[6] if len(c) > 6 else ""}
     return prev
 
 
@@ -322,13 +335,14 @@ def main():
             cnt["blocked"] += 1
             if was_live:
                 status, rel, url, first = "LIVE", p.get("rel", ""), p.get("url", ""), p.get("first", "")
-        rows.append((d, status, rel, url, first, today))
+        page = r.get("page", "") if (status == "LIVE" and r["status"] == "LIVE") else (p.get("page", "") if status in ("LIVE", "GONE") else "")
+        rows.append((d, status, rel, url, first, today, page))
     rows.sort(key=lambda x: (x[1] != "LIVE", x[0]))
     os.makedirs(OPS, exist_ok=True)
     with open(os.path.join(OPS, "live_links.md"), "w", encoding="utf-8") as f:
         f.write(f"# Live links check (last run {today})\n\nStatus: LIVE (link rel = followed / nofollow / ugc / sponsored / no link), "
                 "PENDING (no listing found yet), GONE (was live, now missing), BLOCKED_CHECK (bot wall, could not check), "
-                "UNREACHABLE.\n\n| site | status | link rel | listing URL | first seen live | last checked |\n|---|---|---|---|---|---|\n")
+                "UNREACHABLE.\n\n| site | status | link rel | listing URL | first seen live | last checked | our page |\n|---|---|---|---|---|---|---|\n")
         for r in rows:
             f.write("| " + " | ".join(r) + " |\n")
     if new:

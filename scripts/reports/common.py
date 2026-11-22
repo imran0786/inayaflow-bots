@@ -98,13 +98,15 @@ def list_files(branch, prefix, work=None):
     return sorted(os.path.basename(x) for x in r.stdout.split())
 
 
-def read_tree(branch, prefixes, work=None):
+def read_tree(branch, prefixes, work=None, name_has=""):
     """{path: text} for every file under the given folders of another private branch (ONE fetch). Read-only."""
     out = {}
     if FIXTURE_DIR:
         for pre in prefixes:
             d = os.path.join(FIXTURE_DIR, branch, pre)
             for n in (sorted(os.listdir(d)) if os.path.isdir(d) else []):
+                if name_has and name_has not in n:
+                    continue
                 try:
                     out[pre.rstrip("/") + "/" + n] = open(os.path.join(d, n), encoding="utf-8").read()
                 except OSError:
@@ -117,6 +119,8 @@ def read_tree(branch, prefixes, work=None):
     for pre in prefixes:
         r = git("ls-tree", "--name-only", sha, pre.rstrip("/") + "/", check=False, cwd=work)
         for path in r.stdout.split():
+            if name_has and name_has not in path.rsplit("/", 1)[-1]:
+                continue
             x = subprocess.run(["git", "-C", work, "show", "%s:%s" % (sha, path)], capture_output=True)
             if x.returncode == 0:
                 out[path] = x.stdout.decode("utf-8", "replace")

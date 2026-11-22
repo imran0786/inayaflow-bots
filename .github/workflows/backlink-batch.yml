@@ -1,15 +1,15 @@
-name: Backlink batch (list builder + outreach, twice a day)
+name: Backlink batch (list builder + outreach, every hour)
 
 # A. fixes the status flags in data/directories_candidates.json from the directory agent's real results
 # B. list builder: checks NEW directories on their live pages (GET only) and adds them; free (or free queue) +
 #    relevant ones get usable=true, followed or nofollow (Imran 20 Nov 2026; the directory agent applies to those)
-# C. outreach: at most 3 e-mails a day, written as job files for the Namecheap outbox robot (never Gmail)
+# C. outreach: at most 15 e-mails a day (at most 2 per run, hourly runs; rotates over 5 target pages), written as job files for the Namecheap outbox robot (never Gmail)
 # Never signs up, never fills a form, never pays, never solves a CAPTCHA: those go to ops/blocked_needs_imran.md.
 # Details: PRIVATE repo imran0786/genie, branch ops-reports. Public output: counts only.
-# The script skips a run when the last real run was under 3 hours ago.
+# Runs EVERY HOUR (23 Nov 2026). The script skips a run when the last real run was under MIN_GAP_HOURS (0.5 h) ago.
 on:
   schedule:
-    - cron: "7 13,18 * * *"
+    - cron: "7 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -20,10 +20,10 @@ on:
         default: "false"
       max_new_sites:
         description: "how many new directories to check"
-        default: "15"
+        default: "40"
       max_ai_calls:
-        description: "Haiku call cap for this run (about 1 per new site + 15 for outreach)"
-        default: "30"
+        description: "Haiku call cap for this run (about 1 per new site + 40 for outreach)"
+        default: "80"
 
 permissions:
   contents: write
@@ -35,7 +35,7 @@ concurrency:
 jobs:
   batch:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,15 +47,19 @@ jobs:
         run: |
           python3 -W ignore scripts/reports/test_reports.py
           python3 -W ignore scripts/reports/test_batch_qa.py
+          python3 -W ignore scripts/reports/test_targets.py
+          python3 -W ignore scripts/reports/test_hunter.py
       - name: Run the batch
         env:
           GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           DRY_RUN: ${{ github.event.inputs.dry_run || (github.event_name == 'schedule' && 'false') || 'true' }}
           FORCE: ${{ github.event.inputs.force || 'false' }}
-          MAX_NEW_SITES: ${{ github.event.inputs.max_new_sites || '15' }}
-          MAX_AI_CALLS: ${{ github.event.inputs.max_ai_calls || '30' }}
-          MAX_SENDS_PER_DAY: "3"
+          MAX_NEW_SITES: ${{ github.event.inputs.max_new_sites || '40' }}
+          MAX_AI_CALLS: ${{ github.event.inputs.max_ai_calls || '80' }}
+          MAX_SENDS_PER_DAY: "15"
+          MAX_SENDS_PER_RUN: "2"
+          MIN_GAP_HOURS: "0.5"
         run: |
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           python3 scripts/reports/backlink_batch.py 2>/dev/null
