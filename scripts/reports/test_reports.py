@@ -302,6 +302,64 @@ class Funnel(unittest.TestCase):
         self.assertEqual(seen["url"], "https://x.supabase.co/rest/v1/rpc/ops_funnel_daily")
         self.assertEqual(seen["body"], {"p_token": "TOKEN", "p_days": 8})
 
+    @staticmethod
+    def _days(counts, today="2026-11-22", new=None):
+        """counts = same-hours calls, newest first (today first)."""
+        import datetime as dt
+        base = dt.date.fromisoformat(today)
+        out = []
+        for i, n in enumerate(counts):
+            nw = (new or {}).get(i, (n // 2, n - n // 2))
+            out.append({"day": (base - dt.timedelta(days=i)).isoformat(), "plugin": {"calls": n * 3, "same_hours": {
+                "calls": n, "callers": max(0, n - 1), "new_callers": nw[0], "returning_callers": nw[1]}}})
+        return {"today": today, "now_utc": "05:00", "days": out}
+
+    def test_same_hours_alert_only_when_below_half_of_average(self):
+        data = self._days([2, 12, 5, 20, 8, 9, 7, 6])      # avg of prev 7 = 9.57; 2 < 4.78 -> alert
+        self.assertIn("ALERT", fd.alert_line(data))
+        data = self._days([6, 12, 5, 20, 8, 9, 7, 6])      # 6 >= 4.78 -> no alert
+        self.assertEqual(fd.alert_line(data), "")
+
+    def test_same_hours_alert_needs_3_previous_days(self):
+        # only 2 earlier days with data (avg 10): no alert even at 0
+        self.assertEqual(fd.alert_line(self._days([0, 10, 10, 0, 0, 0, 0, 0])), "")
+        # 3 earlier days with data: alert
+        self.assertIn("ALERT", fd.alert_line(self._days([0, 10, 10, 10, 0, 0, 0, 0])))
+
+    def test_same_hours_alert_threshold_exact(self):
+        # previous 7 days all 10 -> avg 10; alert only when today < 5
+        self.assertEqual(fd.alert_line(self._days([5] + [10] * 7)), "")
+        self.assertIn("ALERT", fd.alert_line(self._days([4] + [10] * 7)))
+
+    def test_same_hours_alert_needs_avg_at_least_5(self):
+        # avg 4.0 (below 5): today 0 must NOT alert
+        self.assertEqual(fd.alert_line(self._days([0] + [4] * 7)), "")
+        # avg exactly 5.0: today 2 (< 2.5) alerts
+        self.assertIn("ALERT", fd.alert_line(self._days([2] + [5] * 7)))
+
+    def test_same_hours_skips_days_before_the_log_existed(self):
+        # only 3 earlier days have data, the 4 oldest are 0 (no log yet): average is over the 3, not 7
+        data = self._days([3, 10, 10, 10, 0, 0, 0, 0])
+        _t, avg, n, alert = fd.same_hours_check(fd.same_hours_rows(data))
+        self.assertEqual((n, avg, alert), (3, 10.0, True))
+
+    def test_same_hours_missing_numbers_degrade(self):
+        rep = fd.build(Funnel.DATA, {})
+        self.assertIn("Not available yet", rep)
+        self.assertNotIn("ALERT", rep)
+        self.assertIsNone(fd.same_hours_rows(Funnel.DATA))
+
+    def test_same_hours_report_lines_and_alert_at_top(self):
+        data = self._days([1, 10, 10, 10, 10, 10, 10, 10], new={0: (1, 0), 1: (4, 6)})
+        data.update(paying_total=1, paying_by_tier={})
+        rep = fd.build(data, {})
+        top = rep.splitlines()
+        self.assertTrue(any(l.startswith("**ALERT") for l in top[:6]))
+        self.assertIn("| 2026-11-22 | 1 | 0 | 1 | 0 |", rep)
+        self.assertIn("| 2026-11-21 | 10 | 9 | 4 | 6 |", rep)
+        self.assertIn("00:00 UTC to 05:00 UTC", rep)
+        self.assertIn("Today same hours: 1 calls", rep)
+
     def test_not_set_up_text(self):
         self.assertIn("FUNNEL_READ_TOKEN", fd.not_set_up(["FUNNEL_READ_TOKEN"]))
 
