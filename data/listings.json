@@ -1,0 +1,115 @@
+{
+ "note": "One entry per product we list. Only LIVE pages on inayaflow.ai (checked 22 Nov 2026). short <=50 chars, long <=150 chars, taken from the live page's own text.",
+ "products": [
+  {
+   "id": "homepage",
+   "name": "InayaFlow",
+   "url": "https://inayaflow.ai/",
+   "short_description": "AI TikTok agent: daily ideas and scripts",
+   "long_description": "InayaFlow is an AI TikTok agent for creators. Each morning it delivers ready-to-film ideas, hooks, scripts, trending sounds and posting times.",
+   "category": "Social media / Marketing / Creator tools",
+   "pricing": "Freemium (free tools, paid AI plans)",
+   "keywords": "AI TikTok agent, TikTok ideas, TikTok scripts, TikTok growth",
+   "kind": "homepage"
+  },
+  {
+   "id": "follower-count-checker",
+   "name": "Free TikTok Follower Count Checker",
+   "url": "https://inayaflow.ai/tools/tiktok-follower-count-checker",
+   "short_description": "Free TikTok follower count checker",
+   "long_description": "Type any @username to see followers, following, likes and videos from the public TikTok profile. No password, no login.",
+   "category": "Social media / Analytics / Creator tools",
+   "pricing": "Free",
+   "keywords": "TikTok follower count, TikTok checker, TikTok analytics",
+   "kind": "tool"
+  },
+  {
+   "id": "money-calculator",
+   "name": "TikTok Money Calculator",
+   "url": "https://inayaflow.ai/tools/tiktok-money-calculator",
+   "short_description": "Free TikTok money calculator",
+   "long_description": "Enter a TikTok username or your views to estimate Creator Rewards earnings per video, month and year. No sign-up.",
+   "category": "Social media / Calculators / Creator tools",
+   "pricing": "Free",
+   "keywords": "TikTok money calculator, TikTok earnings, Creator Rewards",
+   "kind": "tool"
+  },
+  {
+   "id": "shadowban-checker",
+   "name": "TikTok Shadowban Checker",
+   "url": "https://inayaflow.ai/tools/tiktok-shadowban-checker",
+   "short_description": "Free TikTok shadowban checker",
+   "long_description": "Enter a username to compare recent views with usual views and see if your reach looks limited. A free self-check.",
+   "category": "Social media / Analytics / Creator tools",
+   "pricing": "Free",
+   "keywords": "TikTok shadowban, shadowban checker, TikTok views",
+   "kind": "tool"
+  },
+  {
+   "id": "hashtag-generator",
+   "name": "TikTok Hashtag Generator",
+   "url": "https://inayaflow.ai/tools/tiktok-hashtag-generator",
+   "short_description": "Free TikTok hashtag generator",
+   "long_description": "Turn your topic into up to 5 hashtags from your own words and TikTok Creative Center's US board. Copy in one tap.",
+   "category": "Social media / Marketing / Creator tools",
+   "pricing": "Free",
+   "keywords": "TikTok hashtag generator, TikTok hashtags",
+   "kind": "tool"
+  },
+  {
+   "id": "hashtag-counter",
+   "name": "TikTok Hashtag Counter",
+   "url": "https://inayaflow.ai/tools/tiktok-hashtag-counter",
+   "short_description": "Free TikTok hashtag counter",
+   "long_description": "Paste your TikTok caption to count hashtags and characters, and catch repeats and broken tags. Free, no account.",
+   "category": "Social media / Marketing / Creator tools",
+   "pricing": "Free",
+   "keywords": "TikTok hashtag counter, TikTok caption length",
+   "kind": "tool"
+  },
+  {
+   "id": "coins-to-usd",
+   "name": "TikTok Coins to USD Calculator",
+   "url": "https://inayaflow.ai/tools/tiktok-coins-to-usd",
+   "short_description": "Free TikTok coins to USD calculator",
+   "long_description": "Convert TikTok coins, dollars and LIVE gifts like the Rose and Lion at TikTok's coin prices. Free.",
+   "category": "Social media / Calculators / Creator tools",
+   "pricing": "Free",
+   "keywords": "TikTok coins to USD, TikTok gifts value",
+   "kind": "tool"
+  },
+  {
+   "id": "engagement-rate-calculator",
+   "name": "TikTok Engagement Rate Calculator",
+   "url": "https://inayaflow.ai/tools/tiktok-engagement-rate-calculator",
+   "short_description": "Free TikTok engagement rate calculator",
+   "long_description": "Enter a username or your numbers to get your engagement rate, then compare it with 2026 benchmarks.",
+   "category": "Social media / Analytics / Creator tools",
+   "pricing": "Free",
+   "keywords": "TikTok engagement rate, engagement calculator",
+   "kind": "tool"
+  },
+  {
+   "id": "best-time-to-post",
+   "name": "Best Time to Post on TikTok Today",
+   "url": "https://inayaflow.ai/tools/best-time-to-post-on-tiktok-today",
+   "short_description": "Free best time to post on TikTok tool",
+   "long_description": "Today's best times to post on TikTok in your time zone or your audience's, plus the next slot today.",
+   "category": "Social media / Scheduling / Creator tools",
+   "pricing": "Free",
+   "keywords": "best time to post on TikTok, TikTok posting times",
+   "kind": "tool"
+  },
+  {
+   "id": "username-generator",
+   "name": "TikTok Username Generator",
+   "url": "https://inayaflow.ai/tools/tiktok-username-generator",
+   "short_description": "Free TikTok username generator",
+   "long_description": "Get 20 TikTok username ideas from your name and niche, each checked against TikTok's rules. Free.",
+   "category": "Social media / Creator tools",
+   "pricing": "Free",
+   "keywords": "TikTok username generator, TikTok names",
+   "kind": "tool"
+  }
+ ]
+}

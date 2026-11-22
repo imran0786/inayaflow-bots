@@ -1,0 +1,42 @@
+name: Prospect hunter (24/7 research job every 3 hours)
+
+# Queues ONE research job (Claude Sonnet + web search, max $0.60) in the job runner's queue (PRIVATE repo imran0786/genie,
+# branch ops-jobs, jobs/pending). The job runner runs it; the next backlink-batch run feeds the verified prospects into
+# ops/outreach_prospects.json and data/directories_candidates.json. Rotates over the 11 target pages x 5 prospect types.
+# Sends nothing, signs up nowhere. Public output: the job id and counts only.
+# Imran, 22 Nov 2026: "One agent helper should 24/7 be building the links, the backlinks, the list of directories ... 24/7."
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = print what would be queued, queue nothing"
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hunter
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests (a failure stops the run)
+        run: |
+          python3 -W ignore scripts/reports/test_hunter.py
+      - name: Queue the hunter job (private repo, never here)
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          python3 scripts/hunter/hunter.py 2>/dev/null

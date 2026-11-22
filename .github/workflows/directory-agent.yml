@@ -3,11 +3,12 @@ name: Directory agent (browser-use, daily engine)
 # THE daily directory engine since 18 Nov (replaces the Playwright bot's schedule).
 # Public repo: stdout = site names, result codes, counts and cost only (no URLs, e-mails, codes, passwords).
 # State + logs live in the PRIVATE repo (imran0786/genie, branch ops-directory-logs, ops/directory_agent_*.md/json).
-# Daily: stops at 10 confirmed successes or 50 attempts or 60 min. Never retries a finished site (see agent.py eligible()).
+# Daily: runs every 3 hours (23 Nov 2026); caps are per UTC DAY, shared by all runs: 30 confirmed successes, 150 site attempts, 200 tool attempts; each run stops itself after 8400 s (140 min) and a 150-minute step timeout sits above that.
+# Per-tool listings (data/listings.json): after a site's main listing, each free tool is submitted as its OWN product (up to 200 tool attempts a day). Never retries a finished site (see agent.py eligible()).
 # Primary model Haiku 5.5, Sonnet 5.5 as fallback when Haiku ends OTHER/ERROR/TIMEOUT.
 on:
   schedule:
-    - cron: "37 6 * * *"
+    - cron: "37 */3 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -39,7 +40,7 @@ concurrency:
 jobs:
   agent:
     runs-on: ubuntu-latest
-    timeout-minutes: 85
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,7 +53,7 @@ jobs:
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           mkdir -p ops
           if git clone -q --branch ops-directory-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/logs 2>/dev/null; then
-            for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_state.json directory_verify_state.json; do
+            for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_agent_spend.json directory_state.json directory_verify_state.json; do
               cp "/tmp/logs/ops/$f" "ops/$f" 2>/dev/null || true
             done
             echo "state restored"
@@ -64,10 +65,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Unit tests (offline)
+        run: python3 -W ignore scripts/directory_agent/test_agent.py
+
       - name: Install browser-use (pinned)
         run: python3 -m pip install -q 'browser-use==1.0.6' 2>&1 | tail -2
 
       - name: Run agent
+        timeout-minutes: 150   # shorter than the job (180), so the save step below always has time to run, even after a timeout
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
@@ -78,8 +83,11 @@ jobs:
           FALLBACK_MODEL: ${{ (github.event_name == 'schedule' && 'claude-sonnet-5-5') || github.event.inputs.fallback_model }}
           ONLY: ${{ github.event.inputs.only || '' }}
           BATCH_FILE: ${{ github.event.inputs.batch_file || '' }}
-          DAILY_SUCCESS_CAP: "10"
-          DAILY_ATTEMPT_CAP: "50"
+          DAILY_SUCCESS_CAP: "30"
+          DAILY_ATTEMPT_CAP: "150"
+          DAILY_TOOL_ATTEMPT_CAP: "200"
+          DAILY_USD_CAP: "6"
+          RUN_SECONDS: "8400"   # 140 min: the agent stops itself below the 150-minute step timeout
           BROWSER_USE_SETUP_LOGGING: "false"
           ANONYMIZED_TELEMETRY: "false"
         run: python3 scripts/directory_agent/agent.py 2>/dev/null
@@ -100,7 +108,7 @@ jobs:
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
           fi
           mkdir -p /tmp/push/ops
-          for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md; do
+          for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_agent_spend.json; do
             [ -f "ops/$f" ] && cp "ops/$f" "/tmp/push/ops/$f" || true
           done
           cd /tmp/push

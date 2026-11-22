@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Backlink batch (twice a day).
+"""Backlink batch (every hour since 23 Nov 2026).
 
  A. FLAGS: copies the directory agent's real results into data/directories_candidates.json (status "TRIED ..."),
     so the count of untried sites is true.
@@ -7,7 +7,9 @@
     submit page, pricing page, sample listing pages), lets Claude Haiku judge free / paid / relevant, measures
     whether outbound listing links are followed, and adds the site to data/directories_candidates.json.
     Free (or free-queue) + relevant sites get usable=true, followed or nofollow (Imran 20 Nov 2026) (the directory agent then applies to them).
- C. OUTREACH: at most 3 e-mails a day in total. Each one: prospect from the private list, page opened live,
+ C. OUTREACH: at most 15 e-mails a day in total (22 Nov 2026: 3 -> 15), at most 2 per run (hourly runs),
+    rotating across the 11 target pages (homepage, hashtag guide, the 9 live tools) so each gets mail in turn. A shared daily cap of
+    600 Haiku calls stops the run's AI work once reached. Each one: prospect from the private list, page opened live,
     contact address found on the site's own live pages, exact topic match judged by Haiku, fixed company-voice
     template with true product facts, guardrails in code. The mail is NOT sent here: a job file is written for the
     Namecheap outbox robot (private branch ops-outbox). Follow-ups: one, only on or after its due date, only
@@ -35,8 +37,11 @@ DRAFTS = "ops/outreach_drafts.md"
 PROSPECTS = "ops/outreach_prospects.json"
 CONTROL = "ops/robots_control.json"
 MAX_NEW_SITES = int(os.environ.get("MAX_NEW_SITES", "15"))
-MAX_SENDS_DAY = min(int(os.environ.get("MAX_SENDS_PER_DAY", "3")), 3)   # hard ceiling 3
-MAX_PROSPECT_TRIES = int(os.environ.get("MAX_PROSPECT_TRIES", "8"))
+MAX_SENDS_DAY = min(int(os.environ.get("MAX_SENDS_PER_DAY", "15")), 15)   # hard ceiling 15 (22 Nov 2026, Imran: 3 -> up to 15)
+MAX_SENDS_RUN = min(int(os.environ.get("MAX_SENDS_PER_RUN", "2")), 8)     # hourly runs (23 Nov): at most 2 per run, spread over the day
+AI_CALLS_PER_DAY = int(os.environ.get("AI_CALLS_PER_DAY", "600"))
+AI_USD_PER_DAY = float(os.environ.get("AI_USD_PER_DAY", "1.50"))   # Haiku 5.5 $0.10 in / $0.50 out per M tokens (official pricing page, read 19 Nov 2026)   # shared by all hourly runs (Director budget, 23 Nov 2026)
+MAX_PROSPECT_TRIES = int(os.environ.get("MAX_PROSPECT_TRIES", "20"))
 FOLLOWUP_DAYS = int(os.environ.get("FOLLOWUP_DAYS", "7"))
 MIN_GAP_HOURS = float(os.environ.get("MIN_GAP_HOURS", "3"))
 FORCE = os.environ.get("FORCE", "false").strip().lower() == "true"
@@ -267,6 +272,28 @@ def check_site(name, url, domain, get=c.http_get, ai=c.haiku):
     return row
 
 
+def verify_unchecked(data, limit=8, get=c.http_get, ai=c.haiku):
+    """Hunter directory rows arrive UNCHECKED (the hunter's own words are not trusted): run the same live check as for list-builder sites
+    (alive, free / paid, relevant, followed measured, captcha) before the directory agent may use them. Updates the rows in place."""
+    done = []
+    for row in data.get("sites", []):
+        if len(done) >= limit:
+            break
+        if not str(row.get("status", "")).startswith("UNCHECKED"):
+            continue
+        try:
+            new = check_site(row.get("name", row.get("domain", "")), row.get("submit_url", ""), c.reg_domain(row.get("domain", "")), get, ai)
+        except c.BudgetExceeded:
+            break
+        except Exception:
+            continue                       # stays UNCHECKED, tried again next run
+        new["source"] = row.get("source", "hunter")
+        row.clear()
+        row.update(new)
+        done.append(row)
+    return done
+
+
 def list_builder(data, known_extra, limit=MAX_NEW_SITES, get=c.http_get, ai=c.haiku):
     """Appends checked rows to data['sites']. Returns the new rows."""
     sites = data.setdefault("sites", [])
@@ -300,6 +327,47 @@ def list_builder(data, known_extra, limit=MAX_NEW_SITES, get=c.http_get, ai=c.ha
 
 # ---------- C. outreach ----------
 
+# The pages that must each get mail in turn (22-23 Nov 2026, Imran: "If you have 10 tools, get for them as well, and the home page as well"):
+# homepage, the hashtag guide and ALL 9 live tools. A prospect only gets a page whose topic it matches (HARD, 17 Nov).
+TARGET_PAGES = ["https://inayaflow.ai/", "https://inayaflow.ai/blog/tiktok-hashtag-strategy"] + [
+    "https://inayaflow.ai/tools/" + t for t in ("tiktok-follower-count-checker", "tiktok-money-calculator", "tiktok-shadowban-checker", "tiktok-hashtag-generator",
+                                                "tiktok-hashtag-counter", "tiktok-engagement-rate-calculator", "best-time-to-post-on-tiktok-today",
+                                                "tiktok-coins-to-usd", "tiktok-username-generator")]
+
+
+def sent_today_by_page(state, today):
+    """{our page url: first mails queued today} from the batch state (the same count the report shows)."""
+    out = {}
+    for e in state.get("outreach", {}).values():
+        if e.get("date") == today and e.get("match") in MATCH and e.get("status") in ("queued", "sent", "replied"):
+            u = MATCH[e["match"]][0]
+            out[u] = out.get(u, 0) + 1
+    return out
+
+
+# Pages of ours that honestly fit the SAME topic as a prospect's article (topic match stays HARD): a hashtag article can get the hashtag
+# generator, the hashtag counter or the hashtag guide; a tools round-up can get the tools page or the homepage (Director decision, 23 Nov 2026:
+# "a /tools round-up article may be offered the /tools page OR the homepage - allowed"). Nothing else is ever swapped in.
+_HASH = ["hashtags", "hashtag-strategy", "hashtag-counter"]
+ALTERNATES = {"hashtags": _HASH, "hashtag-strategy": _HASH, "hashtag-counter": _HASH, "/tools": ["/tools", "home"]}
+
+
+def best_match(p, counts):
+    """The match key (one of ALTERNATES for the prospect's topic) whose page has had the fewest mails today; target pages first."""
+    opts = [m for m in ALTERNATES.get(p["match"], [p["match"]]) if m in MATCH]
+    return min(opts, key=lambda m: (MATCH[m][0] not in TARGET_PAGES, counts.get(MATCH[m][0], 0), opts.index(m)))
+
+
+def next_by_rotation(remaining, counts):
+    """The next prospect: the one whose matching page of ours has had the fewest mails today; the 5 target pages come before other pages;
+    list order breaks ties. Topic match is untouched: the page is always the one the prospect's own match names."""
+    def key(ip):
+        i, p = ip
+        u = MATCH[best_match(p, counts)][0]
+        return (u not in TARGET_PAGES, counts.get(u, 0), i)
+    return min(enumerate(remaining), key=key)[0] if remaining else None
+
+
 MATCH = {  # our page per topic: url, topic words for the judge, one TRUE line about it (from PRODUCT_FACTS), what we call it
     "/tools": ("https://inayaflow.ai/tools", "lists or round-ups of TikTok tools / TikTok analytics tools for creators",
                "We run a set of free TikTok tools for creators: a money calculator, a coins to USD calculator, an engagement rate calculator, a hashtag generator and counter, a best time to post tool, a follower count checker and a shadowban self-check. They are free and need no account.", "our free TikTok tools page"),
@@ -315,12 +383,23 @@ MATCH = {  # our page per topic: url, topic words for the judge, one TRUE line a
               "We built a free TikTok money calculator. It gives an earnings estimate from views and needs no account.", "our free money calculator"),
     "coins": ("https://inayaflow.ai/tools/tiktok-coins-to-usd", "TikTok coins, gifts and their value in dollars",
               "We built a free TikTok coins to USD calculator. It needs no account.", "our free coins to USD calculator"),
+    "home": ("https://inayaflow.ai/", "TikTok growth, TikTok analytics or an AI tool that gives TikTok creators daily video ideas, hooks and scripts",
+             "InayaFlow is an AI TikTok agent for creators. Each morning it delivers ready-to-film ideas, hooks, scripts, trending sounds and posting times.", "InayaFlow"),
+    "hashtag-strategy": ("https://inayaflow.ai/blog/tiktok-hashtag-strategy", "how many hashtags to use on TikTok (the limit, length, order, strategy)",
+                         "We published a guide on how many hashtags to use on TikTok: the limit is 5 per post.", "our hashtag guide"),
+    "followers": ("https://inayaflow.ai/tools/tiktok-follower-count-checker", "checking a TikTok account's follower count, following, likes and videos",
+                  "We built a free TikTok follower count checker. Type any @username to see followers, following, likes and videos from the public profile. No password and no login.", "our free follower count checker"),
+    "hashtag-counter": ("https://inayaflow.ai/tools/tiktok-hashtag-counter", "counting hashtags and characters in a TikTok caption (hashtag limit, caption length)",
+                        "We built a free TikTok hashtag counter and caption length checker. It counts hashtags and characters, and needs no account.", "our free hashtag counter"),
+    "username": ("https://inayaflow.ai/tools/tiktok-username-generator", "choosing a TikTok username or handle (ideas, rules for usernames)",
+                 "We built a free TikTok username generator. It gives 20 ideas from a name and niche, each checked against TikTok's username rules, and needs no account.", "our free username generator"),
     "guide": ("https://inayaflow.ai/blog/best-time-to-post-on-tiktok", "the best time to post on TikTok",
               "We published a guide on the best time to post on TikTok.", "our guide"),
     "scripts": ("https://inayaflow.ai/blog/tiktok-scripts-chatgpt-plugin", "writing TikTok scripts or hooks with ChatGPT / AI prompts for TikTok scripts",
                 "We published a guide on getting TikTok scripts inside ChatGPT: it writes scripts, hooks and captions from a public TikTok account's best recent videos.", "our guide"),
 }
-SUBJECT = {"/tools": "Free TikTok tools for your list", "hashtags": "A free hashtag tool to go with your TikTok hashtag article",
+SUBJECT = {"hashtag-counter": "A free hashtag counter to go with your TikTok caption article", "username": "A free username generator to go with your TikTok name article", "home": "A TikTok growth tool for your readers", "hashtag-strategy": "A hashtag guide to go with your TikTok hashtag article",
+           "followers": "A free follower count checker to go with your article", "/tools": "Free TikTok tools for your list", "hashtags": "A free hashtag tool to go with your TikTok hashtag article",
            "best-time tool": "A free tool to go with your best time to post article", "engagement": "A free calculator to go with your engagement rate article",
            "shadowban": "A free self-check to go with your shadowban article", "money": "A free calculator to go with your TikTok earnings article",
            "coins": "A free calculator to go with your TikTok coins article", "guide": "A guide to go with your best time to post article",
@@ -580,7 +659,8 @@ def run_outreach(work, state, send, get=c.http_get, ai=c.haiku):
     idx = outbox_index(outbox_files)
     reconcile(state, idx)
     n_today = max(state.get("days", {}).get(today, 0), sum(1 for f in idx["names"] if f.startswith(today) and "-robot-" in f))
-    room = max(0, MAX_SENDS_DAY - n_today)
+    room = min(max(0, MAX_SENDS_DAY - n_today), MAX_SENDS_RUN)   # per run AND per day
+    counts = sent_today_by_page(state, today)
     queued, skipped = [], []
     replied = replied_index(c.fetch_file("ops-email-logs", "ops/email_replier_log.md"), c.fetch_file("ops-inbox-digest", "ops/inbox_digest.md"))
     mark_replies(state, replied)          # every run, for every site we wrote to
@@ -604,9 +684,12 @@ def run_outreach(work, state, send, get=c.http_get, ai=c.haiku):
     # 2) first mails
     ok, human = eligible_prospects(prospects, state, exclude)
     tries = 0
-    for p in ok:
+    remaining = list(ok)
+    while remaining:
         if room <= 0 or tries >= MAX_PROSPECT_TRIES:
             break
+        p = remaining.pop(next_by_rotation(remaining, counts))
+        p = dict(p, match=best_match(p, counts))     # rotation: same topic, the least-mailed page of ours
         k = site_key(p)
         if in_outbox(k, p.get("emails"), idx):       # already written to by anyone (robot or Director): never twice
             skipped.append((k, "already in the outbox"))
@@ -624,6 +707,7 @@ def run_outreach(work, state, send, get=c.http_get, ai=c.haiku):
             if not why.startswith(("check failed", "page not reachable")):   # those two are tried again another day
                 state.setdefault("outreach", {})[k] = {"status": "skipped", "why": why, "date": today}
             continue
+        counts[MATCH[job["match"]][0]] = counts.get(MATCH[job["match"]][0], 0) + 1
         oid = outbox_id("outreach", k, today)
         queued.append({"id": oid, "to": [job["to"]], "cc": [], "subject": job["subject"], "body": job["body"], "_key": k, "_kind": "first",
                        "_title": job["title"], "_page": job["page"], "_match": job["match"]})
@@ -714,6 +798,20 @@ def main():
             if age < MIN_GAP_HOURS:
                 print("batch: skipped, last run %.1f h ago" % age)
                 return
+        used = state.setdefault("ai_calls", {})
+        for k in [k for k in used if k < (c.now() - datetime.timedelta(days=3)).strftime("%Y-%m-%d")]:
+            del used[k]
+        usd = state.setdefault("ai_usd", {})
+        for k in [k for k in usd if k < (c.now() - datetime.timedelta(days=3)).strftime("%Y-%m-%d")]:
+            del usd[k]
+        base_calls, base_usd = used.get(c.today(), 0), usd.get(c.today(), 0.0)
+        c.MAX_AI_CALLS = max(0, min(c.MAX_AI_CALLS, AI_CALLS_PER_DAY - base_calls))   # daily caps shared by every hourly run: calls AND dollars
+        c.USD_LIMIT = max(0.0, AI_USD_PER_DAY - base_usd)
+
+        def record_calls():
+            """What this run has used so far goes into the state. Called on EVERY exit path, so a crash cannot reset the daily cap."""
+            state.setdefault("ai_calls", {})[c.today()] = base_calls + c.USAGE["calls"]
+            state.setdefault("ai_usd", {})[c.today()] = round(base_usd + c.cost_usd(), 5)
         control = c.read_json(os.path.join(work, CONTROL), {})
         send = (not c.DRY) and control.get("outreach_send") is True
         note = "" if send or c.DRY else "Outreach sending is OFF (ops/robots_control.json outreach_send is not true): drafts only."
@@ -732,6 +830,25 @@ def main():
         for r in rows:
             if str(r.get("status", "")).startswith("BLOCKED"):
                 state.setdefault("blocked", {})["dir:" + r["domain"]] = {"date": c.today(), "what": "directory listing", "where": r.get("submit_url", ""), "why": r["status"]}
+        # B2: new results of the 24/7 prospect hunter -> outreach prospects + directory candidates (counts only, never printed names)
+        hunt = {}
+        try:
+            import hunter_ingest as hi
+            done = c.read_tree("ops-jobs", ["jobs/done"], name_has="-hunter-")
+            prospects = c.read_json(os.path.join(work, PROSPECTS), [])
+            excl = {c.reg_domain(l.strip().lower()) for l in c.fetch_file("main", "ops/outreach_domains.txt").splitlines() if l.strip() and not l.startswith("#")}
+            ob_idx = outbox_index(c.read_tree("ops-outbox", ["outbox/sent", "outbox/pending", "outbox/failed"]))
+            hunt = hi.ingest(done, state, prospects, data, excl, ob_idx, in_outbox, c.today())
+            hunt["verified"] = len(verify_unchecked(data))
+            if hunt.get("prospects") and not c.DRY:
+                c.write_json(os.path.join(work, PROSPECTS), prospects)
+            if (hunt.get("directories") or hunt.get("verified")) and not c.DRY:
+                with open(CANDS, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=1, ensure_ascii=False)
+                    f.write(chr(10))
+        except Exception as e:
+            hunt = {"error": type(e).__name__}
+        print("hunter feed: %s" % hunt)
         # C
         queued, skipped, human = run_outreach(work, state, send)
         for p, why in human:
@@ -749,6 +866,7 @@ def main():
             pass
         c.write_text(os.path.join(work, LOG), ("# Backlink batch log (newest first)\n\n" + section + "\n" + re.sub(r"\A# Backlink batch log[^\n]*\n\n", "", old_log))[:200000])
         c.write_text(os.path.join(work, BLOCKED), render_blocked(state))
+        record_calls()
         if not c.DRY:
             state["last_run"] = c.now().isoformat()
         c.write_json(os.path.join(work, STATE), state)
@@ -769,6 +887,9 @@ def main():
     except Exception as e:
         print("batch: FAILED %s" % type(e).__name__)
         try:
+            if "record_calls" in locals():
+                record_calls()
+                c.write_json(os.path.join(work, STATE), state)      # the day's AI use survives a crash
             c.error_notice(latest, "backlink batch", e)
             c.commit_push("ops: backlink batch error notice")
         except Exception:

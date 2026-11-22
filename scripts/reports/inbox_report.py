@@ -250,6 +250,12 @@ def build(inputs, state, digests=(), digest_note="", ai=c.haiku):
          "- Bot mail waiting more than 2 hours: %d" % len(not_handled), ""]
     if digest_note:
         L += ["Note: " + digest_note + ".", ""]
+    try:   # 22 Nov 2026: per-page backlink targets; a failure here never breaks the rest of the report
+        import targets as tg
+        L += tg.build_targets(live_all, tg.parse_json(inputs.get("batch_state", "")), tg.parse_json(inputs.get("directory_agent_state", "")),
+                              c.now().date()).split(chr(10))
+    except Exception as e:
+        L += ["## Backlink targets today", "", "Not built this run (%s)." % type(e).__name__, ""]
     L += ["## Replies from people, last 24 hours (whatever the label)", "",
           "Every 'Re:' mail from a real person to contact@ in the last 24 h (no-reply senders and out-of-office left out). The Director reads each one.", "",
           table(["date (UTC)", "from", "subject", "router label"], people),
@@ -285,6 +291,8 @@ def read_inputs():
         "for_imran": c.fetch_file("ops-email-logs", "ops/for_imran.md"),
         "live_links": c.fetch_file("ops-directory-logs", "ops/live_links.md"),
         "live_links_new": c.fetch_file("ops-directory-logs", "ops/live_links_new.md"),
+        "directory_agent_state": c.fetch_file("ops-directory-logs", "ops/directory_agent_state.json"),
+        "batch_state": c.fetch_file(c.REPORT_BRANCH, "ops/backlink_batch_state.json"),
     }
 
 

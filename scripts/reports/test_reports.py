@@ -260,8 +260,10 @@ class Batch(unittest.TestCase):
         self.assertEqual([k for k, _e in due], ["a.com"])
         self.assertEqual(st["outreach"]["r.com"]["status"], "replied")
 
-    def test_daily_cap_is_three(self):
-        self.assertLessEqual(bb.MAX_SENDS_DAY, 3)
+    def test_daily_cap_is_fifteen(self):
+        self.assertEqual(bb.MAX_SENDS_DAY, 15)                 # 22 Nov 2026: 3 -> 15 (hard ceiling)
+        self.assertLessEqual(bb.MAX_SENDS_RUN, 2)              # hourly runs (23 Nov): at most 2 per run
+        self.assertGreaterEqual(bb.MAX_SENDS_RUN * 24, bb.MAX_SENDS_DAY)   # hourly runs: 2 per run reach 15 in the day
         self.assertTrue(bb.outbox_id("outreach", "a.com", "2026-11-19").startswith("2026-11-19-robot-outreach-"))
 
 
