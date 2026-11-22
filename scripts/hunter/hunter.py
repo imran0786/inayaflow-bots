@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PROSPECT HUNTER (23 Nov 2026): queues ONE research job for the cloud job runner every 2 hours, 24/7.
+"""PROSPECT HUNTER (23 Nov 2026): queues ONE research job for the cloud job runner every 3 hours, 24/7.
 
 Imran: "One agent helper should 24/7 be building the links, the backlinks, the list of directories, the list of backlinks,
 platforms that can give us backlinks."
@@ -9,7 +9,7 @@ scripts/submit-job.mjs in the project folder). The job runner (job-runner.yml, e
 search and writes jobs/done/<id>.md: strict JSON lines of VERIFIED prospects. The next backlink-batch run reads new results
 (scripts/reports/hunter_ingest.py) and adds them to the prospect list and the directory candidates.
 
-Rotation: 12 slots a day (every 2 hours) walk through the 5 target pages and the 5 prospect types so every page gets every type.
+Rotation: 8 slots a day (every 3 hours) walk through the 11 target pages and the 5 prospect types so every page gets every type.
 It sends nothing, signs up nowhere, spends only through the job runner's own caps (max_cost per job, daily cap).
 PUBLIC repo: prints the job id and counts only.
 """
@@ -23,7 +23,7 @@ import common as c
 
 BRANCH = "ops-jobs"
 WORK = os.environ.get("HUNTER_WORK", "/tmp/ops_jobs_hunter")
-MAX_COST = float(os.environ.get("HUNTER_MAX_COST", "1.00"))       # job-runner ceiling is $1
+MAX_COST = float(os.environ.get("HUNTER_MAX_COST", "0.60"))       # job-runner ceiling is $1; Director budget 23 Nov: 8 jobs a day at $0.60
 MAX_SEARCHES = int(os.environ.get("HUNTER_MAX_SEARCHES", "10"))   # job-runner ceiling is 10
 MAX_WAITING = int(os.environ.get("HUNTER_MAX_WAITING", "3"))      # never pile up more hunter jobs than the runner can clear
 
@@ -38,6 +38,18 @@ PAGES = [  # (slug used in the job id and the result's "page" field, URL, what i
      "how much TikTok pays creators / TikTok earnings / TikTok Creator Rewards"),
     ("shadowban-checker", "https://inayaflow.ai/tools/tiktok-shadowban-checker", "our free TikTok shadowban self-check (compares recent views with usual views; not a ban verdict)",
      "TikTok shadowbans, sudden drops in views, how to appeal"),
+    ("hashtag-generator", "https://inayaflow.ai/tools/tiktok-hashtag-generator", "our free TikTok hashtag generator (turns a topic into up to 5 hashtags; no AI, no account)",
+     "which hashtags to use on TikTok / TikTok hashtag ideas"),
+    ("hashtag-counter", "https://inayaflow.ai/tools/tiktok-hashtag-counter", "our free TikTok hashtag counter and caption length checker (counts hashtags and characters)",
+     "TikTok hashtag limit and caption length"),
+    ("engagement-rate", "https://inayaflow.ai/tools/tiktok-engagement-rate-calculator", "our free TikTok engagement rate calculator with 2026 benchmarks",
+     "TikTok engagement rate (how to calculate it, benchmarks)"),
+    ("best-time", "https://inayaflow.ai/tools/best-time-to-post-on-tiktok-today", "our free tool that shows the best time to post on TikTok today in the visitor's time zone",
+     "the best time to post on TikTok"),
+    ("coins-to-usd", "https://inayaflow.ai/tools/tiktok-coins-to-usd", "our free TikTok coins to USD calculator with LIVE gift values",
+     "TikTok coins, gifts and their value in dollars"),
+    ("username-generator", "https://inayaflow.ai/tools/tiktok-username-generator", "our free TikTok username generator (20 ideas checked against TikTok's rules)",
+     "choosing a TikTok username"),
 ]
 TYPES = [  # (type value in the result, what to find)
     ("blog_article", "BLOG ARTICLES or posts on EXACTLY the page's topic, published or updated in 2025-2026, by a site that could plausibly link to a free tool or guide. "
@@ -52,10 +64,10 @@ TYPES = [  # (type value in the result, what to find)
 
 
 def slot(now=None):
-    """(page, type, slot number): 12 slots a day (every 2 hours); every page meets every type over 25 slots."""
+    """(page, type, slot number): 8 slots a day (every 3 hours); every page meets every type over 55 slots."""
     now = now or c.now()
-    n = now.timetuple().tm_yday * 12 + now.hour // 2
-    return PAGES[n % 5], TYPES[(n // 5) % 5], n
+    n = now.timetuple().tm_yday * 8 + now.hour // 3
+    return PAGES[n % len(PAGES)], TYPES[(n // len(PAGES)) % len(TYPES)], n
 
 
 def job_id(now, page, typ):

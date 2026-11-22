@@ -49,6 +49,7 @@ jobs:
           python3 -W ignore scripts/reports/test_batch_qa.py
           python3 -W ignore scripts/reports/test_targets.py
           python3 -W ignore scripts/reports/test_hunter.py
+          python3 -W ignore scripts/reports/test_merge.py
       - name: Run the batch
         env:
           GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
@@ -73,6 +74,13 @@ jobs:
           git commit -q -m "data: directory candidates (backlink batch)"
           for i in 1 2 3; do
             if git push -q origin HEAD:main; then echo "saved"; exit 0; fi
-            git pull -q --rebase origin main || true
+            # conflict: keep our rows AND theirs (union by domain), never lose either side
+            git show HEAD:data/directories_candidates.json > /tmp/ours.json
+            git fetch -q origin main
+            git reset -q --hard origin/main
+            python3 scripts/reports/merge_candidates.py /tmp/ours.json data/directories_candidates.json
+            git add data/directories_candidates.json
+            git diff --cached --quiet && { echo "nothing left to save"; exit 0; }
+            git commit -q -m "data: directory candidates (backlink batch, merged)"
           done
           echo "push failed"; exit 1

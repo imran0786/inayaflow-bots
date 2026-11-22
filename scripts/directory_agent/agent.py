@@ -16,9 +16,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 MODEL = os.environ.get("AGENT_MODEL", "claude-haiku-5-5")  # primary; no temperature is ever set
 FALLBACK_MODEL = os.environ.get("FALLBACK_MODEL", "claude-sonnet-5-5")  # used when the primary ends OTHER/ERROR/TIMEOUT
 SUCCESS_CAP = int(os.environ.get("DAILY_SUCCESS_CAP", "30"))   # 22 Nov 2026: 10 -> 30 (Imran: increase the limit as much as you want)
-ATTEMPT_CAP = int(os.environ.get("DAILY_ATTEMPT_CAP", "150"))  # 22 Nov 2026: 50 -> 120; 23 Nov: 150
+ATTEMPT_CAP = int(os.environ.get("DAILY_ATTEMPT_CAP", "150"))  # site attempts per UTC day, all runs together (was 10 / 50 before 22-23 Nov 2026)
 TOOL_ATTEMPT_CAP = int(os.environ.get("DAILY_TOOL_ATTEMPT_CAP", "200"))  # extra per-tool listings a day, on top of the site attempts
-RUN_SECONDS = int(os.environ.get("RUN_SECONDS", "17000"))
+RUN_SECONDS = int(os.environ.get("RUN_SECONDS", "9000"))   # per run (same value as the workflow)
+USD_CAP = float(os.environ.get("DAILY_USD_CAP", "6"))      # Director budget 23 Nov 2026: this robot may spend at most $6 a UTC day, all runs together
+UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "0.25"))  # ASSUMPTION used only when the library gives no price for an attempt
+SPEND_PATH = os.path.join(ROOT, "ops", "directory_agent_spend.json")
 ASSET_DIR = os.path.join(ROOT, "data", "assets")
 STATE_PATH = os.path.join(ROOT, "ops", "directory_agent_state.json")
 OLD_STATE_PATH = os.path.join(ROOT, "ops", "directory_state.json")
@@ -392,6 +395,30 @@ def record(state, site, r, today):
             state[k]["url"] = site["url"]
 
 
+def load_spend():
+    try:
+        return json.load(open(SPEND_PATH, encoding="utf8"))
+    except Exception:
+        return {}
+
+
+def spent_today(spend, today):
+    return float(spend.get(today, 0.0) or 0.0)
+
+
+def add_spend(spend, today, r):
+    """Adds one attempt's cost (the logged model usage price, or the assumed flat price when unpriced) and keeps 7 days."""
+    spend[today] = round(spent_today(spend, today) + (r.get("cost") if r.get("cost") is not None else UNPRICED_USD), 4)
+    for k in sorted(spend)[:-7]:
+        del spend[k]
+    os.makedirs(os.path.dirname(SPEND_PATH), exist_ok=True)
+    json.dump(spend, open(SPEND_PATH, "w", encoding="utf8"))
+
+
+MAX_FAILS_IN_A_ROW = 2   # a site's tool loop stops after two OTHER/ERROR/TIMEOUT results in a row
+SOFT_FAILS = ("OTHER", "ERROR", "TIMEOUT")
+
+
 def product_todo(state, site, products, today):
     """Tool listings still to do on this site: no final result yet; a failed one (OTHER/ERROR/TIMEOUT) is retried once on a later day."""
     e = state.get(reg_domain(urlparse(site["url"]).hostname or "")) or state.get(nkey(site["name"])) or {}
@@ -509,12 +536,14 @@ def main():
         MODEL, FALLBACK_MODEL, DRY, ALLOW_SIGNUP, "BATCH" if manual else "FEED", untried, att0, succ0), flush=True)
     products = load_products()
     rows, tot, succ, att = [], 0.0, succ0, att0
+    spend = load_spend()
     tool_att = count_tool_today(state, today)   # per UTC day, shared by all runs
 
     def do(s, product):
         nonlocal tot
         r = run_one(s, product)
         tot += r["cost"] or 0
+        add_spend(spend, today, r)    # every attempt counts, dry runs too (they use the model)
         cost_s = "n/a" if r["cost"] is None else ("$%.3f%s" % (r["cost"], "~" if r["cost_estimated"] else ""))
         pname = product["id"] if product else "homepage"
         print("RESULT | %s | %s | %s | %s | %ss | steps %s | %s" % (s["name"], pname, r["status"], r["model"], r["secs"], r["steps"], cost_s), flush=True)
@@ -526,18 +555,26 @@ def main():
             os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
             json.dump(state, open(STATE_PATH, "w", encoding="utf8"), indent=1)
 
+    def stop_now():
+        return time.time() - t_start > RUN_SECONDS or spent_today(spend, today) >= USD_CAP
+
     def tool_listings(s):
-        """Each free tool as its OWN listing on this directory. Stops for the site when it allows one listing per company."""
+        """Each free tool as its OWN listing on this directory. Stops for the site when it allows one listing per company,
+        at a wall, after 2 failures in a row, or when the day's dollar cap is reached."""
         nonlocal tool_att
         todo = product_todo(state, s, products, today)
+        fails = 0
         for i, p in enumerate(todo):
-            if not manual and (tool_att >= TOOL_ATTEMPT_CAP or time.time() - t_start > RUN_SECONDS):
+            if not manual and (tool_att >= TOOL_ATTEMPT_CAP or stop_now()):
                 break
             tool_att += 1
             r = do(s, p)
             if not manual and not DRY:
                 record_product(state, s, p, r, today)
                 save()
+            fails = fails + 1 if r["status"] in SOFT_FAILS else 0
+            if fails >= MAX_FAILS_IN_A_ROW:
+                break
             if r["status"] == "ONE_PER_DOMAIN":
                 if not manual and not DRY:
                     skip_remaining_products(state, s, todo[i + 1:], today, "one listing per company here")
@@ -547,7 +584,7 @@ def main():
                 break  # captcha / paid / login wall etc.: the same wall applies to every tool
 
     for s in sites:
-        if not manual and (succ >= SUCCESS_CAP or att >= ATTEMPT_CAP or time.time() - t_start > RUN_SECONDS):
+        if not manual and (succ >= SUCCESS_CAP or att >= ATTEMPT_CAP or stop_now()):
             break
         r = do(s, None)
         att += 1
@@ -560,7 +597,7 @@ def main():
     # backfill: sites listed earlier that still miss tool listings (only sites whose URL is known)
     if products and not manual:
         for s in backfill_sites(state, products, today):
-            if tool_att >= TOOL_ATTEMPT_CAP or time.time() - t_start > RUN_SECONDS:
+            if tool_att >= TOOL_ATTEMPT_CAP or stop_now():
                 break
             tool_listings(s)
     left = max(0, untried - (att - att0))

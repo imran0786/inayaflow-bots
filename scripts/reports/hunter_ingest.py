@@ -15,12 +15,23 @@ from urllib.parse import urlparse
 
 import common as c
 
-PAGE_MATCH = {"homepage": "home", "hashtag-strategy": "hashtag-strategy", "follower-checker": "followers",
-              "money-calculator": "money", "shadowban-checker": "shadowban"}
+PAGE_MATCH = {"homepage": "home", "hashtag-strategy": "hashtag-strategy", "follower-checker": "followers", "money-calculator": "money",
+              "shadowban-checker": "shadowban", "hashtag-generator": "hashtags", "hashtag-counter": "hashtag-counter",
+              "engagement-rate": "engagement", "best-time": "best-time tool", "coins-to-usd": "coins", "username-generator": "username"}
 EMAIL = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 BAD_LOCAL = re.compile(r"^(noreply|no-reply|donotreply|do-not-reply|abuse|privacy|dmca|legal|postmaster|webmaster@)", re.I)
 MAIL_TYPES = {"blog_article", "resource_page"}
 DIR_TYPES = {"directory", "launch_site", "platform"}
+
+
+def clean(s, n):
+    """Text from the hunter is untrusted: no HTML, no links, no addresses, no line breaks, no control characters, capped length."""
+    s = re.sub(r"<[^>]*>", " ", str(s or ""))
+    s = re.sub(r"https?://\S+|www\.\S+", " ", s)
+    s = re.sub(r"[\w.+-]+@[\w-]+\.[\w.-]+", " ", s)
+    s = re.sub(r"[\x00-\x1f\x7f]+", " ", s)
+    s = re.sub(r"[<>{}`|]", " ", s)
+    return re.sub(r"\s+", " ", s).strip()[:n]
 
 
 def parse_lines(text):
@@ -58,7 +69,7 @@ def outreach_row(d, job_id, n):
         return None
     if c.reg_domain(email.split("@")[-1]) != site:  # a free-mail or third-party address is not the site's own contact
         return None
-    return {"n": n, "site": site, "page": url, "page_date": "", "topic": str(d.get("topic", ""))[:120], "match": match,
+    return {"n": n, "site": site, "page": url.split()[0][:300], "page_date": "", "topic": clean(d.get("topic", ""), 80), "match": match,
             "contact": src, "emails": [email], "pri": "B", "note": "hunter %s" % job_id}
 
 
@@ -73,11 +84,11 @@ def directory_row(d, job_id, today):
     dom = _host(url)
     if not dom or dom == "inayaflow.ai":
         return None
-    name = str(d.get("name") or dom)[:60]
+    name = clean(d.get("name"), 60) or dom
     return {"name": name, "domain": dom, "submit_url": url, "source": "hunter %s" % job_id, "their_category": "", "their_auto_flag": "",
-            "their_notes": "", "their_status": None, "http": 200, "final_url": url, "free_check": "free_likely", "captcha_words_on_page": False,
-            "has_form_on_page": True, "quality": "relevant", "usable": True, "followed": rel, "checked": today,
-            "judge_reason": str(d.get("rel_evidence", ""))[:160], "status": "TODO", "followed_sample": "hunter: " + rel}
+            "their_notes": "", "their_status": None, "http": None, "final_url": url, "free_check": "unchecked", "captcha_words_on_page": False,
+            "has_form_on_page": False, "quality": "unknown", "usable": False, "followed": "unknown", "checked": today,
+            "judge_reason": "hunter says %s: %s" % (rel, clean(d.get("rel_evidence", ""), 120)), "status": "UNCHECKED hunter"}
 
 
 def ingest(done_files, state, prospects, cands, exclude_domains, outbox_idx, in_outbox, today):

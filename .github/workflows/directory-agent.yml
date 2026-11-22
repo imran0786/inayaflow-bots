@@ -53,7 +53,7 @@ jobs:
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           mkdir -p ops
           if git clone -q --branch ops-directory-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/logs 2>/dev/null; then
-            for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_state.json directory_verify_state.json; do
+            for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_agent_spend.json directory_state.json directory_verify_state.json; do
               cp "/tmp/logs/ops/$f" "ops/$f" 2>/dev/null || true
             done
             echo "state restored"
@@ -72,6 +72,7 @@ jobs:
         run: python3 -m pip install -q 'browser-use==1.0.6' 2>&1 | tail -2
 
       - name: Run agent
+        timeout-minutes: 150   # shorter than the job (180), so the save step below always has time to run, even after a timeout
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
@@ -85,6 +86,7 @@ jobs:
           DAILY_SUCCESS_CAP: "30"
           DAILY_ATTEMPT_CAP: "150"
           DAILY_TOOL_ATTEMPT_CAP: "200"
+          DAILY_USD_CAP: "6"
           RUN_SECONDS: "9000"
           BROWSER_USE_SETUP_LOGGING: "false"
           ANONYMIZED_TELEMETRY: "false"
@@ -106,7 +108,7 @@ jobs:
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
           fi
           mkdir -p /tmp/push/ops
-          for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md; do
+          for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_agent_spend.json; do
             [ -f "ops/$f" ] && cp "ops/$f" "/tmp/push/ops/$f" || true
           done
           cd /tmp/push

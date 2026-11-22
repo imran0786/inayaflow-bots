@@ -138,7 +138,9 @@ def commit_push(msg, branch=REPORT_BRANCH, work=None):
     for _ in range(3):
         if git("push", "-q", "origin", branch, check=False, cwd=work).returncode == 0:
             return True
-        git("pull", "-q", "--rebase", "origin", branch, check=False, cwd=work)
+        if git("pull", "-q", "--rebase", "origin", branch, check=False, cwd=work).returncode != 0:
+            git("rebase", "--abort", check=False, cwd=work)     # a conflict never leaves a half-done rebase behind
+            git("fetch", "-q", "origin", branch, check=False, cwd=work)
     raise RuntimeError("push failed")
 
 

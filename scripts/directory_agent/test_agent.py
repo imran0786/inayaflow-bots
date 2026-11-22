@@ -66,5 +66,38 @@ class Listings(unittest.TestCase):
         self.assertIn("ONE_PER_DOMAIN", ag.RESULT_CODES)
 
 
+class Budget(unittest.TestCase):
+    def test_defaults_match_the_workflow(self):
+        self.assertEqual(ag.RUN_SECONDS, 9000)
+        self.assertEqual(ag.USD_CAP, 6.0)
+
+    def test_dollar_cap_counts_priced_and_unpriced_attempts(self):
+        import tempfile
+        old = ag.SPEND_PATH
+        ag.SPEND_PATH = os.path.join(tempfile.mkdtemp(), "ops", "spend.json")
+        try:
+            sp = {}
+            ag.add_spend(sp, "2026-11-25", {"cost": 1.5})
+            ag.add_spend(sp, "2026-11-25", {"cost": None})                      # unpriced: the assumed flat price
+            self.assertAlmostEqual(ag.spent_today(sp, "2026-11-25"), 1.5 + ag.UNPRICED_USD)
+            self.assertEqual(ag.spent_today(sp, "2026-11-26"), 0.0)             # a new day starts at zero
+            self.assertEqual(ag.load_spend(), sp)
+            ag.add_spend(sp, "2026-11-25", {"cost": 5.0})
+            self.assertGreaterEqual(ag.spent_today(sp, "2026-11-25"), ag.USD_CAP)
+        finally:
+            ag.SPEND_PATH = old
+
+    def test_two_soft_failures_in_a_row_stop_the_tool_loop(self):
+        self.assertEqual(ag.MAX_FAILS_IN_A_ROW, 2)
+        fails = 0
+        order = []
+        for st in ("SUBMITTED", "TIMEOUT", "OTHER", "SUBMITTED"):
+            fails = fails + 1 if st in ag.SOFT_FAILS else 0
+            order.append(fails)
+            if fails >= ag.MAX_FAILS_IN_A_ROW:
+                break
+        self.assertEqual(order, [0, 1, 2])
+
+
 if __name__ == "__main__":
     unittest.main()

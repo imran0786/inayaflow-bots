@@ -21,6 +21,12 @@ PAGES = [  # (label, path on inayaflow.ai, listing id in data/listings.json, min
     ("Follower count checker", "/tools/tiktok-follower-count-checker", "follower-count-checker", 4),
     ("Money calculator", "/tools/tiktok-money-calculator", "money-calculator", 4),
     ("Shadowban checker", "/tools/tiktok-shadowban-checker", "shadowban-checker", 4),
+    ("Hashtag generator", "/tools/tiktok-hashtag-generator", "hashtag-generator", 4),
+    ("Hashtag counter", "/tools/tiktok-hashtag-counter", "hashtag-counter", 4),
+    ("Engagement rate calculator", "/tools/tiktok-engagement-rate-calculator", "engagement-rate-calculator", 4),
+    ("Best time to post", "/tools/best-time-to-post-on-tiktok-today", "best-time-to-post", 4),
+    ("Coins to USD", "/tools/tiktok-coins-to-usd", "coins-to-usd", 4),
+    ("Username generator", "/tools/tiktok-username-generator", "username-generator", 4),
 ]
 DAY_TARGET = 1
 WEEK_TARGET = 7
