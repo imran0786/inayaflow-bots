@@ -20951,7 +20951,7 @@
    "followed": "mixed",
    "checked": "2026-11-22",
    "judge_reason": "A product site selling an AI marketing tool; no listing or submission page found.",
-   "status": "HOLD not a directory",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "4 followed / 8 not",
    "needs": []
   },
@@ -20974,7 +20974,7 @@
    "followed": "mixed",
    "checked": "2026-11-22",
    "judge_reason": "Submit page says 'Free with a backlink' and lists paid plans; AI tools accepted.",
-   "status": "BLOCKED needs a person (badge_or_backlink)",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "20 followed / 8 not",
    "needs": [
     "badge_or_backlink"
@@ -20999,7 +20999,7 @@
    "followed": "followed",
    "checked": "2026-11-22",
    "judge_reason": "Free $0 launch in queue; paid options and badge speed it up. Human review, AI focus.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "24 followed / 0 not",
    "needs": []
   },
@@ -21022,7 +21022,7 @@
    "followed": "mixed",
    "checked": "2026-11-22",
    "judge_reason": "Says launching is free, but also needs X Premium; requires a site badge; engagement-exchange model.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "574 followed / 4 not",
    "needs": [
     "account",
@@ -21049,7 +21049,7 @@
    "followed": "followed",
    "checked": "2026-11-22",
    "judge_reason": "Describes itself as free for makers to submit SaaS/AI tools; paid ads and Premium launches also exist.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "16 followed / 0 not",
    "needs": [
     "account"
@@ -21074,7 +21074,7 @@
    "followed": "unknown",
    "checked": "2026-11-22",
    "judge_reason": "Product launch directory with email or Google sign-in; no free listing named, ads from $19/week.",
-   "status": "HOLD paid",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -21099,7 +21099,7 @@
    "followed": "mixed",
    "checked": "2026-11-22",
    "judge_reason": "Free $0 launch plan, but needs a badge backlink; SEO-bait copy and paid backlink upsells.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "102 followed / 7 not",
    "needs": [
     "badge_or_backlink"
@@ -21124,7 +21124,7 @@
    "followed": "mixed",
    "checked": "2026-11-22",
    "judge_reason": "Free listing via badge or review queue; paid tiers skip the wait. Sign-in needed.",
-   "status": "BLOCKED needs a person (badge_or_backlink)",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "307 followed / 169 not",
    "needs": [
     "badge_or_backlink",
@@ -21150,7 +21150,7 @@
    "followed": "mixed",
    "checked": "2026-11-22",
    "judge_reason": "Free Simple listing needs a permanent reciprocal badge/backlink; reciprocal-link scheme looks spammy.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "13 followed / 12 not",
    "needs": [
     "badge_or_backlink"
@@ -21175,7 +21175,7 @@
    "followed": "mixed",
    "checked": "2026-11-22",
    "judge_reason": "Free weekly launch listing; needs 4 upvotes and 1 comment first, plus login.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "152 followed / 10 not",
    "needs": [
     "account"
@@ -21200,7 +21200,7 @@
    "followed": "unknown",
    "checked": "2026-11-22",
    "judge_reason": "Product directory with AI and productivity tools; submit needs sign-in; no listing pricing shown.",
-   "status": "HOLD free not confirmed",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -21225,7 +21225,7 @@
    "followed": "followed",
    "checked": "2026-11-22",
    "judge_reason": "Free listing with human review; requires a verified Reviewed badge on your site and a dashboard account.",
-   "status": "BLOCKED needs a person (badge_or_backlink)",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "9 followed / 0 not",
    "needs": [
     "account",
@@ -21251,7 +21251,7 @@
    "followed": "unknown",
    "checked": "2026-11-22",
    "judge_reason": "Submit page says listing is free forever; accepts web apps and AI tools.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -21274,7 +21274,7 @@
    "followed": "followed",
    "checked": "2026-11-22",
    "judge_reason": "Takes AI tool submissions, but no free listing is stated. Sells sponsored and link placements; looks link-farm-like.",
-   "status": "HOLD spam risk",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "26 followed / 0 not",
    "needs": []
   },
@@ -21297,12 +21297,110 @@
    "followed": "mixed",
    "checked": "2026-11-22",
    "judge_reason": "Free listing for SaaS/AI/dev tools; needs account and a one-step site check.",
-   "status": "BLOCKED needs a person (badge_or_backlink)",
+   "status": "TRIED SUBMITTED 2026-11-21",
    "followed_sample": "4 followed / 3 not",
    "needs": [
     "account",
     "badge_or_backlink"
    ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "theaitoolsdir.com",
+   "submit_url": "https://theaitoolsdir.com/submit/",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://theaitoolsdir.com/",
+   "free_check": "free_with_paid_option",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-22",
+   "judge_reason": "Free $0 plan requires a dofollow badge; paid networked backlink listings also sold.",
+   "status": "HOLD spam risk",
+   "followed_sample": "18 followed / 0 not",
+   "needs": [
+    "badge_or_backlink"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "thedevtoolsdir.com",
+   "submit_url": "https://thedevtoolsdir.com/submit/",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://thedevtoolsdir.com/",
+   "free_check": "free_with_paid_option",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-22",
+   "judge_reason": "Free listing requires a dofollow badge on your site; sells backlinks across a network of sister directories.",
+   "status": "HOLD spam risk",
+   "followed_sample": "18 followed / 0 not",
+   "needs": [
+    "badge_or_backlink"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "indielineup.com",
+   "submit_url": "https://indielineup.com/submit/",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://indielineup.com/",
+   "free_check": "free_with_paid_option",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-22",
+   "judge_reason": "Free listing requires a dofollow badge on your site; sister-network paid backlink sales suggest link farm.",
+   "status": "HOLD spam risk",
+   "followed_sample": "18 followed / 0 not",
+   "needs": [
+    "badge_or_backlink"
+   ]
+  },
+  {
+   "name": "star-history.com",
+   "domain": "star-history.com",
+   "submit_url": "https://www.star-history.com/?repos=theshubh77%2Fawesome-saas-directories&type=date&legend=top-left",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://www.star-history.com/",
+   "free_check": "unclear",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "not relevant",
+   "usable": false,
+   "followed": "followed",
+   "checked": "2026-11-22",
+   "judge_reason": "Star-tracking tool for GitHub repos; no submission page; only a paid-looking 'Promote your product' slot.",
+   "status": "HOLD not a directory",
+   "followed_sample": "9 followed / 0 not",
+   "needs": []
   }
  ]
 }
