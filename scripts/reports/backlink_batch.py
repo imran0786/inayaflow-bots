@@ -40,7 +40,7 @@ MAX_NEW_SITES = int(os.environ.get("MAX_NEW_SITES", "15"))
 MAX_SENDS_DAY = min(int(os.environ.get("MAX_SENDS_PER_DAY", "15")), 15)   # hard ceiling 15 (22 Nov 2026, Imran: 3 -> up to 15)
 MAX_SENDS_RUN = min(int(os.environ.get("MAX_SENDS_PER_RUN", "2")), 8)     # hourly runs (23 Nov): at most 2 per run, spread over the day
 AI_CALLS_PER_DAY = int(os.environ.get("AI_CALLS_PER_DAY", "600"))
-AI_USD_PER_DAY = float(os.environ.get("AI_USD_PER_DAY", "1.50"))   # Haiku 5.5 $0.10 in / $0.50 out per M tokens (official pricing page, read 19 Nov 2026)   # shared by all hourly runs (Director budget, 23 Nov 2026)
+AI_USD_PER_DAY = float(os.environ.get("AI_USD_PER_DAY", "1.00"))   # 23 Nov QA round 3: 1.50 -> 1.00 so all robots stay <= $15/day.   # Haiku 5.5 $0.10 in / $0.50 out per M tokens (official pricing page, read 19 Nov 2026)   # shared by all hourly runs (Director budget, 23 Nov 2026)
 MAX_PROSPECT_TRIES = int(os.environ.get("MAX_PROSPECT_TRIES", "20"))
 FOLLOWUP_DAYS = int(os.environ.get("FOLLOWUP_DAYS", "7"))
 MIN_GAP_HOURS = float(os.environ.get("MIN_GAP_HOURS", "3"))

@@ -131,5 +131,26 @@ class T(unittest.TestCase):
             self.assertNotIn(s, out)
 
 
+class DailyAiCap(unittest.TestCase):
+    def test_daily_cap_counts_and_resets(self):
+        import tempfile
+        p = os.path.join(tempfile.mkdtemp(), "ops", "ai_calls_router.json")
+        self.assertEqual(R.AI_CALLS_PER_DAY, 150)
+        for _ in range(R.AI_CALLS_PER_DAY):
+            self.assertTrue(R.ai_take_call(p, "2026-11-23"))
+        self.assertFalse(R.ai_take_call(p, "2026-11-23"))
+        self.assertEqual(R.ai_calls_today(p, "2026-11-23"), 150)
+        self.assertTrue(R.ai_take_call(p, "2026-11-24"))
+
+    def test_main_loop_defers_when_the_daily_cap_is_used(self):
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "router.py"), encoding="utf8").read()
+        self.assertIn("if ai_used >= MAX_AI or not ai_take_call():", src)          # the check sits BEFORE the model call
+        self.assertLess(src.index("not ai_take_call()"), src.index("bucket, reason, _how = classify("))
+
+    def test_workflow_saves_the_counter(self):
+        w = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "workflows", "mail-router.yml"), encoding="utf8").read()
+        self.assertIn("ops/ai_calls_router.json", w)
+
+
 if __name__ == "__main__":
     unittest.main()

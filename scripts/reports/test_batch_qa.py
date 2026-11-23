@@ -301,7 +301,7 @@ class Safety(unittest.TestCase):
             c.MAX_AI_CALLS = 25
 
     def test_daily_dollar_and_call_caps(self):
-        self.assertEqual((bb.AI_CALLS_PER_DAY, bb.AI_USD_PER_DAY), (600, 1.5))
+        self.assertEqual((bb.AI_CALLS_PER_DAY, bb.AI_USD_PER_DAY), (600, 1.0))
         c.USAGE.update({"calls": 0, "in": 2_000_000, "out": 0})        # $0.20 spent in this run
         c.USD_LIMIT = 0.15
         try:

@@ -165,7 +165,46 @@ class StdoutAudit(unittest.TestCase):
 
 class ModelFallback(unittest.TestCase):
     def setUp(self):
+        import tempfile
         r.MODEL_USED.update({"haiku": 0, "deepseek": 0})
+        self._count = r.AI_COUNT_PATH
+        r.AI_COUNT_PATH = os.path.join(tempfile.mkdtemp(), "ops", "ai_calls_replier.json")      # tests never touch ops/
+
+    def tearDown(self):
+        r.AI_COUNT_PATH = self._count
+
+    def test_daily_model_call_cap(self):
+        import unittest.mock as mock
+        self.assertEqual(r.AI_CALLS_PER_DAY, 150)
+        for _ in range(r.AI_CALLS_PER_DAY):
+            self.assertTrue(r.ai_take_call(today="2026-11-23"))
+        self.assertFalse(r.ai_take_call(today="2026-11-23"))                 # the 151st call is refused
+        self.assertTrue(r.ai_take_call(today="2026-11-24"))                  # a new UTC day starts again
+        self.assertEqual(r.ai_calls_today(today="2026-11-24"), 1)
+        # at the cap, llm_call makes NO model call (neither Haiku nor DeepSeek) and raises: the mail is skipped and retried tomorrow
+        import datetime
+        today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+        json = __import__("json")
+        json.dump({"date": today, "calls": r.AI_CALLS_PER_DAY}, open(r.AI_COUNT_PATH, "w"))
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k", "DEEPSEEK_API_KEY": "d"}), mock.patch.object(r, "_post_json") as post:
+            with self.assertRaises(RuntimeError):
+                r.llm_call("a", "b")
+        post.assert_not_called()
+
+    def test_each_attempt_counts_including_the_retry(self):
+        import unittest.mock as mock
+        seq = [RuntimeError("x"), {"content": [{"type": "text", "text": "H2"}]}]
+        def fake(url, body, headers):
+            v = seq.pop(0)
+            if isinstance(v, Exception):
+                raise v
+            return v
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k"}), mock.patch.object(r, "_post_json", fake), mock.patch.object(r.time, "sleep"):
+            r.llm_call("a", "b")
+        self.assertEqual(r.ai_calls_today(), 2)
+
+    def test_a_long_reply_is_cut_before_the_model(self):
+        self.assertLessEqual(len(r._user_prompt("s", "x" * 50000)), 1500 + 6000 + 100)
 
     def test_haiku_primary(self):
         import unittest.mock as mock

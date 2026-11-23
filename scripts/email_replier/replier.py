@@ -231,8 +231,33 @@ def _post_json(url, body, headers):
         return json.load(r)
 
 
+AI_CALLS_PER_DAY = int(os.environ.get("AI_CALLS_PER_DAY", "150"))     # 23 Nov QA round 3: <= 150 Haiku calls a UTC day (~$0.0025 each: <= $0.45 a day)
+AI_COUNT_PATH = os.environ.get("AI_COUNT_PATH", "ops/ai_calls_replier.json")
+REPLY_MAX_CHARS = 6000                                                  # one reply is cut here before it reaches the model (cost bound per call)
+
+
+def ai_calls_today(path=None, today=None):
+    path, today = path or AI_COUNT_PATH, today or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    try:
+        d = json.load(open(path, encoding="utf-8"))
+        return int(d.get("calls", 0)) if d.get("date") == today else 0
+    except Exception:
+        return 0
+
+
+def ai_take_call(path=None, today=None):
+    """Counts one model call before it is made. False when today's cap is used up. The count is written at once (a crash cannot lose it)."""
+    path, today = path or AI_COUNT_PATH, today or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    n = ai_calls_today(path, today)
+    if n >= AI_CALLS_PER_DAY:
+        return False
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    json.dump({"date": today, "calls": n + 1}, open(path, "w", encoding="utf-8"))
+    return True
+
+
 def _user_prompt(sent_text, reply_text):
-    return "OUR ORIGINAL MESSAGE (truncated):\n%s\n\nTHEIR REPLY:\n%s" % (sent_text[:1500], reply_text)
+    return "OUR ORIGINAL MESSAGE (truncated):\n%s\n\nTHEIR REPLY:\n%s" % (sent_text[:1500], reply_text[:REPLY_MAX_CHARS])
 
 
 def call_anthropic(user):
@@ -269,6 +294,8 @@ def llm_call(sent_text, reply_text):
     user = _user_prompt(sent_text, reply_text)
     if os.environ.get("ANTHROPIC_API_KEY"):
         for attempt in (1, 2):
+            if not ai_take_call():
+                raise RuntimeError("daily model-call cap reached")      # the mail is skipped and retried tomorrow
             try:
                 out = call_anthropic(user)
                 MODEL_USED["haiku"] += 1
@@ -276,6 +303,8 @@ def llm_call(sent_text, reply_text):
             except Exception:
                 if attempt == 1:
                     time.sleep(2)
+    if not ai_take_call():
+        raise RuntimeError("daily model-call cap reached")
     out = call_deepseek(user)
     MODEL_USED["deepseek"] += 1
     return out

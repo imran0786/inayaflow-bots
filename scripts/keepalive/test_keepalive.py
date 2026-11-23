@@ -137,6 +137,32 @@ class Main(unittest.TestCase):
         self.assertEqual(inputs["directory-agent.yml"], {"dry_run": "false"})   # its default is TRUE: a bare dispatch would be a dry run
 
 
+class WorstCase(unittest.TestCase):
+    """The hard daily caps of every robot that spends model money add up to <= $15 (Imran 22 Nov: "Spend 14, maybe $15 a day")."""
+
+    def test_sum_of_the_hard_caps(self):
+        base = os.path.join(ROOT, "scripts")
+        for sub in ("directory_agent", "hunter", "reports", "email_replier", "mail_router"):
+            sys.path.insert(0, os.path.join(base, sub))
+        import agent as ag, hunter as hu, backlink_batch as bb, replier as rp, router as rt
+        PER_CALL_HAIKU = 0.003                                   # 15k tokens in x $0.10/M + 3000 out x $0.50/M (scripts/reports/common.py prices)
+        table = {
+            "directory agent": ag.USD_CAP,
+            "hunter (runner enforces $0.60 a job)": hu.DAILY_CAP,
+            "backlink batch": bb.AI_USD_PER_DAY,
+            "ops report (20 calls x 8 runs)": 20 * 8 * PER_CALL_HAIKU,
+            "email replier": rp.AI_CALLS_PER_DAY * PER_CALL_HAIKU,
+            "mail router": rt.AI_CALLS_PER_DAY * PER_CALL_HAIKU,
+            "DEV poster (1 article a day, own cap)": 0.60,
+        }
+        total = sum(table.values())
+        self.assertLessEqual(total, 15.0, table)
+        self.assertEqual(ag.USD_CAP, 6.0)
+        self.assertEqual(hu.DAILY_CAP, 6.0)
+        self.assertEqual(bb.AI_USD_PER_DAY, 1.0)
+        self.assertLessEqual(rp.AI_CALLS_PER_DAY * PER_CALL_HAIKU, 0.45 + 1e-9)
+
+
 class Config(unittest.TestCase):
     wf = os.path.join(ROOT, ".github", "workflows")
 
