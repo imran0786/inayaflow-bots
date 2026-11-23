@@ -1,10 +1,12 @@
 name: DEV poster (one article a day on dev.to)
 
 # 23 Nov 2026. Publishes ONE original article a day to DEV (dev.to, @inayaflow) through the official Forem API (POST /api/articles).
-# Writer: Claude Sonnet 5.5 + web search (max $0.60 a run, one run a day). QA: Haiku + offline checks. Any FAIL = nothing is published,
-# the draft is saved to the PRIVATE repo (imran0786/genie, branch ops-dev-poster) for the Director.
-# SWITCH: scheduled runs are DRY (write + check, publish nothing) until the repository variable DEV_POSTER_LIVE is "true".
-# Manual runs default to dry_run=true. Public log = page slug, status words, cost only (never the key, never article text).
+# Writer: Claude Sonnet 5.5 + web search. QA: Haiku + offline checks. HARD cap $0.60 a UTC day over ALL runs (writer + QA + retry; the poster checks the
+# cost before each model call and keeps the day's spend in its state); at most 2 dry runs a day; one article a day (DEV is asked what we published today).
+# Any FAIL = nothing is published, the draft is saved to the PRIVATE repo (imran0786/genie, branch ops-dev-poster) for the Director.
+# SWITCH: NOTHING is published (scheduled OR manual run, dry_run input or not) unless the repository variable DEV_POSTER_LIVE is "true"; the poster
+# checks the switch itself as well. Manual runs default to dry_run=true. No run at all unless the private state was restored (fail closed).
+# Public log = page slug, status words, cost only (never the key, never article text).
 on:
   schedule:
     - cron: "23 13 * * *"
@@ -39,20 +41,31 @@ jobs:
         run: |
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           mkdir -p ops
-          if git clone -q --branch ops-dev-poster --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/logs 2>/dev/null; then
-            cp /tmp/logs/ops/dev_poster_state.json ops/ 2>/dev/null || true
-            cp /tmp/logs/ops/dev_poster_log.md ops/ 2>/dev/null || true
-            echo "state restored"
+          U="https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git"
+          if git ls-remote --exit-code --heads "$U" ops-dev-poster >/dev/null 2>&1; then rc=0; else rc=$?; fi
+          if [ "$rc" = "0" ]; then
+            if git clone -q --branch ops-dev-poster --depth 1 "$U" /tmp/logs 2>/dev/null; then
+              cp /tmp/logs/ops/dev_poster_state.json ops/ 2>/dev/null || true
+              cp /tmp/logs/ops/dev_poster_log.md ops/ 2>/dev/null || true
+              echo "DEV_STATE_OK=true" >> "$GITHUB_ENV"
+              echo "state restored"
+            else
+              echo "state branch exists but could not be read: no run"
+            fi
+          elif [ "$rc" = "2" ]; then
+            echo "DEV_STATE_OK=true" >> "$GITHUB_ENV"
+            echo "no state branch yet (first run)"
           else
-            echo "no state branch yet"
+            echo "private repo unreachable: no run"
           fi
 
       - name: Write, check and (when live) publish
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           DEV_API_KEY: ${{ secrets.DEV_API_KEY }}
-          DRY_RUN: ${{ github.event_name == 'schedule' && (vars.DEV_POSTER_LIVE == 'true' && 'false' || 'true') || github.event.inputs.dry_run || 'true' }}
-          DEV_RUN_USD_CAP: "0.60"
+          DEV_POSTER_LIVE: ${{ vars.DEV_POSTER_LIVE }}
+          DRY_RUN: ${{ vars.DEV_POSTER_LIVE == 'true' && ((github.event_name == 'schedule' && 'false') || github.event.inputs.dry_run || 'true') || 'true' }}
+          DEV_DAY_USD_CAP: "0.60"
         run: |
           echo "::add-mask::$DEV_API_KEY"
           python3 scripts/dev_poster/poster.py 2>/dev/null

@@ -9,6 +9,11 @@ article -> offline checks (words, title, tags, link, numbers vs the fetched sour
 -> Claude Haiku QA reads the article with the fetched source texts -> publish (POST https://dev.to/api/articles) -> read the
 live page and record whether OUR link is followed. FAIL = nothing is published and the draft goes to the PRIVATE repo.
 
+HARD LIMITS (QA round 4): $0.60 a UTC DAY in total (every run, dry or live, writer + QA + retry: the cost is checked BEFORE each model call with a
+reserve for that call and for the QA call that must follow; the day's spend is kept in the state file); at most 2 dry runs a day; one article a day
+(DEV itself is asked "what did we publish today?" before and a pending marker is written before the POST); nothing runs unless the private state was
+restored (DEV_STATE_OK); nothing is published unless BOTH the run is not dry AND the repository switch DEV_POSTER_LIVE is "true" (also for manual runs).
+
 PUBLIC repo: stdout = page slug, status words, counts, cost. Never the key, never article text. Everything else goes to the
 PRIVATE repo (imran0786/genie, branch ops-dev-poster) through the workflow. canonical_url is never set (our own article).
 DEV's Terms (section 11): content must be on-topic, high-quality and "not designed primarily for the purposes of promotion or
@@ -27,8 +32,13 @@ DRAFT_DIR = os.path.join(OPS, "dev_drafts")
 DRY = os.environ.get("DRY_RUN", "true").strip().lower() != "false"
 WRITER = os.environ.get("DEV_WRITER_MODEL", "claude-sonnet-5-5")
 QA_MODEL = os.environ.get("DEV_QA_MODEL", "claude-haiku-5-5")
-USD_CAP = float(os.environ.get("DEV_RUN_USD_CAP", "0.60"))
-RETRY_BELOW = float(os.environ.get("DEV_RETRY_BELOW_USD", "0.30"))   # a 2nd writer try only when this much or less has been spent
+DAY_CAP = float(os.environ.get("DEV_DAY_USD_CAP", "0.60"))        # HARD cap per UTC day over ALL runs (dry and live), writer + QA + retry
+USD_CAP = DAY_CAP                                                  # (older name, same value)
+WRITER_RESERVE = 0.30   # most one Sonnet request can cost: <= ~70k tokens in x $2/M + 6000 out x $10/M + 5 searches x $0.01 = ~$0.25
+QA_RESERVE = 0.02       # most the Haiku QA request can cost: <= 20k tokens in x $0.10/M + 700 out x $0.50/M = ~$0.003, rounded up
+RETRY_BELOW = DAY_CAP - WRITER_RESERVE - QA_RESERVE                # a 2nd writer try only when it can still be paid AND still be QA-checked
+MAX_DRY_PER_DAY = 2
+PAST_ARTICLES_KEPT = 30                                            # bodies whose 7-word shingles are remembered for the similarity check
 MAX_SEARCHES = int(os.environ.get("DEV_MAX_SEARCHES", "5"))
 REST_DAYS = 14
 MIN_WORDS, MAX_WORDS = 600, 1050
@@ -126,7 +136,15 @@ def seven_word_overlap(article, reference, n=7):
     return ""
 
 
-def check_article(art, target_url, page_text, source_texts, first_person_ok=False):
+def shingles(text, n=7):
+    """Set of short hashes of every n-word sequence (links and URLs stripped): what the state keeps of an article."""
+    import hashlib
+    t = re.sub(r"https?://\S+", " ", re.sub(r"```.*?```", " ", text, flags=re.S))
+    w = [x.lower() for x in re.findall(r"[A-Za-z0-9']+", t)]
+    return {hashlib.md5(" ".join(w[i:i + n]).encode()).hexdigest()[:10] for i in range(len(w) - n + 1)}
+
+
+def check_article(art, target_url, page_text, source_texts, first_person_ok=False, past_shingles=None):
     """-> list of problems (empty = passes the offline gate). art = dict(title, description, tags, body, sources).
     source_texts = {url: fetched text} for every external link in the body (None/'' = could not be fetched)."""
     p = []
@@ -182,13 +200,30 @@ def check_article(art, target_url, page_text, source_texts, first_person_ok=Fals
     ov = seven_word_overlap(re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", body), page_text)
     if ov:
         p.append("7-word overlap with the inayaflow.ai page")
+    # promotional density (DEV terms s.11: "not designed primarily for the purposes of promotion or creating backlinks"):
+    paras = [x for x in re.split(r"\n\s*\n", re.sub(r"```.*?```", " ", body, flags=re.S)) if x.strip() and not x.lstrip().startswith("#")]
+    at = [i for i, x in enumerate(paras) if target_url in x]
+    if at and (at[0] == 0 or at[-1] == len(paras) - 1):
+        p.append("our link is in the first or the last paragraph (reads as an ad)")
+    if len(re.findall(r"inayaflow", re.sub(r"\]\(https?://[^)\s]+\)", "]", body), re.I)) > 2:
+        p.append("the InayaFlow name appears more than 2 times")
+    if past_shingles:
+        mine = shingles(body)
+        shared = len(mine & set(past_shingles))
+        if shared >= 8 or (mine and shared / len(mine) >= 0.03):
+            p.append("too similar to our earlier DEV articles (%d shared 7-word runs)" % shared)
     return p[:12]
 
 
 # ---------- Anthropic (raw HTTP, metered) ----------
 
+class CapReached(RuntimeError):
+    pass
+
+
 class Meter:
-    def __init__(self):
+    def __init__(self, cap=None):
+        self.cap = DAY_CAP if cap is None else cap
         self.cost = 0.0
         self.calls = 0
         self.searches = 0
@@ -213,6 +248,9 @@ def anthropic(model, system, user, meter, post=None, tools=None, max_tokens=6000
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key and post is None:
         raise RuntimeError("no ANTHROPIC_API_KEY")
+    reserve = (WRITER_RESERVE + QA_RESERVE) if model == WRITER else QA_RESERVE      # a writer call must leave room for the QA call after it
+    if meter.cost + reserve > meter.cap + 1e-9:
+        raise CapReached("daily cost cap: %.3f spent + %.2f reserve > %.2f" % (meter.cost, reserve, meter.cap))
     body = {"model": model, "max_tokens": max_tokens, "system": system,
             "messages": messages or [{"role": "user", "content": user}]}
     if tools:
@@ -230,8 +268,6 @@ def run_writer(system, user, meter, post=None):
     messages = [{"role": "user", "content": user}]
     text = ""
     for _ in range(6):
-        if meter.cost >= USD_CAP - 0.12:
-            raise RuntimeError("cost cap reached before the article was finished")
         data = anthropic(WRITER, system, None, meter, post=post, tools=tools, max_tokens=6000, messages=messages)
         content = data.get("content") or []
         text = "".join(b.get("text", "") for b in content if b.get("type") == "text") or text
@@ -301,6 +337,40 @@ def publish(art, api_key, post=None):
     return (post or _post_json)(API, body, headers)
 
 
+def list_published(api_key, get=None):
+    """GET https://dev.to/api/articles/me/published (our own published articles, newest first). Raises on any failure (the caller fails closed)."""
+    headers = {"api-key": api_key, "accept": "application/vnd.forem.api-v1+json", "user-agent": UA}
+    if get:
+        return get(API + "/me/published?per_page=30", headers)
+    req = urllib.request.Request(API + "/me/published?per_page=30", headers=headers)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        data = json.load(r)
+    if not isinstance(data, list):
+        raise RuntimeError("unexpected answer")
+    return data
+
+
+def published_today(listing, today):
+    return any(str(a.get("published_at") or a.get("published_timestamp") or a.get("created_at") or "")[:10] == today for a in listing)
+
+
+def reconcile_pending(state, listing, today):
+    """A 'pending' marker means a POST was started and we do not know if it worked. Returns None / 'recorded' / 'cleared' / 'unknown'."""
+    pend = state.get("pending")
+    if not pend:
+        return None
+    hit = next((a for a in listing if a.get("title") == pend.get("title")), None)
+    if hit:
+        state["posts"].append({"date": str(hit.get("published_at") or pend["date"])[:10], "slug": pend.get("slug"), "title": pend.get("title"),
+                               "url": hit.get("url") or "", "id": hit.get("id"), "target": pend.get("target"), "rel": "unknown (recovered)"})
+        state.pop("pending", None)
+        return "recorded"
+    if pend.get("date") != today:
+        state.pop("pending", None)
+        return "cleared"
+    return "unknown"
+
+
 def link_rel(html, target_url):
     """rel attribute of OUR link in the live page HTML: 'followed' / 'nofollow' / 'ugc' / 'sponsored' / 'missing'."""
     for m in re.finditer(r"<a\b[^>]*>", html or "", re.I):
@@ -327,18 +397,65 @@ def log(line):
         f.write(line.rstrip() + "\n")
 
 
-def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep):
+def live_switch_on():
+    return os.environ.get("DEV_POSTER_LIVE", "").strip().lower() == "true"
+
+
+def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=None):
     getter = getter or c.http_get
     today = utc_today()
+    dry = DRY or not live_switch_on()          # publishing needs BOTH: a non-dry run AND the repository switch (scheduled and manual runs alike)
+    if os.environ.get("DEV_STATE_OK", "") != "true":
+        print("dev_poster: the private state could not be restored, nothing runs (fail closed)")
+        return "NO_STATE"
     state = read_json(STATE_PATH, {"posts": [], "attempts": {}})
-    meter = Meter()
+    state.setdefault("posts", [])
+    spent_before = float((state.get("spent") or {}).get(today, 0.0) or 0.0)
+    key = os.environ.get("DEV_API_KEY")
+    listing = None
+    if not dry:
+        if not key:
+            print("dev_poster: no DEV_API_KEY, stop")
+            return "NO_KEY"
+        try:
+            listing = list_published(key, get=lister)               # what does DEV itself say we published? (fail closed if it cannot answer)
+        except Exception as e:
+            print("dev_poster: cannot ask DEV what we published (%s), stop" % type(e).__name__)
+            return "DEV_CHECK_FAILED"
+        rec = reconcile_pending(state, listing, today)
+        if rec:
+            print("dev_poster: pending marker %s" % rec)
+            write_json(STATE_PATH, state)
+        if rec == "unknown":
+            print("dev_poster: an earlier POST today may or may not have worked, stop (the Director checks DEV)")
+            return "PENDING_UNKNOWN"
+        if published_today(listing, today):
+            print("dev_poster: DEV says we already published today, nothing to do")
+            return "ALREADY_DONE"
     if any(e.get("date") == today and e.get("url") for e in state["posts"]):
         print("dev_poster: already published today, nothing to do")
         return "ALREADY_DONE"
     tries_today = state.get("attempts", {}).get(today, 0)
-    if tries_today >= 2 and not DRY:
+    if tries_today >= 2 and not dry:
         print("dev_poster: 2 failed attempts today, stop (the Director looks at the drafts)")
         return "STOPPED"
+    dry_today = (state.get("dry") or {}).get(today, 0)
+    if dry and dry_today >= MAX_DRY_PER_DAY:
+        print("dev_poster: %d dry runs today already, stop" % dry_today)
+        return "DRY_LIMIT"
+    remaining = round(DAY_CAP - spent_before, 4)
+    if remaining < WRITER_RESERVE + QA_RESERVE:
+        print("dev_poster: the day's $%.2f is used up ($%.3f spent), stop" % (DAY_CAP, spent_before))
+        return "DAY_CAP"
+    meter = Meter(cap=remaining)
+
+    def save():
+        sp = state.setdefault("spent", {})
+        sp[today] = round(spent_before + meter.cost, 4)
+        for k in sorted(sp)[:-7]:
+            del sp[k]
+        write_json(STATE_PATH, state)
+
     page = pick_page(state, today)
     if not page:
         print("dev_poster: every page is resting, nothing to write")
@@ -350,13 +467,16 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep):
         print("dev_poster: target page not readable (HTTP %s), stop" % st)
         log("| %s | %s | STOP page not readable | | | $0 | HTTP %s |" % (today, slug, st))
         return "PAGE_DOWN"
-    past = [e.get("title", "") for e in state["posts"][-30:] if e.get("title")]
+    past = [e.get("title", "") for e in state["posts"][-PAST_ARTICLES_KEPT:] if e.get("title")]
+    past_sh = set()
+    for lst in (state.get("shingles") or [])[-PAST_ARTICLES_KEPT:]:
+        past_sh.update(lst)
     user = ("TARGET PAGE: %s\nIT IS: %s (%s)\nTOPIC AREA: %s\nPAGE TEXT (the only facts you may state about our page):\n%s\n\n"
             "ARTICLES WE ALREADY PUBLISHED (do not repeat these angles):\n%s\n\nWrite today's article now.") % (
         url, what, kind, topic, page_text, "\n".join("- " + t for t in past) or "(none yet)")
     problems, art, source_texts = ["no draft"], None, {}
     for attempt in (1, 2):
-        if attempt == 2 and meter.cost > RETRY_BELOW:
+        if attempt == 2 and meter.cost > RETRY_BELOW + 1e-9:
             break
         extra = "" if attempt == 1 else "\n\nYOUR LAST DRAFT FAILED THESE CHECKS, fix them: " + "; ".join(problems)
         try:
@@ -372,7 +492,7 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep):
         for u in ext:
             s2, _, h2 = getter(u)
             source_texts[u] = c.html_text(h2, 20000) if s2 == 200 else ""
-        problems = check_article(art, url, page_text, source_texts)
+        problems = check_article(art, url, page_text, source_texts, past_shingles=past_sh)
         sl, _, _ = getter(url)
         if sl != 200:
             problems.append("target link not live (HTTP %s)" % sl)
@@ -393,41 +513,49 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep):
             open(os.path.join(DRAFT_DIR, "%s_%s.md" % (today, slug)), "w", encoding="utf8").write(
                 "# FAILED DRAFT (not published)\n\nReasons: %s\n\nTitle: %s\n\n%s\n" % ("; ".join(reasons), art["title"], art["body"]))
         log("| %s | %s | FAIL, not published | | | %s | %s |" % (today, slug, cost, "; ".join(reasons)[:300]))
-        write_json(STATE_PATH, state)
+        if dry:
+            state["attempts"][today] = tries_today
+            state.setdefault("dry", {})[today] = dry_today + 1
+        save()
         print("dev_poster: FAIL page=%s problems=%d cost=%s" % (slug, len(reasons), cost))
         return "FAIL"
-    if DRY:
+    if dry:
         os.makedirs(DRAFT_DIR, exist_ok=True)
         open(os.path.join(DRAFT_DIR, "%s_%s_DRYRUN.md" % (today, slug)), "w", encoding="utf8").write(
             "# DRY RUN (not published)\n\nTitle: %s\nTags: %s\n\n%s\n" % (art["title"], ",".join(art["tags"]), art["body"]))
         log("| %s | %s | DRY RUN passed all checks, not published | | | %s | |" % (today, slug, cost))
         state["attempts"][today] = tries_today          # a dry run does not use up a real attempt
-        write_json(STATE_PATH, state)
+        state.setdefault("dry", {})[today] = dry_today + 1
+        save()
         print("dev_poster: DRY RUN ok page=%s cost=%s (publish endpoint NOT called)" % (slug, cost))
         return "DRY_OK"
-    key = os.environ.get("DEV_API_KEY")
-    if not key:
-        print("dev_poster: no DEV_API_KEY, stop")
-        return "NO_KEY"
+    state["pending"] = {"date": today, "slug": slug, "title": art["title"], "target": url}      # written BEFORE the POST: a crash leaves this behind
+    save()
     try:
         res = publish(art, key, post=post_dev)
     except urllib.error.HTTPError as e:
+        state.pop("pending", None)                      # DEV answered with a refusal: nothing was created
         log("| %s | %s | DEV refused HTTP %s | | | %s | %s |" % (today, slug, e.code, cost, "429 = rate limit; retried next run" if e.code == 429 else ""))
-        write_json(STATE_PATH, state)
+        save()
         print("dev_poster: DEV answered HTTP %s" % e.code)
         return "DEV_ERROR"
-    except Exception as e:
-        log("| %s | %s | DEV error %s | | | %s | |" % (today, slug, type(e).__name__, cost))
-        write_json(STATE_PATH, state)
-        print("dev_poster: DEV error %s" % type(e).__name__)
-        return "DEV_ERROR"
+    except Exception as e:                              # timeout or network error: the article MAY exist; the pending marker stays
+        log("| %s | %s | DEV error %s (pending marker kept) | | | %s | |" % (today, slug, type(e).__name__, cost))
+        save()
+        print("dev_poster: DEV error %s, pending marker kept" % type(e).__name__)
+        return "DEV_UNKNOWN"
     art_url = res.get("url") or ""
+    state.pop("pending", None)
+    state["posts"].append({"date": today, "slug": slug, "title": art["title"], "url": art_url, "id": res.get("id"), "target": url, "rel": "unknown (not read yet)"})
+    state.setdefault("shingles", []).append(sorted(shingles(art["body"])))
+    state["shingles"] = state["shingles"][-PAST_ARTICLES_KEPT:]
+    save()                                              # the article is recorded BEFORE the slow live-page read below
     sleeper(20)
     s3, _, live = getter(art_url) if art_url else (0, "", "")
     rel = link_rel(live, url) if s3 == 200 else "unknown (page HTTP %s)" % s3
-    state["posts"].append({"date": today, "slug": slug, "title": art["title"], "url": art_url, "id": res.get("id"), "target": url, "rel": rel})
+    state["posts"][-1]["rel"] = rel
     log("| %s | %s | PUBLISHED | %s | %s | %s | |" % (today, slug, art_url, rel, cost))
-    write_json(STATE_PATH, state)
+    save()
     print("dev_poster: PUBLISHED page=%s link=%s cost=%s" % (slug, rel, cost))
     return "PUBLISHED"
 
