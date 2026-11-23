@@ -42,10 +42,11 @@ jobs:
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           mkdir -p ops
           U="https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git"
-          if git ls-remote --exit-code --heads "$U" ops-dev-poster >/dev/null 2>&1; then rc=0; else rc=$?; fi
+          # a plain clone (the command every other robot uses) tells EXISTS / ABSENT / UNREACHABLE; ls-remote is not used (it failed here on the first run)
+          if res=$(bash scripts/dev_poster/state_branch.sh "$U" /tmp/logs ops-dev-poster); then rc=0; else rc=$?; fi
+          echo "state branch check: $res"
           if [ "$rc" = "0" ]; then
-            if git clone -q --branch ops-dev-poster --depth 1 "$U" /tmp/logs 2>/dev/null \
-               && python3 -c "import json,sys; d=json.load(open('/tmp/logs/ops/dev_poster_state.json')); sys.exit(0 if isinstance(d, dict) and isinstance(d.get('posts', []), list) else 1)" 2>/dev/null; then
+            if python3 -c "import json,sys; d=json.load(open('/tmp/logs/ops/dev_poster_state.json')); sys.exit(0 if isinstance(d, dict) and isinstance(d.get('posts', []), list) else 1)" 2>/dev/null; then
               cp /tmp/logs/ops/dev_poster_state.json ops/
               cp /tmp/logs/ops/dev_poster_log.md ops/ 2>/dev/null || true
               echo "DEV_STATE_OK=true" >> "$GITHUB_ENV"
@@ -53,7 +54,7 @@ jobs:
             else
               echo "state branch exists but the state file is missing or unreadable: no run"
             fi
-          elif [ "$rc" = "2" ]; then
+          elif [ "$rc" = "10" ]; then
             echo "DEV_STATE_OK=true" >> "$GITHUB_ENV"
             echo "DEV_FIRST_RUN=true" >> "$GITHUB_ENV"
             echo "no state branch yet (first run)"
@@ -82,19 +83,16 @@ jobs:
           set -e
           rm -rf /tmp/push
           U="https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git"
-          if git ls-remote --exit-code --heads "$U" ops-dev-poster >/dev/null 2>&1; then rc=0; else rc=$?; fi
+          if res=$(bash scripts/dev_poster/state_branch.sh "$U" /tmp/push ops-dev-poster); then rc=0; else rc=$?; fi
+          echo "state branch check: $res"
           if [ "$rc" = "0" ]; then
-            # the state branch EXISTS: it must be cloned, never re-created. If that fails, stop cleanly: no orphan branch, nothing pushed.
-            if ! git clone -q --branch ops-dev-poster --depth 1 "$U" /tmp/push 2>/dev/null; then
-              echo "state branch exists but cannot be cloned: NOT saving (no orphan branch is created); the state stays in this run's ops/ folder only"
-              exit 1
-            fi
-          elif [ "$rc" = "2" ]; then
-            git clone -q --depth 1 "$U" /tmp/push
+            :   # the state branch EXISTS and is checked out in /tmp/push: it is never re-created
+          elif [ "$rc" = "10" ]; then
+            # the repository was reached and has NO such branch: the only place an orphan branch is created (first save)
             cd /tmp/push && git checkout -q --orphan ops-dev-poster && git rm -rq --cached . >/dev/null 2>&1 || true
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
           else
-            echo "private repo unreachable: NOT saving"
+            echo "private repo unreachable or the state branch cannot be checked out: NOT saving (no orphan branch is created); the state stays in this run's ops/ folder only"
             exit 1
           fi
           mkdir -p /tmp/push/ops

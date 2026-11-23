@@ -291,7 +291,8 @@ class FlowFailures(unittest.TestCase):
     def test_workflow_separates_absent_branch_from_damaged_state(self):
         w = open(os.path.join(HERE, "..", "..", ".github", "workflows", "dev-poster.yml"), encoding="utf8").read()
         self.assertEqual(w.count("DEV_FIRST_RUN=true"), 1)         # only the "branch absent" arm
-        arm_ok = w.split('if [ "$rc" = "0" ]; then')[1].split('elif [ "$rc" = "2" ]')[0]
+        self.assertNotIn("git ls-remote", w)                           # the plain clone is the check (ls-remote failed on the first real run)
+        arm_ok = w.split('if [ "$rc" = "0" ]; then')[1].split('elif [ "$rc" = "10" ]')[0]
         self.assertIn("json.load(open('/tmp/logs/ops/dev_poster_state.json'))", arm_ok)      # a restored branch must carry a readable state file
         self.assertIn("state file is missing or unreadable: no run", arm_ok)
         self.assertNotIn("DEV_FIRST_RUN", arm_ok)
@@ -351,16 +352,17 @@ class FlowFailures(unittest.TestCase):
     def test_save_step_retries_and_never_creates_an_orphan_when_the_branch_exists(self):
         w = open(os.path.join(HERE, "..", "..", ".github", "workflows", "dev-poster.yml"), encoding="utf8").read()
         save = w.split("Save state, log and drafts")[1]
-        arm_exists = save.split('if [ "$rc" = "0" ]; then')[1].split('elif [ "$rc" = "2" ]')[0]
-        self.assertIn("exit 1", arm_exists)
+        arm_exists = save.split('if [ "$rc" = "0" ]; then')[1].split('elif [ "$rc" = "10" ]')[0]
         self.assertNotIn("--orphan", arm_exists)
-        arm_absent = save.split('elif [ "$rc" = "2" ]; then')[1].split("else")[0]
-        self.assertIn("--orphan", arm_absent)                       # only when ls-remote proves the branch is absent
+        arm_absent = save.split('elif [ "$rc" = "10" ]; then')[1].split("else")[0]
+        self.assertIn("--orphan", arm_absent)                       # only when the clone worked and the branch is absent
+        arm_bad = save.split('elif [ "$rc" = "10" ]; then')[1].split("\n          else\n")[1]
+        self.assertIn("exit 1", arm_bad)
         self.assertEqual(save.count("--orphan"), 1)
         self.assertIn("for i in 1 2 3 4; do", save)
         self.assertIn("git pull -q --rebase origin ops-dev-poster", save)
         self.assertIn('[ "$ok" = "1" ] ||', save)
-        self.assertIn("unreachable: NOT saving", save)
+        self.assertIn("NOT saving", save)
 
     def test_no_dev_key_stops_before_any_spend(self):
         os.environ.pop("DEV_API_KEY", None)
@@ -505,6 +507,70 @@ class FlowFailures(unittest.TestCase):
         self.assertEqual(w.count("DEV_STATE_OK=true"), 2)         # restored, or first run (branch really absent); unreachable = not set
         self.assertIn('DEV_DAY_USD_CAP: "0.60"', w)
         self.assertIn("group: dev-poster", w)
+
+
+class StateBranchScript(unittest.TestCase):
+    """scripts/dev_poster/state_branch.sh run for real against local git remotes (file:// URLs): the first real run failed with 'unreachable'."""
+
+    SH = os.path.join(HERE, "state_branch.sh")
+
+    def run_sh(self, url, dest, branch="ops-dev-poster"):
+        import subprocess, shutil
+        bash = shutil.which("bash")
+        r = subprocess.run([bash, self.SH, url, dest, branch], capture_output=True, text=True, timeout=120)
+        return r.returncode, r.stdout.strip(), r.stderr
+
+    def make_remote(self, with_branch):
+        import subprocess
+        base = tempfile.mkdtemp()
+        remote = os.path.join(base, "r.git")
+        g = lambda *a, cwd=None: subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True, check=True)
+        g("init", "-q", "--bare", "-b", "main", remote)
+        w = os.path.join(base, "w")
+        g("clone", "-q", remote, w)
+        g("config", "user.name", "t", cwd=w); g("config", "user.email", "t@example.com", cwd=w)
+        open(os.path.join(w, "README"), "w").write("code repo")
+        g("add", "-A", cwd=w); g("commit", "-q", "-m", "c", cwd=w); g("push", "-q", "origin", "HEAD:main", cwd=w)
+        if with_branch:
+            g("checkout", "-q", "--orphan", "ops-dev-poster", cwd=w)
+            g("rm", "-rqf", ".", cwd=w)
+            os.makedirs(os.path.join(w, "ops"))
+            json.dump({"posts": [], "attempts": {}}, open(os.path.join(w, "ops", "dev_poster_state.json"), "w"))
+            g("add", "-A", cwd=w); g("commit", "-q", "-m", "state", cwd=w); g("push", "-q", "origin", "ops-dev-poster", cwd=w)
+        return "file://" + remote.replace("\\", "/"), base
+
+    def test_branch_absent_means_first_run_is_allowed(self):
+        url, base = self.make_remote(with_branch=False)
+        rc, out, err = self.run_sh(url, os.path.join(base, "dest"))
+        self.assertEqual((rc, out), (10, "ABSENT"))
+        self.assertTrue(os.path.isdir(os.path.join(base, "dest", ".git")))        # the repo WAS reached: the save step can create the orphan branch in it
+
+    def test_branch_present_is_checked_out(self):
+        url, base = self.make_remote(with_branch=True)
+        rc, out, err = self.run_sh(url, os.path.join(base, "dest"))
+        self.assertEqual((rc, out), (0, "EXISTS"))
+        st = json.load(open(os.path.join(base, "dest", "ops", "dev_poster_state.json")))
+        self.assertEqual(st["posts"], [])
+
+    def test_real_unreachability_stays_fail_closed(self):
+        base = tempfile.mkdtemp()
+        rc, out, err = self.run_sh("file://" + os.path.join(base, "does-not-exist.git").replace("\\", "/"), os.path.join(base, "dest"))
+        self.assertEqual((rc, out), (20, "UNREACHABLE"))
+        self.assertNotIn("file://", out + err)                                       # nothing about the URL is printed
+
+    def test_empty_repository_counts_as_absent(self):
+        import subprocess
+        base = tempfile.mkdtemp()
+        remote = os.path.join(base, "e.git")
+        subprocess.run(["git", "init", "-q", "--bare", remote], check=True)
+        rc, out, err = self.run_sh("file://" + remote.replace("\\", "/"), os.path.join(base, "dest"))
+        self.assertEqual((rc, out), (10, "ABSENT"))
+
+    def test_both_workflow_steps_use_the_script_and_the_exit_codes(self):
+        w = open(os.path.join(HERE, "..", "..", ".github", "workflows", "dev-poster.yml"), encoding="utf8").read()
+        self.assertEqual(w.count("bash scripts/dev_poster/state_branch.sh"), 2)     # restore step and save step
+        self.assertEqual(w.count('"$rc" = "10"'), 2)                                 # ABSENT arm in both
+        self.assertIn("git clone", open(self.SH, encoding="utf8").read())
 
 
 class CodeChecks(unittest.TestCase):
