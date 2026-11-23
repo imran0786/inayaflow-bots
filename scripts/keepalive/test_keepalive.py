@@ -145,6 +145,12 @@ class WorstCase(unittest.TestCase):
         for sub in ("directory_agent", "hunter", "reports", "email_replier", "mail_router"):
             sys.path.insert(0, os.path.join(base, sub))
         import agent as ag, hunter as hu, backlink_batch as bb, replier as rp, router as rt, inbox_report as ir
+        dev_cap = 0.60                                           # same value as the poster's DAY_CAP; read from the poster itself where that file exists
+        if os.path.exists(os.path.join(base, "dev_poster", "poster.py")):
+            sys.path.insert(0, os.path.join(base, "dev_poster"))
+            import poster as pp
+            dev_cap = pp.DAY_CAP
+            self.assertLessEqual(dev_cap, 0.60)
         PER_CALL_HAIKU = 0.003                                   # 15k tokens in x $0.10/M + 3000 out x $0.50/M (scripts/reports/common.py prices)
         table = {
             "directory agent": ag.USD_CAP,
@@ -153,7 +159,7 @@ class WorstCase(unittest.TestCase):
             "ops report (daily counter, 160 calls)": ir.REPORT_AI_PER_DAY * PER_CALL_HAIKU,
             "email replier": rp.AI_CALLS_PER_DAY * PER_CALL_HAIKU,
             "mail router": rt.AI_CALLS_PER_DAY * PER_CALL_HAIKU,
-            "DEV poster (1 article a day, own cap)": 0.60,
+            "DEV poster (daily cap in poster.py when that file exists)": dev_cap,
         }
         total = sum(table.values())
         self.assertLessEqual(total, 15.0, table)
