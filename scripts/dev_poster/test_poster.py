@@ -138,6 +138,7 @@ class Flow(unittest.TestCase):
             if os.path.exists(f):
                 os.remove(f)
         os.environ["DEV_STATE_OK"] = "true"
+        os.environ["DEV_FIRST_RUN"] = "true"          # tests start from an empty state: that is only allowed on a first run
         os.environ["DEV_POSTER_LIVE"] = "true"
         os.environ["DEV_API_KEY"] = "SECRET-KEY-VALUE"
         P.DRY = False
@@ -146,6 +147,7 @@ class Flow(unittest.TestCase):
         P.pick_page = REAL_PICK                                   # never leak the patched picker into other tests
         P.DRY = True
         os.environ["DEV_STATE_OK"] = "true"
+        os.environ["DEV_FIRST_RUN"] = "true"
         os.environ["DEV_POSTER_LIVE"] = "true"
 
     def test_dry_run_never_calls_publish(self):
@@ -244,6 +246,55 @@ class FlowFailures(unittest.TestCase):
         post_ai, calls = fake_ai_factory(good_body())
         self.assertEqual(run_quiet(post_ai=post_ai, post_dev=lambda *a, **k: self.fail("published")), "NO_STATE")
         self.assertEqual(calls, [])
+
+    def test_a_call_that_raised_is_charged_its_reserve_and_saved(self):
+        def timeout(url, b, h):
+            raise TimeoutError("read timed out")                   # may or may not have been billed
+        self.assertEqual(run_quiet(post_ai=timeout), "FAIL")
+        st = P.read_json(P.STATE_PATH, {})
+        self.assertGreaterEqual(st["spent"][today()], P.WRITER_RESERVE)       # the writer call's reserve is booked
+        m = P.Meter()
+        with self.assertRaises(TimeoutError):
+            P.anthropic(P.QA_MODEL, "s", "u", m, post=timeout)
+        self.assertEqual((m.cost, m.calls), (P.QA_RESERVE, 1))
+        # repeated timeouts cannot spend past the day cap: the cost check sees the booked reserves
+        P.write_json(P.STATE_PATH, {"posts": [], "attempts": {}, "spent": {today(): 0.25}})
+        self.assertEqual(run_quiet(post_ai=timeout), "FAIL")
+        self.assertLessEqual(P.read_json(P.STATE_PATH, {})["spent"][today()], P.DAY_CAP)
+
+    def test_state_file_missing_after_the_branch_exists_stops_the_run(self):
+        os.environ.pop("DEV_FIRST_RUN", None)
+        post_ai, calls = fake_ai_factory(good_body())
+        if os.path.exists(P.STATE_PATH):
+            os.remove(P.STATE_PATH)
+        self.assertEqual(run_quiet(post_ai=post_ai), "NO_STATE")
+        self.assertEqual(calls, [])
+
+    def test_state_file_unreadable_or_wrong_shape_stops_the_run(self):
+        os.environ.pop("DEV_FIRST_RUN", None)
+        post_ai, calls = fake_ai_factory(good_body())
+        for content in ("{not json", "[1, 2]", '{"posts": "x"}', ""):
+            open(P.STATE_PATH, "w").write(content)
+            self.assertEqual(run_quiet(post_ai=post_ai), "NO_STATE", content)
+        self.assertEqual(calls, [])
+        # a damaged file is NOT replaced by an empty one
+        self.assertEqual(open(P.STATE_PATH).read(), "")
+
+    def test_first_run_flag_alone_lets_an_empty_state_start(self):
+        os.environ["DEV_FIRST_RUN"] = "true"
+        if os.path.exists(P.STATE_PATH):
+            os.remove(P.STATE_PATH)
+        P.DRY = True
+        post_ai, _ = fake_ai_factory(good_body())
+        self.assertEqual(run_quiet(post_ai=post_ai), "DRY_OK")
+
+    def test_workflow_separates_absent_branch_from_damaged_state(self):
+        w = open(os.path.join(HERE, "..", "..", ".github", "workflows", "dev-poster.yml"), encoding="utf8").read()
+        self.assertEqual(w.count("DEV_FIRST_RUN=true"), 1)         # only the "branch absent" arm
+        arm_ok = w.split('if [ "$rc" = "0" ]; then')[1].split('elif [ "$rc" = "2" ]')[0]
+        self.assertIn("json.load(open('/tmp/logs/ops/dev_poster_state.json'))", arm_ok)      # a restored branch must carry a readable state file
+        self.assertIn("state file is missing or unreadable: no run", arm_ok)
+        self.assertNotIn("DEV_FIRST_RUN", arm_ok)
 
     def test_no_dev_key_stops_before_any_spend(self):
         os.environ.pop("DEV_API_KEY", None)

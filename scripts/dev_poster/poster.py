@@ -256,7 +256,13 @@ def anthropic(model, system, user, meter, post=None, tools=None, max_tokens=6000
     if tools:
         body["tools"] = tools
     headers = {"x-api-key": key or "", "anthropic-version": "2023-06-01", "content-type": "application/json"}
-    data = (post or _post_json)("https://api.anthropic.com/v1/messages", body, headers)
+    try:
+        data = (post or _post_json)("https://api.anthropic.com/v1/messages", body, headers)
+    except BaseException:
+        # a timeout / network error / HTTP error: the request MAY have run and been billed. Charge the call's full reserve (it is saved with the day's spend).
+        meter.cost += WRITER_RESERVE if model == WRITER else QA_RESERVE
+        meter.calls += 1
+        raise
     meter.add(model, data.get("usage"))
     return data
 
@@ -397,6 +403,22 @@ def log(line):
         f.write(line.rstrip() + "\n")
 
 
+def load_state():
+    """The state dict, or None = do not run. A missing / unparsable / wrong-shaped file is only accepted as 'empty' on the very first run, i.e. when the
+    workflow saw that the private state branch does not exist yet (DEV_FIRST_RUN=true)."""
+    first = os.environ.get("DEV_FIRST_RUN", "") == "true"
+    if not os.path.exists(STATE_PATH):
+        return {"posts": [], "attempts": {}} if first else None
+    try:
+        d = json.load(open(STATE_PATH, encoding="utf8"))
+    except Exception:
+        return None
+    if not isinstance(d, dict) or not isinstance(d.get("posts", []), list):
+        return None
+    d.setdefault("attempts", {})
+    return d
+
+
 def live_switch_on():
     return os.environ.get("DEV_POSTER_LIVE", "").strip().lower() == "true"
 
@@ -408,7 +430,10 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
     if os.environ.get("DEV_STATE_OK", "") != "true":
         print("dev_poster: the private state could not be restored, nothing runs (fail closed)")
         return "NO_STATE"
-    state = read_json(STATE_PATH, {"posts": [], "attempts": {}})
+    state = load_state()
+    if state is None:
+        print("dev_poster: the state file is missing or unreadable although the private branch exists, nothing runs (fail closed)")
+        return "NO_STATE"
     state.setdefault("posts", [])
     spent_before = float((state.get("spent") or {}).get(today, 0.0) or 0.0)
     key = os.environ.get("DEV_API_KEY")
