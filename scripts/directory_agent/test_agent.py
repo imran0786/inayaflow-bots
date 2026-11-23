@@ -69,7 +69,7 @@ class Listings(unittest.TestCase):
 class Budget(unittest.TestCase):
     def test_defaults_match_the_workflow(self):
         self.assertEqual(ag.RUN_SECONDS, 8400)                 # below the 150-minute step timeout
-        self.assertEqual(ag.USD_CAP, 8.0)
+        self.assertEqual(ag.USD_CAP, 6.5)
 
     def test_dollar_cap_counts_priced_and_unpriced_attempts(self):
         import tempfile
