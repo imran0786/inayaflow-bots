@@ -35,7 +35,7 @@ class Hunter(unittest.TestCase):
 
     def test_daily_stop_keeps_worst_case_under_8_dollars(self):
         import tempfile
-        self.assertEqual(hu.DAILY_CAP, 8.0)
+        self.assertEqual(hu.DAILY_CAP, 7.2)
         now = at(21)
         with tempfile.TemporaryDirectory() as w:
             os.makedirs(os.path.join(w, "jobs", "done"))
@@ -43,23 +43,43 @@ class Hunter(unittest.TestCase):
                 open(os.path.join(w, "jobs", "done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)), "w").close()
             open(os.path.join(w, "jobs", "done", "2026-11-22-0900-hunter-old-x.md"), "w").close()    # yesterday does not count
             self.assertEqual(hu.queued_today(w, now), 12)
-        # at most floor(8 / 0.60) = 13 jobs a day can ever be queued
-        self.assertEqual(int(hu.DAILY_CAP // hu.MAX_COST), 13)
-        self.assertLessEqual(13 * hu.MAX_COST, 8.0)
+        # at most floor(7.2 / 0.60) = 12 jobs a day can ever be queued
+        self.assertEqual(int(round(hu.DAILY_CAP / hu.MAX_COST)), 12)
+        # a hunter job still pending from yesterday counts against today; a done one from yesterday does not
+        with tempfile.TemporaryDirectory() as w:
+            for d in ("pending", "done"):
+                os.makedirs(os.path.join(w, "jobs", d))
+            open(os.path.join(w, "jobs", "pending", "2026-11-22-2100-hunter-old-x.md"), "w").close()
+            open(os.path.join(w, "jobs", "done", "2026-11-22-0900-hunter-old2-x.md"), "w").close()
+            open(os.path.join(w, "jobs", "pending", "2026-11-23-0900-other-job.md"), "w").close()    # not a hunter job
+            self.assertEqual(hu.queued_today(w, now), 1)
 
-    def test_main_stops_at_the_daily_cap(self):
+    def run_main(self, files, hour=21, max_waiting=99):
         import tempfile
         w = tempfile.mkdtemp()
-        os.makedirs(os.path.join(w, "jobs", "done"))
-        for i in range(12):
-            open(os.path.join(w, "jobs", "done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)), "w").close()
+        for d, n in files:
+            os.makedirs(os.path.join(w, "jobs", d), exist_ok=True)
+            open(os.path.join(w, "jobs", d, n), "w").close()
         saved = (c.clone, c.commit_push, c.now, c.DRY, hu.MAX_WAITING)
-        c.clone, c.commit_push, c.now, c.DRY, hu.MAX_WAITING = (lambda *a, **k: w), (lambda *a, **k: True), (lambda: at(21)), False, 99
+        c.clone, c.commit_push, c.now, c.DRY, hu.MAX_WAITING = (lambda *a, **k: w), (lambda *a, **k: True), (lambda: at(hour)), False, max_waiting
         try:
             hu.main()
         finally:
             c.clone, c.commit_push, c.now, c.DRY, hu.MAX_WAITING = saved
-        self.assertEqual(len([n for n in os.listdir(os.path.join(w, "jobs", "pending"))]), 1)   # 12 + 1 = 13 jobs = $7.80; the 14th is refused
+        return len(os.listdir(os.path.join(w, "jobs", "pending")))
+
+    def test_main_11_done_plus_2_picks_queues_one_more_only_if_it_fits(self):
+        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(10)]
+        self.assertEqual(self.run_main(done), 2)                  # 10 + 2 = 12 jobs = $7.20: both fit (the QA double-count case)
+        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(11)]
+        self.assertEqual(self.run_main(done), 1)                  # 11 + 1 = 12 fits, the 13th is refused
+        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(12)]
+        self.assertEqual(self.run_main(done), 0)                  # 12 already: nothing
+
+    def test_main_old_pending_jobs_count_against_today(self):
+        old = [("pending", "2026-11-22-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(5)]
+        done = [("done", "2026-11-23-%02d00-hunter-q%d-x.md" % (i, i)) for i in range(6)]
+        self.assertEqual(self.run_main(old + done), 5 + 1)        # 5 carried over + 6 done = 11: one more fits (12), the second does not
 
     def test_already_queued_survives_a_later_minute(self):
         import tempfile

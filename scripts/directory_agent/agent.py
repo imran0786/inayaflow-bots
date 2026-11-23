@@ -19,8 +19,9 @@ SUCCESS_CAP = int(os.environ.get("DAILY_SUCCESS_CAP", "30"))   # 22 Nov 2026: 10
 ATTEMPT_CAP = int(os.environ.get("DAILY_ATTEMPT_CAP", "150"))  # site attempts per UTC day, all runs together (was 10 / 50 before 22-23 Nov 2026)
 TOOL_ATTEMPT_CAP = int(os.environ.get("DAILY_TOOL_ATTEMPT_CAP", "200"))  # extra per-tool listings a day, on top of the site attempts
 RUN_SECONDS = int(os.environ.get("RUN_SECONDS", "8400"))   # per run (same value as the workflow)
-USD_CAP = float(os.environ.get("DAILY_USD_CAP", "6.5"))      # Director budget 23 Nov 2026: this robot may spend at most $6.50 a UTC day (23 Nov: was $6, hunter total stop $8, worst case of all robots <= $15; Imran 22 Nov: "Spend 14, maybe $15 a day" across all robots), all runs together
+USD_CAP = float(os.environ.get("DAILY_USD_CAP", "6"))      # Director budget 23 Nov 2026 (QA round 2): at most $6 a UTC day, all runs together; a new attempt only starts when spent + ATTEMPT_MAX_USD fits under it; hunter stop is $7.20
 UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "0.25"))  # ASSUMPTION used only when the library gives no price for an attempt
+ATTEMPT_MAX_USD = float(os.environ.get("ATTEMPT_MAX_USD", "1.00"))  # RESERVE for one attempt (primary + fallback model): none starts unless spent + this fits under USD_CAP; a dearer attempt is printed as OVER_RESERVE
 SPEND_PATH = os.path.join(ROOT, "ops", "directory_agent_spend.json")
 ASSET_DIR = os.path.join(ROOT, "data", "assets")
 STATE_PATH = os.path.join(ROOT, "ops", "directory_agent_state.json")
@@ -543,6 +544,8 @@ def main():
         nonlocal tot
         r = run_one(s, product)
         tot += r["cost"] or 0
+        if (r["cost"] or 0) > ATTEMPT_MAX_USD:
+            print("OVER_RESERVE | %s | attempt cost $%.2f is above the $%.2f reserve" % (s["name"], r["cost"], ATTEMPT_MAX_USD), flush=True)
         add_spend(spend, today, r)    # every attempt counts, dry runs too (they use the model)
         cost_s = "n/a" if r["cost"] is None else ("$%.3f%s" % (r["cost"], "~" if r["cost_estimated"] else ""))
         pname = product["id"] if product else "homepage"
@@ -556,7 +559,7 @@ def main():
             json.dump(state, open(STATE_PATH, "w", encoding="utf8"), indent=1)
 
     def stop_now():
-        return time.time() - t_start > RUN_SECONDS or spent_today(spend, today) >= USD_CAP
+        return time.time() - t_start > RUN_SECONDS or spent_today(spend, today) + ATTEMPT_MAX_USD > USD_CAP
 
     def tool_listings(s):
         """Each free tool as its OWN listing on this directory. Stops for the site when it allows one listing per company,

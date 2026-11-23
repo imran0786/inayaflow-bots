@@ -26,7 +26,7 @@ WORK = os.environ.get("HUNTER_WORK", "/tmp/ops_jobs_hunter")
 MAX_COST = float(os.environ.get("HUNTER_MAX_COST", "0.60"))       # job-runner ceiling is $1; Director budget 23 Nov: 8 jobs a day at $0.60
 MAX_SEARCHES = int(os.environ.get("HUNTER_MAX_SEARCHES", "10"))   # job-runner ceiling is 10
 JOBS_PER_RUN = int(os.environ.get("HUNTER_JOBS_PER_RUN", "2"))     # 23 Nov: 2 research jobs per 3-hour run (was 1): 16 a day at $0.60 max
-DAILY_CAP = float(os.environ.get("HUNTER_DAILY_CAP", "8"))          # 23 Nov: hunter total stop per UTC day: queued jobs x their max cost may not pass this
+DAILY_CAP = float(os.environ.get("HUNTER_DAILY_CAP", "7.2"))          # 23 Nov: hunter total stop per UTC day: queued jobs x their max cost may not pass this
 MAX_WAITING = int(os.environ.get("HUNTER_MAX_WAITING", "6"))      # never pile up more hunter jobs than the runner can clear
 
 PAGES = [  # (slug used in the job id and the result's "page" field, URL, what it is, topic words the prospect must be about)
@@ -129,12 +129,16 @@ def already_queued(work, now, page, typ):
 
 
 def queued_today(work, now):
-    """How many hunter jobs exist for today (UTC) in any folder: the worst-case spend is this x MAX_COST."""
+    """How many hunter jobs count against today's budget: every job queued today (UTC) in any folder PLUS every hunter job still
+    pending from an earlier day (it will run today and spend today's money). Worst-case spend = this x MAX_COST.
+    Counts files on disk, so a job written a moment ago is already included: never add it again."""
     day = now.strftime("%Y-%m-%d")
     seen = set()
     for d in ("pending", "briefs", "done", "failed"):
         try:
-            seen.update(n for n in os.listdir(os.path.join(work, "jobs", d)) if n.startswith(day) and "-hunter-" in n)
+            for n in os.listdir(os.path.join(work, "jobs", d)):
+                if "-hunter-" in n and (n.startswith(day) or d == "pending"):
+                    seen.add(n)
         except OSError:
             pass
     return len(seen)
@@ -151,12 +155,13 @@ def main():
     os.makedirs(os.path.join(work, "jobs", "pending"), exist_ok=True)
     queued = []
     for page, typ, n in picks:
-        w = waiting(work) + len(queued)
+        w = waiting(work)                                  # counts the files written earlier in this loop too
         if w >= MAX_WAITING:
             print("hunter: %d hunter job(s) still waiting, nothing more queued" % w)
             break
-        if (queued_today(work, now) + len(queued) + 1) * MAX_COST > DAILY_CAP + 1e-9:
-            print("hunter: daily stop reached (%d job(s) today x $%.2f, cap $%.2f)" % (queued_today(work, now) + len(queued), MAX_COST, DAILY_CAP))
+        today = queued_today(work, now)                    # same: no "+ len(queued)"
+        if (today + 1) * MAX_COST > DAILY_CAP + 1e-9:
+            print("hunter: daily stop reached (%d job(s) count for today x $%.2f, cap $%.2f)" % (today, MAX_COST, DAILY_CAP))
             break
         if already_queued(work, now, page, typ):
             print("hunter: slot already queued today (%s/%s)" % (page[0], typ[0]))

@@ -23,6 +23,8 @@ API = "https://api.github.com"
 FACTOR = 1.5              # dispatch when the newest run is older than FACTOR x interval
 RED_FACTOR = 2.0          # report shows RED when older than RED_FACTOR x interval
 MAX_DISPATCH_PER_HOUR = 1
+BUSY_MAX_MIN = 180          # a run queued / in progress for longer than this is stuck: it no longer blocks a dispatch and the report shows RED
+BUSY_MAX_OVERRIDE = {"heartbeat.yml": 400}   # the heartbeat job legitimately runs ~5 h 40 min (timeout 350)
 BUSY = ("queued", "in_progress", "waiting", "pending", "requested")
 
 # (workflow file, cron interval in minutes, inputs sent when started by hand-dispatch). Spend robots get dry_run=false as the heartbeat does.
@@ -50,7 +52,7 @@ def parse_time(s):
 
 def newest_run(runs):
     """Newest run that really started (a cancelled run before it began does not count as the robot running)."""
-    ok = [r for r in runs if r.get("conclusion") not in ("skipped",)]
+    ok = [r for r in runs if r.get("conclusion") not in ("skipped", "cancelled")]
     return max(ok, key=lambda r: r["created_at"]) if ok else None
 
 
@@ -63,10 +65,17 @@ def age_minutes(run, now):
     return None if run is None else int((now - parse_time(run["created_at"])).total_seconds() // 60)
 
 
-def decide(interval, runs, now):
-    """-> (action, reason). action is 'dispatch' or 'skip'."""
+def stuck_busy(wf, runs, now):
+    """True when a run has been queued / in progress for longer than its limit (stuck: waiting for approval, runner lost ...)."""
+    lim = BUSY_MAX_OVERRIDE.get(wf, BUSY_MAX_MIN)
+    return any(r.get("status") in BUSY and (now - parse_time(r["created_at"])).total_seconds() > lim * 60 for r in runs)
+
+
+def decide(interval, runs, now, wf=""):
+    """-> (action, reason). action is 'dispatch' or 'skip'. A busy run older than its limit is ignored (stuck); a fresh one blocks."""
+    lim = BUSY_MAX_OVERRIDE.get(wf, BUSY_MAX_MIN)
     for r in runs:
-        if r.get("status") in BUSY:
+        if r.get("status") in BUSY and (now - parse_time(r["created_at"])).total_seconds() <= lim * 60:
             return "skip", "already queued or running"
     recent = 0
     for r in runs:
@@ -82,8 +91,10 @@ def decide(interval, runs, now):
     return "skip", "on time (%d min)" % age
 
 
-def flag(interval, runs, now):
+def flag(interval, runs, now, wf=""):
     age = age_minutes(newest_run(runs), now)
+    if stuck_busy(wf, runs, now):
+        return "RED (stuck)"
     if age is None or age > RED_FACTOR * interval:
         return "RED"
     return "ok"
@@ -123,8 +134,8 @@ def age_section(token, now=None, fetch=None, robots=ROBOTS):
             L.append("| %s | %d min | ? | ? | UNKNOWN (%s) |" % (wf[:-4], interval, type(e).__name__))
             continue
         a, s = age_minutes(newest_run(runs), now), age_minutes(last_success(runs), now)
-        f = flag(interval, runs, now)
-        reds += f == "RED"
+        f = flag(interval, runs, now, wf)
+        reds += f.startswith("RED")
         L.append("| %s | %d min | %s | %s | %s |" % (wf[:-4], interval, "never" if a is None else "%d min ago" % a, "never" if s is None else "%d min ago" % s, f))
     L.insert(1, "RED robots: %d" % reds if reds else "All robots on time.")
     return "\n".join(L) + "\n", reds
@@ -137,19 +148,20 @@ def main():
         print("keepalive: no token")
         return 1
     now = datetime.datetime.now(datetime.timezone.utc)
-    started = 0
+    started = errors = 0
     for wf, interval, inputs in ROBOTS:
         try:
             runs = fetch_runs(token, wf)
-            action, why = decide(interval, runs, now)
+            action, why = decide(interval, runs, now, wf)
             if action == "dispatch" and not dry:
                 dispatch(token, wf, inputs)
                 started += 1
             print("keepalive: %s %s (%s)%s" % (wf, action, why, " [dry]" if dry and action == "dispatch" else ""))
         except Exception as e:
+            errors += 1
             print("keepalive: %s ERROR %s" % (wf, type(e).__name__))
-    print("keepalive: started %d" % started)
-    return 0
+    print("keepalive: started %d errors %d" % (started, errors))
+    return 1 if errors == len(ROBOTS) else 0     # every robot failed (bad token, rate limit): make the check itself go red
 
 
 if __name__ == "__main__":

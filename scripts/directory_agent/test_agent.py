@@ -69,7 +69,8 @@ class Listings(unittest.TestCase):
 class Budget(unittest.TestCase):
     def test_defaults_match_the_workflow(self):
         self.assertEqual(ag.RUN_SECONDS, 8400)                 # below the 150-minute step timeout
-        self.assertEqual(ag.USD_CAP, 6.5)
+        self.assertEqual(ag.USD_CAP, 6.0)
+        self.assertEqual(ag.ATTEMPT_MAX_USD, 1.0)
 
     def test_dollar_cap_counts_priced_and_unpriced_attempts(self):
         import tempfile
@@ -105,7 +106,7 @@ class ManualRuns(unittest.TestCase):
         d = tempfile.mkdtemp()
         batch = os.path.join(d, "batch.json")
         json.dump({"sites": [{"name": "S%d" % i, "url": "https://s%d.example/submit" % i} for i in range(5)]}, open(batch, "w"))
-        saved = (ag.STATE_PATH, ag.SPEND_PATH, ag.LOG_PATH, ag.SUMMARY_PATH, ag.OLD_STATE_PATH, ag.VSTATE_PATH, ag.USD_CAP, ag.run_one, ag.WITH_TOOLS, ag.ROOT)
+        saved = (ag.STATE_PATH, ag.SPEND_PATH, ag.LOG_PATH, ag.SUMMARY_PATH, ag.OLD_STATE_PATH, ag.VSTATE_PATH, ag.USD_CAP, ag.run_one, ag.WITH_TOOLS, ag.ROOT, ag.ATTEMPT_MAX_USD)
         calls = []
 
         def fake(s, product=None):
@@ -114,15 +115,15 @@ class ManualRuns(unittest.TestCase):
         ag.STATE_PATH, ag.SPEND_PATH = os.path.join(d, "ops", "state.json"), os.path.join(d, "ops", "spend.json")
         ag.LOG_PATH, ag.SUMMARY_PATH = os.path.join(d, "ops", "log.md"), os.path.join(d, "ops", "sum.md")
         ag.OLD_STATE_PATH, ag.VSTATE_PATH = os.path.join(d, "ops", "old.json"), os.path.join(d, "ops", "v.json")
-        ag.USD_CAP, ag.run_one, ag.WITH_TOOLS = 0.5, fake, True
+        ag.USD_CAP, ag.run_one, ag.WITH_TOOLS, ag.ATTEMPT_MAX_USD = 1.0, fake, True, 0.5
         os.environ["BATCH_FILE"] = batch
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 ag.main()
         finally:
             os.environ.pop("BATCH_FILE", None)
-            (ag.STATE_PATH, ag.SPEND_PATH, ag.LOG_PATH, ag.SUMMARY_PATH, ag.OLD_STATE_PATH, ag.VSTATE_PATH, ag.USD_CAP, ag.run_one, ag.WITH_TOOLS, ag.ROOT) = saved
-        self.assertEqual(len(calls), 2, calls)          # homepage 0.4, first tool 0.8 >= 0.5: nothing more, tool or site
+            (ag.STATE_PATH, ag.SPEND_PATH, ag.LOG_PATH, ag.SUMMARY_PATH, ag.OLD_STATE_PATH, ag.VSTATE_PATH, ag.USD_CAP, ag.run_one, ag.WITH_TOOLS, ag.ROOT, ag.ATTEMPT_MAX_USD) = saved
+        self.assertEqual(len(calls), 2, calls)          # cap 1.0, reserve 0.5: homepage (0+0.5 fits) 0.4, tool (0.4+0.5 fits) 0.8, third (0.8+0.5 > 1.0) refused BEFORE it starts
         spend = json.load(open(os.path.join(d, "ops", "spend.json")))
         self.assertAlmostEqual(sum(spend.values()), 0.8)  # the spend file was updated after each attempt
 

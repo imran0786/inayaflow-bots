@@ -25,7 +25,7 @@ class Decide(unittest.TestCase):
 
     def test_busy_never_dispatched(self):
         for st in ("queued", "in_progress", "waiting"):
-            self.assertEqual(k.decide(60, [run(500, status=st, conclusion=None), run(900)], NOW)[0], "skip")
+            self.assertEqual(k.decide(60, [run(100, status=st, conclusion=None), run(900)], NOW)[0], "skip")
 
     def test_one_dispatch_per_hour(self):
         self.assertEqual(k.decide(10, [run(30, event="workflow_dispatch"), run(500)], NOW)[0], "skip")
@@ -33,6 +33,19 @@ class Decide(unittest.TestCase):
 
     def test_failed_recent_run_counts_as_ran(self):
         self.assertEqual(k.decide(60, [run(10, conclusion="failure")], NOW)[0], "skip")   # no re-run storm on a failing robot
+
+    def test_cancelled_run_does_not_count(self):
+        self.assertEqual(k.decide(60, [run(5, conclusion="cancelled"), run(200)], NOW)[0], "dispatch")
+
+    def test_stuck_busy_run_does_not_block_but_a_fresh_one_does(self):
+        old = run(200, status="queued", conclusion=None)
+        self.assertEqual(k.decide(60, [old, run(300)], NOW, "hunter.yml")[0], "dispatch")
+        self.assertEqual(k.flag(60, [old, run(10)], NOW, "hunter.yml"), "RED (stuck)")
+        fresh = run(100, status="in_progress", conclusion=None)
+        self.assertEqual(k.decide(60, [fresh, run(300)], NOW, "hunter.yml")[0], "skip")
+        hb = run(300, status="in_progress", conclusion=None)      # the heartbeat legitimately runs for hours
+        self.assertEqual(k.decide(180, [hb, run(900)], NOW, "heartbeat.yml")[0], "skip")
+        self.assertEqual(k.flag(180, [hb, run(10)], NOW, "heartbeat.yml"), "ok")
 
     def test_skipped_run_does_not_count(self):
         self.assertEqual(k.decide(60, [run(5, conclusion="skipped"), run(200)], NOW)[0], "dispatch")
@@ -60,6 +73,70 @@ class Report(unittest.TestCase):
         self.assertIn("RED robots: 1", text)
 
 
+class Main(unittest.TestCase):
+    """main() driven with a fake API: no network."""
+
+    def setUp(self):
+        self.saved = (k.fetch_runs, k.api, k.dispatch)
+        self.env = {x: os.environ.get(x) for x in ("GITHUB_TOKEN", "KEEPALIVE_DRY")}
+        os.environ["GITHUB_TOKEN"] = "x"
+        os.environ.pop("KEEPALIVE_DRY", None)
+        self.sent = []
+
+    def tearDown(self):
+        k.fetch_runs, k.api, k.dispatch = self.saved
+        for key, v in self.env.items():
+            if v is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = v
+
+    def quiet(self):
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = k.main()
+        return code, buf.getvalue()
+
+    def test_one_robot_error_does_not_stop_the_others(self):
+        def fetch(token, wf):
+            if wf == "outbox.yml":
+                raise RuntimeError("boom")
+            return []                                           # never ran: dispatch
+        k.fetch_runs = fetch
+        k.dispatch = lambda token, wf, inputs, repo=None: self.sent.append(wf)
+        code, out = self.quiet()
+        self.assertEqual(code, 0)
+        self.assertEqual(len(self.sent), len(k.ROBOTS) - 1)
+        self.assertNotIn("outbox.yml", self.sent)
+        self.assertIn("outbox.yml ERROR RuntimeError", out)
+        self.assertNotIn("boom", out)                           # only the class name is printed
+
+    def test_all_robots_erroring_returns_1(self):
+        def fetch(token, wf):
+            raise RuntimeError("rate limit")
+        k.fetch_runs = fetch
+        self.assertEqual(self.quiet()[0], 1)
+
+    def test_dry_run_dispatches_nothing(self):
+        os.environ["KEEPALIVE_DRY"] = "true"
+        k.fetch_runs = lambda token, wf: []
+        k.dispatch = lambda *a, **kw: self.sent.append(a)
+        code, out = self.quiet()
+        self.assertEqual((code, self.sent), (0, []))
+        self.assertIn("[dry]", out)
+
+    def test_dispatch_sends_ref_main_and_the_inputs(self):
+        calls = []
+        k.api = lambda method, path, token, body=None: calls.append((method, path, body)) or {}
+        k.dispatch("t", "backlink-batch.yml", {"dry_run": "false"}, repo="o/r")
+        k.dispatch("t", "hunter.yml", {}, repo="o/r")
+        self.assertEqual(calls[0], ("POST", "/repos/o/r/actions/workflows/backlink-batch.yml/dispatches", {"ref": "main", "inputs": {"dry_run": "false"}}))
+        self.assertEqual(calls[1][2], {"ref": "main"})
+        inputs = {f: i for f, _, i in k.ROBOTS}
+        self.assertEqual(inputs["directory-agent.yml"], {"dry_run": "false"})   # its default is TRUE: a bare dispatch would be a dry run
+
+
 class Config(unittest.TestCase):
     wf = os.path.join(ROOT, ".github", "workflows")
 
@@ -84,6 +161,16 @@ class Config(unittest.TestCase):
         self.assertIn("actions: write", t)
         self.assertIn("group: keepalive-check", t)
         self.assertIn("cancel-in-progress: false", t)
+
+    def test_ops_report_has_no_write_permission(self):
+        t = open(os.path.join(self.wf, "ops-report.yml"), encoding="utf8").read()
+        block = t.split("permissions:", 1)[1].split("concurrency:", 1)[0]
+        self.assertIn("actions: read", block)
+        self.assertIn("contents: read", block)
+        self.assertNotIn("write", block)
+        ka = open(os.path.join(self.wf, "keepalive-check.yml"), encoding="utf8").read().split("permissions:", 1)[1].split("concurrency:", 1)[0]
+        self.assertIn("contents: read", ka)
+        self.assertNotIn("contents: write", ka)
 
     def test_every_scheduled_workflow_is_watched(self):
         watched = {f for f, _, _ in k.ROBOTS}
