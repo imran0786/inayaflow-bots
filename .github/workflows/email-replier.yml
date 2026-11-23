@@ -108,5 +108,11 @@ jobs:
           git add ops/email_replier_log.md ops/for_imran.md ops/email_replier_drafts.md ops/ai_calls_replier.json 2>/dev/null || true
           if git diff --cached --quiet; then echo "no log changes"; exit 0; fi
           git commit -q -m "ops: email replier log"
-          git push -q origin ops-email-logs
+          ok=0
+          for i in 1 2 3 4; do
+            if git push -q origin ops-email-logs; then ok=1; break; fi
+            git pull -q --rebase origin ops-email-logs || git rebase --abort || true
+            sleep 3
+          done
+          [ "$ok" = "1" ] || { echo "push failed after 4 tries: the saved daily model-call count may be stale"; exit 1; }
           echo "logs saved"

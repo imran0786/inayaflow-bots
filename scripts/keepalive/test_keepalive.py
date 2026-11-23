@@ -207,6 +207,13 @@ class Config(unittest.TestCase):
         "dev-poster.yml": "publishes to dev.to only when its own repository switch DEV_POSTER_LIVE is true; a keep-alive dispatch would run it dry (default dry_run) or bypass the switch, so a missed day is simply missed",
     }
 
+    def test_readme_and_workflows_say_what_the_14_98_covers(self):
+        r = open(os.path.join(ROOT, "README.md"), encoding="utf8").read()
+        self.assertIn("$14.98 a day is the hard cap of THESE robots only", r)
+        self.assertIn("separate $15/day cap", r)
+        self.assertIn("separate from, and not part of, the $14.98", open(os.path.join(self.wf, "job-runner.yml"), encoding="utf8").read())
+        self.assertIn("$14.98 a day is the hard cap of the LISTED robots", open(os.path.join(self.wf, "directory-agent.yml"), encoding="utf8").read())
+
     def test_ops_report_has_no_write_permission(self):
         t = open(os.path.join(self.wf, "ops-report.yml"), encoding="utf8").read()
         block = t.split("permissions:", 1)[1].split("concurrency:", 1)[0]

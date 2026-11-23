@@ -141,9 +141,17 @@ class HardAttemptStop(unittest.TestCase):
         self.assertEqual(ag.token_limits("claude-haiku-5-5", 0.25), (175000, 15000))
 
     def test_primary_plus_fallback_plus_the_crossing_responses_fit_the_reserve(self):
-        crossing_haiku, crossing_sonnet = 0.01, 0.29          # the one response that goes over a limit: Sonnet 35k in + 12k out max_tokens
+        # the response that crosses a limit is a LARGE one: 93,000 tokens in + 12,000 out (the library's fixed max_tokens), at the conservative prices
+        self.assertEqual((ag.CROSS_IN_TOKENS, ag.CROSS_OUT_TOKENS), (93_000, 12_000))
+        crossing_sonnet = 93_000 / 1e6 * ag.PRICE_IN + 12_000 / 1e6 * ag.PRICE_OUT
+        crossing_haiku = 93_000 / 1e6 * ag.HAIKU_PRICE_PER_M[0] + 12_000 / 1e6 * ag.HAIKU_PRICE_PER_M[1]
+        self.assertAlmostEqual(crossing_sonnet, 0.459, places=3)
         worst = ag.RUN_BUDGET_PRIMARY_USD + crossing_haiku + ag.RUN_BUDGET_FALLBACK_USD + crossing_sonnet
+        self.assertAlmostEqual(worst, ag.worst_attempt_usd(), places=6)
         self.assertLessEqual(worst, ag.ATTEMPT_MAX_USD)
+        self.assertLess(worst, 0.97)
+        # the old budgets (0.25 / 0.40) would NOT fit with the large crossing request: the test would have failed
+        self.assertGreater(ag.worst_attempt_usd(budget_p=0.25, budget_f=0.40), ag.ATTEMPT_MAX_USD)
         self.assertEqual(ag.UNPRICED_USD, 1.0)                # an attempt with no known price is booked at the full reserve
 
     def fake_loop(self, accept=True):
@@ -204,6 +212,41 @@ class HardAttemptStop(unittest.TestCase):
         self.addCleanup(cleanup)
         import browser_use.agent.loop as bl
         return bl
+
+    def test_prover_refuses_every_other_way_to_run_the_agent(self):
+        for other in ("run_sync(task)", "run_stream(task)", "iter(task)", "run_stream_events(task)"):
+            body = ("class UsageLimits:\n    def __init__(self, **kw):\n        self.input_tokens_limit = kw.get('input_tokens_limit'); self.output_tokens_limit = kw.get('output_tokens_limit')\n"
+                    "async def run(agent, task, session):\n"
+                    "    x = agent.%s\n"
+                    "    return await agent.run(task, usage_limits=UsageLimits(request_limit=session.max_steps + 1))\n") % other
+            self.fake_library(loop_body=body)
+            self.assertFalse(ag.preflight_limits(), other)
+
+    def test_built_agent_is_checked_at_runtime(self):
+        class A:
+            judge, max_context_chars = False, ag.HUGE_CONTEXT
+        self.assertTrue(ag.check_agent_built(A()))
+        for judge, ctx in ((True, ag.HUGE_CONTEXT), (False, 100_000), (False, None)):
+            B = type("B", (), {"judge": judge, "max_context_chars": ctx})
+            with self.assertRaises(ag.LimitsBroken):
+                ag.check_agent_built(B())
+
+    def test_a_broken_limit_stops_the_whole_run_instead_of_becoming_a_failed_attempt(self):
+        async def fake_run_site(site, model, product=None, budget=None):
+            raise ag.LimitsBroken("judge on")
+        import io, contextlib
+        saved = ag.run_site
+        ag.run_site = fake_run_site
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(ag.LimitsBroken):
+                    ag.run_one({"name": "S", "url": "https://s.example"})
+        finally:
+            ag.run_site = saved
+
+    def test_run_site_checks_the_built_agent_before_the_first_request(self):
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent.py"), encoding="utf8").read()
+        self.assertLess(src.index("check_agent_built(agent)"), src.index("agent.run(max_steps=MAX_STEPS"))
 
     def test_prover_accepts_a_loop_shaped_like_the_real_one(self):
         bl = self.fake_library()

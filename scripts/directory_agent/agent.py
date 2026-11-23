@@ -24,9 +24,12 @@ UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "1.00"))  # an attem
 # HARD per-attempt stop (QA round 3): browser-use 1.0.6 has no live cost hook, but every run is a pydantic-ai run and a
 # UsageLimits token limit aborts it gracefully (UsageLimitExceeded -> status max_steps, partial result kept, cost still read).
 # Each model run gets a dollar budget; it is turned into token limits with CONSERVATIVE prices. One attempt = primary run + fallback run:
-# 0.25 + 0.40 plus the one response that crosses the limit (Haiku ~0.01, Sonnet <= ~0.29) = <= ~0.95 < ATTEMPT_MAX_USD (1.00).
-RUN_BUDGET_PRIMARY_USD = float(os.environ.get("RUN_BUDGET_PRIMARY_USD", "0.25"))
-RUN_BUDGET_FALLBACK_USD = float(os.environ.get("RUN_BUDGET_FALLBACK_USD", "0.40"))
+# The one response that CROSSES a limit is charged on top of the budget. It is assumed LARGE: 93,000 tokens in + 12,000 out (12,000 = the library's fixed
+# max_tokens per request): Haiku 0.093 + 0.06, Sonnet 0.279 + 0.18. Worst attempt = 0.15 + 0.153 + 0.20 + 0.459 = 0.962 <= ATTEMPT_MAX_USD (1.00).
+# This is a tight fallback (about 46k input tokens): the price of a hard stop. Both budgets can be raised by env once real attempt costs are known.
+RUN_BUDGET_PRIMARY_USD = float(os.environ.get("RUN_BUDGET_PRIMARY_USD", "0.15"))
+RUN_BUDGET_FALLBACK_USD = float(os.environ.get("RUN_BUDGET_FALLBACK_USD", "0.20"))
+CROSS_IN_TOKENS, CROSS_OUT_TOKENS = 93_000, 12_000
 HAIKU_PRICE_PER_M = (float(os.environ.get("HAIKU_IN_PER_M", "1.0")), float(os.environ.get("HAIKU_OUT_PER_M", "5.0")))  # ASSUMPTION, 10x the 0.10/0.50 the batch robot reads off the pricing page
 _CUR_LIMITS = {"tokens": None}
 HUGE_CONTEXT = 10_000_000   # characters: compaction (a request outside the limits) can never start
@@ -220,8 +223,35 @@ Finish with one status code from: {', '.join(RESULT_CODES)} and a note of at mos
 
 def token_limits(model, budget):
     """(input_tokens_limit, output_tokens_limit) that keep one model run inside `budget` dollars (70% input, 30% output)."""
-    pin, pout = HAIKU_PRICE_PER_M if "haiku" in str(model).lower() else (PRICE_IN, PRICE_OUT)
+    pin, pout = model_prices(model)
     return int(budget * 0.7 / pin * 1e6), int(budget * 0.3 / pout * 1e6)
+
+
+def model_prices(model):
+    return HAIKU_PRICE_PER_M if "haiku" in str(model).lower() else (PRICE_IN, PRICE_OUT)
+
+
+def worst_attempt_usd(primary=None, fallback=None, budget_p=None, budget_f=None):
+    """Worst-case dollars of ONE attempt (primary run + fallback run), each = its budget + the large crossing request."""
+    total = 0.0
+    for model, b in ((primary or MODEL, RUN_BUDGET_PRIMARY_USD if budget_p is None else budget_p),
+                     (fallback or FALLBACK_MODEL, RUN_BUDGET_FALLBACK_USD if budget_f is None else budget_f)):
+        pin, pout = model_prices(model)
+        total += b + CROSS_IN_TOKENS / 1e6 * pin + CROSS_OUT_TOKENS / 1e6 * pout
+    return total
+
+
+class LimitsBroken(Exception):
+    """The per-attempt cost limits are not in force: the whole run must stop, never become 'one failed attempt'."""
+
+
+def check_agent_built(agent):
+    """Runtime check of the Agent that was really built: judge off, compaction never starting. Raises LimitsBroken."""
+    if getattr(agent, "judge", None) is not False:
+        raise LimitsBroken("built agent has the judge on")
+    if (getattr(agent, "max_context_chars", None) or 0) < HUGE_CONTEXT:
+        raise LimitsBroken("built agent can compact its context")
+    return True
 
 
 def install_limits():
@@ -255,6 +285,8 @@ def prove_loop(bl, agent_cls=None):
     assert src.count("UsageLimits(") == 1, "loop builds its limits more or less than once"
     assert src.count(".run(") == 1, "loop makes more or less than one agent.run per attempt"
     assert "usage_limits=" in src, "loop does not pass usage_limits to agent.run"
+    for other in ("run_sync(", "run_stream(", ".iter(", "run_stream_events(", "to_cli("):
+        assert other not in src, "loop also runs the agent through %s" % other
     import ast, textwrap
     tree = ast.parse(textwrap.dedent(src))
     for loop_node in ast.walk(tree):                      # the single agent.run must not sit inside a loop: a run per step would reset the limits every step
@@ -318,6 +350,7 @@ async def run_site(site, model, product=None, budget=None):
         judge=False,                         # the judge is one more model request AFTER the run, outside the token limits: off (hard per-attempt bound)
         max_context_chars=HUGE_CONTEXT,      # context compaction is also a separate model request outside the limits: never triggered; our token limits end the run first
     )
+    check_agent_built(agent)           # fail closed (LimitsBroken) before the first model request
     t0 = time.time()
     res = await asyncio.wait_for(agent.run(max_steps=MAX_STEPS, timeout=SITE_SECONDS - 20), timeout=SITE_SECONDS)
     out = getattr(res, "structured_output", None)
@@ -582,6 +615,9 @@ def run_one(s, product=None):
     for i, model in enumerate([MODEL, FALLBACK_MODEL] if FALLBACK_MODEL and FALLBACK_MODEL != MODEL else [MODEL]):
         try:
             r = asyncio.run(run_site(s, model, product, RUN_BUDGET_PRIMARY_USD if i == 0 else RUN_BUDGET_FALLBACK_USD))
+        except LimitsBroken:
+            print("directory agent: cost limits are not in force: STOP", flush=True)
+            raise
         except asyncio.TimeoutError:
             r = {"status": "TIMEOUT", "note": "site budget used", "secs": SITE_SECONDS, "cost": None, "cost_estimated": False, "steps": None, "usage": None, "flags": []}
         except Exception as e:

@@ -149,6 +149,14 @@ class DailyAiCap(unittest.TestCase):
         self.assertFalse(R.ai_take_call(p, "2026-11-23"))
         self.assertFalse(os.path.exists(p))
 
+    def test_workflow_serialises_runs_and_retries_the_push(self):
+        w = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "workflows", "mail-router.yml"), encoding="utf8").read()
+        self.assertIn("group: mail-router", w)
+        self.assertIn("cancel-in-progress: false", w)
+        self.assertIn("for i in 1 2 3 4; do", w)                         # the push is retried (with a rebase); if it still fails the job goes red
+        self.assertIn("git pull -q --rebase origin ops-mail-router", w)
+        self.assertIn('[ "$ok" = "1" ] ||', w)
+
     def test_workflow_restores_sets_the_flag_and_pushes_the_counter(self):
         w = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "workflows", "mail-router.yml"), encoding="utf8").read()
         restore = w.split('echo "log branch restored"', 1)[1].split("else", 1)[0]
