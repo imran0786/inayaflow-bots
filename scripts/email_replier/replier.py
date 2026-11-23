@@ -247,6 +247,8 @@ def ai_calls_today(path=None, today=None):
 
 def ai_take_call(path=None, today=None):
     """Counts one model call before it is made. False when today's cap is used up. The count is written at once (a crash cannot lose it)."""
+    if os.environ.get("AI_COUNTER_OK", "") != "true":
+        return False        # FAIL CLOSED: the workflow sets this only after the counter file was restored from the private repo
     path, today = path or AI_COUNT_PATH, today or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     n = ai_calls_today(path, today)
     if n >= AI_CALLS_PER_DAY:

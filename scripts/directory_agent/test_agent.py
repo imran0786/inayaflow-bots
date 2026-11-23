@@ -144,7 +144,7 @@ class HardAttemptStop(unittest.TestCase):
         crossing_haiku, crossing_sonnet = 0.01, 0.29          # the one response that goes over a limit: Sonnet 35k in + 12k out max_tokens
         worst = ag.RUN_BUDGET_PRIMARY_USD + crossing_haiku + ag.RUN_BUDGET_FALLBACK_USD + crossing_sonnet
         self.assertLessEqual(worst, ag.ATTEMPT_MAX_USD)
-        self.assertEqual(ag.UNPRICED_USD, 0.5)                # unpriced attempts count $0.50
+        self.assertEqual(ag.UNPRICED_USD, 1.0)                # an attempt with no known price is booked at the full reserve
 
     def fake_loop(self, accept=True):
         import types
@@ -173,6 +173,93 @@ class HardAttemptStop(unittest.TestCase):
         ag._CUR_LIMITS["tokens"] = None
         loop.UsageLimits(request_limit=3)
         self.assertEqual(calls[-1], {"request_limit": 3})
+
+    def fake_library(self, loop_body=None, agent_init=None):
+        """A tiny browser_use package on disk (so inspect.getsource works) shaped like the real one."""
+        import tempfile, importlib
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "browser_use", "agent"))
+        loop = loop_body or (
+            "class UsageLimits:\n"
+            "    def __init__(self, **kw):\n"
+            "        self.request_limit = kw.get('request_limit'); self.input_tokens_limit = kw.get('input_tokens_limit'); self.output_tokens_limit = kw.get('output_tokens_limit')\n"
+            "async def run(agent, task, session):\n"
+            "    result = await agent.run(task, usage_limits=UsageLimits(request_limit=session.max_steps + 1))\n"
+            "    return result\n")
+        open(os.path.join(d, "browser_use", "agent", "loop.py"), "w").write(loop)
+        open(os.path.join(d, "browser_use", "agent", "__init__.py"), "w").write("")
+        open(os.path.join(d, "browser_use", "__init__.py"), "w").write(
+            "class Agent:\n    def __init__(self, task, %s):\n        pass\n" % (agent_init or "judge=True, max_context_chars=None"))
+        keys = ("browser_use", "browser_use.agent", "browser_use.agent.loop")
+        saved = {k: sys.modules.pop(k, None) for k in keys}
+        sys.path.insert(0, d)
+        importlib.invalidate_caches()
+
+        def cleanup():
+            sys.path.remove(d)
+            for k in keys:
+                sys.modules.pop(k, None)
+                if saved[k] is not None:
+                    sys.modules[k] = saved[k]
+        self.addCleanup(cleanup)
+        import browser_use.agent.loop as bl
+        return bl
+
+    def test_prover_accepts_a_loop_shaped_like_the_real_one(self):
+        bl = self.fake_library()
+        self.assertTrue(ag.preflight_limits())
+        self.assertIsNone(ag._CUR_LIMITS["tokens"])               # the proof leaves nothing behind
+
+    def test_prover_refuses_when_the_limits_are_not_per_attempt(self):
+        two_runs = ("class UsageLimits:\n    def __init__(self, **kw):\n        self.input_tokens_limit = kw.get('input_tokens_limit'); self.output_tokens_limit = kw.get('output_tokens_limit')\n"
+                    "async def run(agent, task, session):\n"
+                    "    for _ in range(session.max_steps):\n"
+                    "        r = await agent.run(task, usage_limits=UsageLimits(request_limit=1))\n"
+                    "    return r\n")
+        self.fake_library(loop_body=two_runs)
+        self.assertFalse(ag.preflight_limits())                 # a run per step would reset the limits every step: refused
+
+    def test_prover_refuses_when_the_loop_does_not_use_the_patched_name(self):
+        other = ("class UsageLimits:\n    def __init__(self, **kw):\n        self.input_tokens_limit = None\n"
+                 "async def run(agent, task, session):\n"
+                 "    return await agent.run(task, usage_limits=make_limits(session))\n"
+                 "def make_limits(session):\n    return UsageLimits(request_limit=1)\n")
+        self.fake_library(loop_body=other)
+        self.assertFalse(ag.preflight_limits())
+
+    def test_prover_refuses_an_agent_without_judge_or_context_options(self):
+        self.fake_library(agent_init="foo=1")
+        self.assertFalse(ag.preflight_limits())
+
+    def test_the_agent_is_built_without_the_judge_and_without_compaction(self):
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent.py"), encoding="utf8").read()
+        self.assertIn("judge=False", src)
+        self.assertIn("max_context_chars=HUGE_CONTEXT", src)
+        self.assertGreaterEqual(ag.HUGE_CONTEXT, 10_000_000)
+
+    def test_an_attempt_with_an_unknown_price_is_booked_at_the_full_reserve(self):
+        # one run priced, the fallback run timed out (cost None): the WHOLE attempt is unpriced, never "0.1 + 0"
+        async def fake_run_site(site, model, product=None, budget=None):
+            if model == ag.MODEL:
+                return {"status": "OTHER", "note": "", "secs": 1, "cost": 0.1, "cost_estimated": False, "steps": 1, "usage": None, "flags": []}
+            raise asyncio.TimeoutError()
+        import asyncio
+        saved = ag.run_site
+        ag.run_site = fake_run_site
+        try:
+            r = ag.run_one({"name": "S", "url": "https://s.example"})
+        finally:
+            ag.run_site = saved
+        self.assertIsNone(r["cost"])
+        sp = {}
+        saved_path = ag.SPEND_PATH
+        import tempfile
+        ag.SPEND_PATH = os.path.join(tempfile.mkdtemp(), "ops", "s.json")
+        try:
+            ag.add_spend(sp, "2026-11-25", r)
+        finally:
+            ag.SPEND_PATH = saved_path
+        self.assertEqual(sp["2026-11-25"], 1.0)
 
     def test_library_without_the_limits_stops_the_whole_run_before_any_attempt(self):
         import io, contextlib, tempfile

@@ -33,7 +33,7 @@ class Hunter(unittest.TestCase):
         self.assertEqual(hu.slot(at(9), 1)[2], hu.slot(at(9), 0)[2] + 1)
         self.assertEqual(hu.slot(at(12), 0)[2], hu.slot(at(9), 1)[2] + 1)
 
-    def test_daily_stop_keeps_worst_case_under_8_dollars(self):
+    def test_daily_stop_keeps_worst_case_at_6_dollars(self):
         import tempfile
         self.assertEqual(hu.DAILY_CAP, 6.0)
         now = at(21)

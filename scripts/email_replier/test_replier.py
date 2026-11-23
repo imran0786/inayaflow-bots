@@ -167,11 +167,33 @@ class ModelFallback(unittest.TestCase):
     def setUp(self):
         import tempfile
         r.MODEL_USED.update({"haiku": 0, "deepseek": 0})
-        self._count = r.AI_COUNT_PATH
+        self._count, self._ok = r.AI_COUNT_PATH, os.environ.get("AI_COUNTER_OK")
         r.AI_COUNT_PATH = os.path.join(tempfile.mkdtemp(), "ops", "ai_calls_replier.json")      # tests never touch ops/
+        os.environ["AI_COUNTER_OK"] = "true"
 
     def tearDown(self):
         r.AI_COUNT_PATH = self._count
+        if self._ok is None:
+            os.environ.pop("AI_COUNTER_OK", None)
+        else:
+            os.environ["AI_COUNTER_OK"] = self._ok
+
+    def test_fails_closed_when_the_counter_was_not_restored(self):
+        import unittest.mock as mock
+        os.environ.pop("AI_COUNTER_OK", None)
+        self.assertFalse(r.ai_take_call(today="2026-11-23"))
+        self.assertFalse(os.path.exists(r.AI_COUNT_PATH))
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k", "DEEPSEEK_API_KEY": "d"}), mock.patch.object(r, "_post_json") as post:
+            with self.assertRaises(RuntimeError):
+                r.llm_call("a", "b")
+        post.assert_not_called()                                   # no private repo = no model call, neither Haiku nor DeepSeek
+
+    def test_workflow_restores_the_counter_serialises_runs_and_sets_the_flag(self):
+        w = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "workflows", "email-replier.yml"), encoding="utf8").read()
+        self.assertIn("group: email-replier", w)
+        self.assertIn("cancel-in-progress: false", w)
+        self.assertIn("ai_calls_replier.json", w)
+        self.assertIn("AI_COUNTER_OK=true", w)
 
     def test_daily_model_call_cap(self):
         import unittest.mock as mock

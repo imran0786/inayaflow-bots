@@ -19,8 +19,8 @@ SUCCESS_CAP = int(os.environ.get("DAILY_SUCCESS_CAP", "30"))   # 22 Nov 2026: 10
 ATTEMPT_CAP = int(os.environ.get("DAILY_ATTEMPT_CAP", "150"))  # site attempts per UTC day, all runs together (was 10 / 50 before 22-23 Nov 2026)
 TOOL_ATTEMPT_CAP = int(os.environ.get("DAILY_TOOL_ATTEMPT_CAP", "200"))  # extra per-tool listings a day, on top of the site attempts
 RUN_SECONDS = int(os.environ.get("RUN_SECONDS", "8400"))   # per run (same value as the workflow)
-USD_CAP = float(os.environ.get("DAILY_USD_CAP", "6"))      # Director budget 23 Nov 2026 (QA round 2): at most $6 a UTC day, all runs together; a new attempt only starts when spent + ATTEMPT_MAX_USD fits under it; hunter stop is $7.20
-UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "0.50"))  # ASSUMPTION used only when the library gives no price for an attempt (0.25 -> 0.50 in QA round 3)
+USD_CAP = float(os.environ.get("DAILY_USD_CAP", "6"))      # Director budget 23 Nov 2026 (QA round 2): at most $6 a UTC day, all runs together; a new attempt only starts when spent + ATTEMPT_MAX_USD fits under it; hunter stop is $6
+UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "1.00"))  # an attempt with NO known price (timeout, error, no price from the library) is booked at the full per-attempt reserve (QA round 4: 0.25 -> 0.50 -> 1.00)
 # HARD per-attempt stop (QA round 3): browser-use 1.0.6 has no live cost hook, but every run is a pydantic-ai run and a
 # UsageLimits token limit aborts it gracefully (UsageLimitExceeded -> status max_steps, partial result kept, cost still read).
 # Each model run gets a dollar budget; it is turned into token limits with CONSERVATIVE prices. One attempt = primary run + fallback run:
@@ -29,6 +29,7 @@ RUN_BUDGET_PRIMARY_USD = float(os.environ.get("RUN_BUDGET_PRIMARY_USD", "0.25"))
 RUN_BUDGET_FALLBACK_USD = float(os.environ.get("RUN_BUDGET_FALLBACK_USD", "0.40"))
 HAIKU_PRICE_PER_M = (float(os.environ.get("HAIKU_IN_PER_M", "1.0")), float(os.environ.get("HAIKU_OUT_PER_M", "5.0")))  # ASSUMPTION, 10x the 0.10/0.50 the batch robot reads off the pricing page
 _CUR_LIMITS = {"tokens": None}
+HUGE_CONTEXT = 10_000_000   # characters: compaction (a request outside the limits) can never start
 ATTEMPT_MAX_USD = float(os.environ.get("ATTEMPT_MAX_USD", "1.00"))  # RESERVE for one attempt (primary + fallback model): none starts unless spent + this fits under USD_CAP; a dearer attempt is printed as OVER_RESERVE
 SPEND_PATH = os.path.join(ROOT, "ops", "directory_agent_spend.json")
 ASSET_DIR = os.path.join(ROOT, "data", "assets")
@@ -240,11 +241,48 @@ def install_limits():
     return True
 
 
+def prove_loop(bl, agent_cls=None):
+    """PROOF (QA round 4) that the token limits really bind one whole attempt. Raises AssertionError when anything is not as proven.
+    Checked against the library that is really installed (CI runs this against the pinned browser-use right after the install):
+    1. the attempt function bl.run builds its limits through the module-level name UsageLimits (so our wrapper is what it calls) -
+       the name is a global of the function and the function's globals are the module's dict;
+    2. it builds them exactly once and passes them to exactly ONE pydantic-ai agent.run(...) call, inside which ALL steps of the
+       attempt happen (steps = model requests, request_limit = max_steps + 1): so the limits are per attempt, not per step;
+    3. the object it gets back really carries our token limits;
+    4. the Agent accepts judge= and max_context_chars= (the only two other model requests that could sit outside the limits)."""
+    import inspect
+    src = inspect.getsource(bl.run)
+    assert src.count("UsageLimits(") == 1, "loop builds its limits more or less than once"
+    assert src.count(".run(") == 1, "loop makes more or less than one agent.run per attempt"
+    assert "usage_limits=" in src, "loop does not pass usage_limits to agent.run"
+    import ast, textwrap
+    tree = ast.parse(textwrap.dedent(src))
+    for loop_node in ast.walk(tree):                      # the single agent.run must not sit inside a loop: a run per step would reset the limits every step
+        if isinstance(loop_node, (ast.For, ast.AsyncFor, ast.While)):
+            for n in ast.walk(loop_node):
+                assert not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "run"), "agent.run is inside a loop"
+    assert "UsageLimits" in bl.run.__code__.co_names, "UsageLimits is not a global name of the loop function"
+    assert bl.run.__globals__ is vars(bl), "loop function does not use its module's globals"
+    _CUR_LIMITS["tokens"] = (111, 22)
+    try:
+        lim = bl.UsageLimits(request_limit=3)
+        assert getattr(lim, "input_tokens_limit", None) == 111 and getattr(lim, "output_tokens_limit", None) == 22, "limits object does not carry the token limits"
+    finally:
+        _CUR_LIMITS["tokens"] = None
+    if agent_cls is None:
+        from browser_use import Agent as agent_cls
+    params = inspect.signature(agent_cls.__init__).parameters
+    assert "judge" in params and "max_context_chars" in params, "Agent has no judge= / max_context_chars="
+    return True
+
+
 def preflight_limits():
     try:
-        return install_limits()
+        import browser_use.agent.loop as bl
+        install_limits()
+        return prove_loop(bl)
     except Exception as e:
-        print("directory agent: token limits cannot be installed (%s): NO attempt started" % type(e).__name__, flush=True)
+        print("directory agent: token limits cannot be installed or proven (%s): NO attempt started" % type(e).__name__, flush=True)
         return False
 
 
@@ -277,6 +315,8 @@ async def run_site(site, model, product=None, budget=None):
         tools=tools,
         output_model_schema=Outcome,
         sensitive_data={"https://*." + dom: {"password": pw}, "https://" + dom: {"password": pw}},
+        judge=False,                         # the judge is one more model request AFTER the run, outside the token limits: off (hard per-attempt bound)
+        max_context_chars=HUGE_CONTEXT,      # context compaction is also a separate model request outside the limits: never triggered; our token limits end the run first
     )
     t0 = time.time()
     res = await asyncio.wait_for(agent.run(max_steps=MAX_STEPS, timeout=SITE_SECONDS - 20), timeout=SITE_SECONDS)
@@ -547,8 +587,8 @@ def run_one(s, product=None):
         except Exception as e:
             r = {"status": "ERROR", "note": type(e).__name__, "secs": 0, "cost": None, "cost_estimated": False, "steps": None, "usage": None, "flags": []}
         r["model"] = model
-        if out is not None:  # keep cost of the first try
-            r["cost"] = (r["cost"] or 0) + (out["cost"] or 0)
+        if out is not None:  # keep cost of the first try; if EITHER run has no known price the whole attempt is unpriced (booked at the full reserve)
+            r["cost"] = None if (r["cost"] is None or out["cost"] is None) else r["cost"] + out["cost"]
             r["secs"] += out["secs"]
             r["note"] = ("fallback after %s; " % out["status"]) + r["note"]
         out = r

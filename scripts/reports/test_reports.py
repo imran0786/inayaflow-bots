@@ -366,6 +366,31 @@ class Funnel(unittest.TestCase):
         self.assertIn("FUNNEL_READ_TOKEN", fd.not_set_up(["FUNNEL_READ_TOKEN"]))
 
 
+class ReportDailyCap(unittest.TestCase):
+    def test_counter_caps_the_day_and_resets(self):
+        import tempfile, inbox_report as ir
+        w = tempfile.mkdtemp()
+        os.makedirs(os.path.join(w, "ops"))
+        self.assertEqual(ir.REPORT_AI_PER_DAY, 160)
+        self.assertEqual(ir.ai_used_today(w, "2026-11-23"), 0)
+        ir.save_ai_used(w, 0, 12, "2026-11-23")
+        ir.save_ai_used(w, 12, 20, "2026-11-23")
+        self.assertEqual(ir.ai_used_today(w, "2026-11-23"), 32)
+        self.assertEqual(ir.ai_used_today(w, "2026-11-24"), 0)            # a new UTC day starts at zero
+
+    def test_unreadable_counter_fails_closed(self):
+        import tempfile, inbox_report as ir
+        w = tempfile.mkdtemp()
+        os.makedirs(os.path.join(w, "ops"))
+        open(os.path.join(w, "ops", "ai_calls_report.json"), "w").write("[1, 2]")      # valid JSON, wrong shape
+        self.assertEqual(ir.ai_used_today(w, "2026-11-23"), ir.REPORT_AI_PER_DAY)
+
+    def test_main_takes_the_daily_cap_out_of_the_per_run_cap(self):
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox_report.py"), encoding="utf8").read()
+        self.assertIn("c.MAX_AI_CALLS = max(0, min(c.MAX_AI_CALLS, REPORT_AI_PER_DAY - used_before))", src)
+        self.assertLess(src.index("used_before = ai_used_today(work)"), src.index("fetch_journalist_digests(set("))
+
+
 if __name__ == "__main__":
     unittest.main()
 
