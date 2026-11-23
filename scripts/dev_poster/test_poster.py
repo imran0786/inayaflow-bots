@@ -489,9 +489,9 @@ class FlowFailures(unittest.TestCase):
             if b["model"] == P.QA_MODEL:
                 self.fail("QA must not run on a draft that failed the offline gate")
             writers.append(1)
-            return {"content": [{"type": "text", "text": text}], "stop_reason": "end_turn", "usage": {"input_tokens": 120000, "output_tokens": 6000}}   # ~$0.30 > RETRY_BELOW 0.28
+            return {"content": [{"type": "text", "text": text}], "stop_reason": "end_turn", "usage": {"input_tokens": 190000, "output_tokens": 6000}}   # ~$0.44 > RETRY_BELOW (0.60 - 0.20 - 0.02 = 0.38)
         self.assertEqual(run_quiet(post_ai=post), "FAIL")
-        self.assertEqual(len(writers), 1)                         # 0.30 spent: a second writer call (0.30 reserve) + the QA reserve would pass 0.60
+        self.assertEqual(len(writers), 1)                         # 0.44 spent: a second writer call (0.20 reserve) + the QA reserve would pass 0.60
 
     def test_page_not_readable_stops_before_any_spend(self):
         post_ai, calls = fake_ai_factory(good_body())
@@ -507,6 +507,132 @@ class FlowFailures(unittest.TestCase):
         self.assertEqual(w.count("DEV_STATE_OK=true"), 2)         # restored, or first run (branch really absent); unreachable = not set
         self.assertIn('DEV_DAY_USD_CAP: "0.60"', w)
         self.assertIn("group: dev-poster", w)
+
+
+def only_src1_body():
+    """A body whose number (4000 characters) is printed ONLY on SRC1, so a thin SRC1 text makes the number unfindable."""
+    return good_body().replace("[5 hashtags per post](%s)" % SRC1, "[4000 characters per caption](%s)" % SRC1)
+
+
+class WriterAndGateFixes(unittest.TestCase):
+    """23 Nov dry run 2 (cost $0.433, 6 problems): writer / gate mismatches."""
+
+    def setUp(self):
+        Flow.setUp(self)
+
+    def tearDown(self):
+        Flow.tearDown(self)
+
+    # (b) numbers about OUR tool are checked against OUR whole page, not only the first 6000 characters the writer sees
+    def test_numbers_in_the_paragraph_that_links_our_page_are_checked_against_our_whole_page(self):
+        short = PAGE                                                             # what the prompt shows
+        full = PAGE + " Your result is kept for 24 hours and the history covers 30 days."
+        b = good_body().replace("can turn a topic into a short list. ", "can turn a topic into a short list kept for 24 hours and for 30 days. ")
+        self.assertTrue(any("not found" in x for x in P.check_article(art(body=b), URL, short, SRC_TEXT)))
+        self.assertEqual([x for x in P.check_article(art(body=b), URL, short, SRC_TEXT, page_full=full) if "not found" in x], [])
+
+    # (c) first person, rhetorical too
+    def test_first_person_including_rhetorical_lines_is_refused(self):
+        for line in ("Am I shadowbanned?", "Why am I seeing fewer views?", "It's mine now.", "I'd say so.", "We asked myself that."):
+            self.assertTrue(any("first person" in x for x in probs(art(body=good_body() + "\n\n" + line + "\n"))), line)
+        self.assertFalse(any("first person" in x for x in probs(art(body=good_body() + "\n\nIs an account shadowbanned?\n"))))
+
+    # (d) the overlap problem names the phrase so the retry can fix it, and it looks in the whole page
+    def test_overlap_names_the_phrase_and_uses_the_whole_page(self):
+        copied = "Your result is kept for exactly this long and no longer than that."
+        full = PAGE + " " + copied
+        b = good_body() + "\n\n" + copied
+        self.assertEqual([x for x in P.check_article(art(body=b), URL, PAGE, SRC_TEXT) if "overlap" in x], [])         # not in the 6000 shown
+        got = [x for x in P.check_article(art(body=b), URL, PAGE, SRC_TEXT, page_full=full) if "overlap" in x]
+        self.assertEqual(len(got), 1)
+        self.assertIn("your result is kept for exactly this", got[0])
+
+    # (a) what the writer's own fetch tool returned counts as a source text
+    def test_harvest_fetched_reads_the_writers_fetch_results(self):
+        blocks = [{"type": "text", "text": "x"},
+                  {"type": "web_fetch_tool_result", "tool_use_id": "t", "content": {"type": "web_fetch_result", "url": SRC1,
+                   "content": {"type": "document", "source": {"type": "text", "media_type": "text/plain", "data": SRC_TEXT[SRC1]}}}},
+                  {"type": "web_fetch_tool_result", "content": {"type": "web_fetch_tool_error", "error_code": "url_not_accessible"}},
+                  {"type": "web_fetch_tool_result", "content": {"url": SRC2, "content": {"source": {"data": "   "}}}}]
+        out = {}
+        P.harvest_fetched(blocks, out)
+        self.assertEqual(out, {SRC1: SRC_TEXT[SRC1]})
+        P.harvest_fetched(None, out)
+        P.harvest_fetched([{"type": "web_fetch_tool_result", "content": "weird"}], out)
+
+    def fetch_block(self, url, text):
+        return {"type": "web_fetch_tool_result", "content": {"type": "web_fetch_result", "url": url,
+                "content": {"type": "document", "source": {"type": "text", "media_type": "text/plain", "data": text}}}}
+
+    def test_a_source_our_fetcher_cannot_read_is_accepted_when_the_writers_fetch_read_it(self):
+        P.DRY = True
+        text = "TITLE: How to plan TikTok captions\nDESCRIPTION: d\nTAGS: tiktok,socialmedia,webdev,productivity\nSOURCES: %s | %s\n===BODY===\n%s" % (SRC1, SRC2, only_src1_body())
+
+        def post(url, b, h):
+            if b["model"] == P.QA_MODEL:
+                return {"content": [{"type": "text", "text": json.dumps({"verdict": "PASS", "reasons": []})}], "usage": {"input_tokens": 4000, "output_tokens": 50}}
+            return {"content": [self.fetch_block(SRC1, SRC_TEXT[SRC1]), {"type": "text", "text": text}], "stop_reason": "end_turn", "usage": {"input_tokens": 20000, "output_tokens": 2000}}
+
+        def thin_getter(u, **k):
+            if u == SRC1:
+                return 200, u, "<html><body>TikTok Support</body></html>"            # what tiktok.com/support returns to our fetcher
+            return fake_get(u)
+        self.assertEqual(run_quiet(post_ai=post, getter=thin_getter), "DRY_OK")
+        # without the writer's fetched text the same article fails (the old behaviour)
+        P.write_json(P.STATE_PATH, {"posts": [], "attempts": {}})
+
+        def post_no_fetch(url, b, h):
+            r = post(url, b, h)
+            r["content"] = [x for x in r["content"] if x["type"] == "text"]
+            return r
+        self.assertEqual(run_quiet(post_ai=post_no_fetch, getter=thin_getter), "FAIL")
+
+    def test_the_retry_tells_the_writer_which_pages_could_not_be_read(self):
+        P.DRY = True
+        text = "TITLE: How to plan TikTok captions\nDESCRIPTION: d\nTAGS: tiktok,socialmedia,webdev,productivity\nSOURCES: %s | %s\n===BODY===\n%s" % (SRC1, SRC2, only_src1_body())
+        prompts = []
+
+        def post(url, b, h):
+            if b["model"] == P.QA_MODEL:
+                return {"content": [{"type": "text", "text": json.dumps({"verdict": "FAIL", "reasons": ["x"]})}], "usage": {"input_tokens": 100, "output_tokens": 10}}
+            prompts.append(b["messages"][0]["content"])
+            return {"content": [{"type": "text", "text": text}], "stop_reason": "end_turn", "usage": {"input_tokens": 20000, "output_tokens": 2000}}
+
+        def thin_getter(u, **k):
+            if u == SRC1:
+                return 200, u, "<html><body>TikTok Support</body></html>"
+            if u == SRC2:
+                return 200, u, "<p>%s %s</p>" % (SRC_TEXT[SRC2], "More plain text about the study. " * 20)          # a readable page: >= 300 characters
+            return fake_get(u)
+        run_quiet(post_ai=post, getter=thin_getter)
+        self.assertEqual(len(prompts), 2)
+        self.assertNotIn("could NOT be read", prompts[0])
+        self.assertIn("could NOT be read", prompts[1])
+        self.assertIn(SRC1, prompts[1].split("could NOT be read")[1])
+        self.assertNotIn(SRC2, prompts[1].split("could NOT be read")[1])
+
+    def test_the_prompt_carries_the_new_rules(self):
+        s = P.WRITER_SYSTEM
+        for must in ("CITE ONLY WHAT YOU READ", "tiktok.com/support", "never copy 7 or more words", "PAGE TEXT", "myself anywhere", "am I shadowbanned"):
+            self.assertIn(must, s)
+
+    def test_a_writer_run_is_cheaper_and_a_retry_fits_the_day(self):
+        self.assertEqual((P.MAX_SEARCHES, P.MAX_FETCHES, P.FETCH_TOKENS, P.WRITER_MAX_TOKENS), (3, 3, 6000, 3500))
+        sent = []
+
+        def post(url, b, h):
+            sent.append(b)
+            return {"content": [{"type": "text", "text": "x"}], "stop_reason": "end_turn", "usage": {"input_tokens": 40000, "output_tokens": 2500, "server_tool_use": {"web_search_requests": 3}}}
+        m = P.Meter()
+        P.run_writer("s", "u", m, post=post)
+        tools = {t["name"]: t for t in sent[0]["tools"]}
+        self.assertEqual((tools["web_search"]["max_uses"], tools["web_fetch"]["max_uses"], tools["web_fetch"]["max_content_tokens"]), (3, 3, 6000))
+        self.assertEqual(sent[0]["max_tokens"], 3500)
+        self.assertLessEqual(m.cost, 0.30)                                         # a realistic big attempt: 40k in, 2.5k out, 3 searches = $0.135
+        self.assertLessEqual(P.WRITER_RESERVE, 0.20)
+        # two such attempts and the QA call fit inside the $0.60 day
+        self.assertLessEqual(2 * m.cost + P.QA_RESERVE, P.DAY_CAP)
+        self.assertGreaterEqual(P.RETRY_BELOW, 0.35)
 
 
 class StateBranchScript(unittest.TestCase):

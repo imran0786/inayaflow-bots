@@ -34,12 +34,16 @@ WRITER = os.environ.get("DEV_WRITER_MODEL", "claude-sonnet-5-5")
 QA_MODEL = os.environ.get("DEV_QA_MODEL", "claude-haiku-5-5")
 DAY_CAP = float(os.environ.get("DEV_DAY_USD_CAP", "0.60"))        # HARD cap per UTC day over ALL runs (dry and live), writer + QA + retry
 USD_CAP = DAY_CAP                                                  # (older name, same value)
-WRITER_RESERVE = 0.30   # most one Sonnet request can cost: <= ~70k tokens in x $2/M + 6000 out x $10/M + 5 searches x $0.01 = ~$0.25
+WRITER_RESERVE = 0.20   # most one Sonnet request can cost: <= ~45k tokens in x $2/M (prompt + 3 searches + 3 pages of <= 6000 tokens) + 3500 out x $10/M + 3 searches x $0.01 = ~$0.16
 QA_RESERVE = 0.02       # most the Haiku QA request can cost: <= 20k tokens in x $0.10/M + 700 out x $0.50/M = ~$0.003, rounded up
 RETRY_BELOW = DAY_CAP - WRITER_RESERVE - QA_RESERVE                # a 2nd writer try only when it can still be paid AND still be QA-checked
 MAX_DRY_PER_DAY = 2
+MIN_SOURCE_CHARS = 300      # a fetched page with less text than this (e.g. only "TikTok Support") is "unreadable": it cannot back a number
 PAST_ARTICLES_KEPT = 30                                            # bodies whose 7-word shingles are remembered for the similarity check
-MAX_SEARCHES = int(os.environ.get("DEV_MAX_SEARCHES", "5"))
+MAX_SEARCHES = int(os.environ.get("DEV_MAX_SEARCHES", "3"))        # was 5 (23 Nov dry run 2 cost $0.433)
+MAX_FETCHES = 3                                                    # was 4
+FETCH_TOKENS = 6000                                                # per fetched page, was 10000
+WRITER_MAX_TOKENS = 3500                                           # 700-950 words are ~1,300 tokens; was 6000
 REST_DAYS = 14
 MIN_WORDS, MAX_WORDS = 600, 1050
 # USD per million tokens (official pricing, same table as scripts/job_runner/runner.py); web search $10 per 1,000
@@ -144,7 +148,7 @@ def shingles(text, n=7):
     return {hashlib.md5(" ".join(w[i:i + n]).encode()).hexdigest()[:10] for i in range(len(w) - n + 1)}
 
 
-def check_article(art, target_url, page_text, source_texts, first_person_ok=False, past_shingles=None):
+def check_article(art, target_url, page_text, source_texts, first_person_ok=False, past_shingles=None, page_full=None):
     """-> list of problems (empty = passes the offline gate). art = dict(title, description, tags, body, sources).
     source_texts = {url: fetched text} for every external link in the body (None/'' = could not be fetched)."""
     p = []
@@ -182,9 +186,10 @@ def check_article(art, target_url, page_text, source_texts, first_person_ok=Fals
         p.append("banned phrase: %s" % hit[0])
     if re.search(r"(?<![\w/.])@(?!inayaflow\b)[A-Za-z0-9_.]{2,}", re.sub(r"```.*?```", " ", body, flags=re.S)):
         p.append("contains an @handle")
-    if not first_person_ok and re.search(r"\b(I|I'm|I've|I'll|my|me)\b", re.sub(r"```.*?```", " ", body, flags=re.S)):
+    if not first_person_ok and re.search(r"\b(I|I'm|I've|I'll|I'd|my|me|mine|myself)\b", re.sub(r"```.*?```", " ", body, flags=re.S)):
         p.append("first person singular (use 'we')")
-    corpus = " ".join(list(source_texts.values()) + [page_text])
+    own = page_full if page_full else page_text            # OUR page, whole (the prompt only shows the first 6000 characters): numbers about our own tool are checked against it
+    corpus = " ".join(list(source_texts.values()) + [own])
     corpus_nums = {norm_num(m) for m in re.findall(r"\d[\d,\.]*\d|\d", corpus)}
     for para in re.split(r"\n\s*\n", re.sub(r"```.*?```", " ", body, flags=re.S)):
         if para.lstrip().startswith("#"):
@@ -197,9 +202,9 @@ def check_article(art, target_url, page_text, source_texts, first_person_ok=Fals
                 p.append("number '%s' in a paragraph with no source link" % m.group(0).strip()[:30])
             elif num not in corpus_nums:
                 p.append("number '%s' not found in the fetched sources" % m.group(0).strip()[:30])
-    ov = seven_word_overlap(re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", body), page_text)
+    ov = seven_word_overlap(re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", body), own)
     if ov:
-        p.append("7-word overlap with the inayaflow.ai page")
+        p.append("7-word overlap with the inayaflow.ai page: '%s' (rewrite that sentence in your own words)" % ov)
     # promotional density (DEV terms s.11: "not designed primarily for the purposes of promotion or creating backlinks"):
     paras = [x for x in re.split(r"\n\s*\n", re.sub(r"```.*?```", " ", body, flags=re.S)) if x.strip() and not x.lstrip().startswith("#")]
     at = [i for i, x in enumerate(paras) if target_url in x]
@@ -275,15 +280,31 @@ def anthropic(model, system, user, meter, post=None, tools=None, max_tokens=6000
     return data
 
 
-def run_writer(system, user, meter, post=None):
-    """Sonnet with web search + fetch. Handles pause_turn. Returns the final text. Stops when the cost cap is near."""
+def harvest_fetched(content, out):
+    """Texts the WRITER's own web_fetch really returned (tool output, not model words): {url: text}. Defensive about the block shape."""
+    for b in content or []:
+        if isinstance(b, dict) and b.get("type") == "web_fetch_tool_result":
+            r = b.get("content") if isinstance(b.get("content"), dict) else {}
+            doc = r.get("content") if isinstance(r.get("content"), dict) else {}
+            src = doc.get("source") if isinstance(doc.get("source"), dict) else {}
+            text = src.get("data") or src.get("text") or ""
+            url = r.get("url") or ""
+            if url and isinstance(text, str) and text.strip():
+                out[url] = text
+
+
+def run_writer(system, user, meter, post=None, fetched=None):
+    """Sonnet with web search + fetch. Handles pause_turn. Returns the final text. Stops when the cost cap is near.
+    fetched (a dict, optional) is filled with {url: text} of every page the writer's own fetch tool returned."""
     tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": MAX_SEARCHES},
-             {"type": "web_fetch_20250910", "name": "web_fetch", "max_uses": 4, "max_content_tokens": 10000}]
+             {"type": "web_fetch_20250910", "name": "web_fetch", "max_uses": MAX_FETCHES, "max_content_tokens": FETCH_TOKENS}]
     messages = [{"role": "user", "content": user}]
     text = ""
     for _ in range(6):
-        data = anthropic(WRITER, system, None, meter, post=post, tools=tools, max_tokens=6000, messages=messages)
+        data = anthropic(WRITER, system, None, meter, post=post, tools=tools, max_tokens=WRITER_MAX_TOKENS, messages=messages)
         content = data.get("content") or []
+        if fetched is not None:
+            harvest_fetched(content, fetched)
         text = "".join(b.get("text", "") for b in content if b.get("type") == "text") or text
         if data.get("stop_reason") == "refusal":
             raise RuntimeError("refusal")
@@ -294,11 +315,14 @@ def run_writer(system, user, meter, post=None):
     raise RuntimeError("writer did not finish")
 
 
-WRITER_SYSTEM = """You write one article for DEV (dev.to) for the company InayaFlow. Voice: "we" (never I, me, my). Plain, friendly, specific English.
+WRITER_SYSTEM = """You write one article for DEV (dev.to) for the company InayaFlow. Voice: "we" (never I, me, my, mine, myself). Plain, friendly, specific English.
 RULES (all are checked by code afterwards; a break means nothing is published):
 - 700 to 950 words in Markdown. A NEW angle: a practical question a creator or developer really has. Do not summarise or copy the InayaFlow page; add your own examples and reasoning.
-- Real numbers only: use web_search / web_fetch to find them in official or primary sources (TikTok help pages, research, platform docs). EVERY paragraph that contains a number, percent or dollar amount must contain a Markdown link to the page where that number is printed, and the number must appear on that page exactly as you write it. No invented, rounded-up or remembered statistics. If you cannot source a number, leave it out.
+- Real numbers only: use web_search / web_fetch to find them in official or primary sources (research, platform docs, newsrooms). EVERY paragraph that contains a number, percent or dollar amount must contain a Markdown link to the page where that number is printed, and the number must appear on that page exactly as you write it. No invented, rounded-up or remembered statistics. If you cannot source a number, leave it out.
+- CITE ONLY WHAT YOU READ: a page may be cited only if you fetched it with web_fetch in THIS session and the text that came back visibly contains the number as you write it (never cite a page you only saw in search results). Pages on tiktok.com/support, support.tiktok.com and tiktok.com/creator-academy usually come back empty or with only a title: do NOT cite them and do not use a number whose only source is such a page. Our checker re-reads every cited page: a number it cannot find there stops the article.
 - At least 2 different external source links. Use only pages you opened.
+- About OUR page: paraphrase it in your own words and never copy 7 or more words in a row from the PAGE TEXT (the checker compares). Facts about our tool (limits, hours, days, what it needs) may be stated ONLY if they are printed in the PAGE TEXT; the paragraph that links our page may use numbers from the PAGE TEXT without another source link.
+- Never use the words I, I'm, I've, I'll, I'd, me, my, mine or myself anywhere: not in questions, quotes or rhetorical lines ("am I shadowbanned?" is forbidden: write "is an account shadowbanned?" or "are your views down?").
 - Exactly ONE link to the target InayaFlow page (given below), placed where it truly helps the reader, written as [descriptive words](URL). No other inayaflow.ai link except at most one more if truly useful. Never write the bare text inayaflow.ai. Do not describe features of our page that are not in the PAGE TEXT below.
 - No @usernames, no other creators' names, no hype, no calls like "sign up now". Be honest about limits (our tools are free helpers, not magic).
 - Banned words and phrases: delve, game-changer, landscape, tapestry, dive into, unlock, elevate, supercharge, revolutionize, seamlessly, cutting-edge, in conclusion, it's important to note, ever-evolving, look no further, to the next level, harness, embark, realm of, testament, leverage, must-have, take your ... to the next level.
@@ -498,6 +522,7 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
     slug, url, kind, what, topic = page
     st, _, html = getter(url)
     page_text = c.html_text(html, 6000) if st == 200 else ""
+    page_full = c.html_text(html, 40000) if st == 200 else ""
     if st != 200 or len(page_text) < 200:
         print("dev_poster: target page not readable (HTTP %s), stop" % st)
         log("| %s | %s | STOP page not readable | | | $0 | HTTP %s |" % (today, slug, st))
@@ -514,13 +539,17 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
     else:
         state.setdefault("attempts", {})[today] = tries_today + 1
     save()
-    problems, art, source_texts = ["no draft"], None, {}
+    problems, art, source_texts, unreadable = ["no draft"], None, {}, []
     for attempt in (1, 2):
         if attempt == 2 and meter.cost > RETRY_BELOW + 1e-9:
             break
         extra = "" if attempt == 1 else "\n\nYOUR LAST DRAFT FAILED THESE CHECKS, fix them: " + "; ".join(problems)
+        if attempt == 2 and unreadable:
+            extra += ("\nThese pages could NOT be read by our checker (empty or only a title): do not cite them again and drop every number whose only source is one of them: "
+                      + " | ".join(unreadable[:6]))
+        fetched = {}
         try:
-            art = parse_writer(run_writer(WRITER_SYSTEM, user + extra, meter, post=post_ai))
+            art = parse_writer(run_writer(WRITER_SYSTEM, user + extra, meter, post=post_ai, fetched=fetched))
         except Exception as e:
             problems = ["writer error %s" % type(e).__name__]
             break
@@ -531,8 +560,11 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
         source_texts = {}
         for u in ext:
             s2, _, h2 = getter(u)
-            source_texts[u] = c.html_text(h2, 20000) if s2 == 200 else ""
-        problems = check_article(art, url, page_text, source_texts, past_shingles=past_sh)
+            ours = c.html_text(h2, 20000) if s2 == 200 else ""
+            theirs = fetched.get(u, "")[:20000]                    # what the writer's own fetch tool returned for that page
+            source_texts[u] = theirs if len(theirs) > len(ours) else ours
+        unreadable = [u for u in ext if len(source_texts.get(u, "")) < MIN_SOURCE_CHARS]
+        problems = check_article(art, url, page_text, source_texts, past_shingles=past_sh, page_full=page_full)
         sl, _, _ = getter(url)
         if sl != 200:
             problems.append("target link not live (HTTP %s)" % sl)
