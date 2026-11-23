@@ -144,19 +144,24 @@ class WorstCase(unittest.TestCase):
         base = os.path.join(ROOT, "scripts")
         for sub in ("directory_agent", "hunter", "reports", "email_replier", "mail_router"):
             sys.path.insert(0, os.path.join(base, sub))
-        import agent as ag, hunter as hu, backlink_batch as bb, replier as rp, router as rt
+        import agent as ag, hunter as hu, backlink_batch as bb, replier as rp, router as rt, inbox_report as ir
         PER_CALL_HAIKU = 0.003                                   # 15k tokens in x $0.10/M + 3000 out x $0.50/M (scripts/reports/common.py prices)
         table = {
             "directory agent": ag.USD_CAP,
             "hunter (runner enforces $0.60 a job)": hu.DAILY_CAP,
             "backlink batch": bb.AI_USD_PER_DAY,
-            "ops report (20 calls x 8 runs)": 20 * 8 * PER_CALL_HAIKU,
+            "ops report (daily counter, 160 calls)": ir.REPORT_AI_PER_DAY * PER_CALL_HAIKU,
             "email replier": rp.AI_CALLS_PER_DAY * PER_CALL_HAIKU,
             "mail router": rt.AI_CALLS_PER_DAY * PER_CALL_HAIKU,
             "DEV poster (1 article a day, own cap)": 0.60,
         }
         total = sum(table.values())
         self.assertLessEqual(total, 15.0, table)
+        # NOT in the sum, on purpose: the job runner's other jobs (Director-submitted QA, research and code helper jobs) are not robots; they sit under
+        # the runner's OWN $15/day cap (job-runner.yml DAILY_COST_CAP), which is separate. The hunter jobs also run through that runner.
+        jr = open(os.path.join(ROOT, ".github", "workflows", "job-runner.yml"), encoding="utf8").read()
+        self.assertIn('DAILY_COST_CAP: "15.00"', jr)
+        self.assertEqual(ir.REPORT_AI_PER_DAY, 160)
         self.assertEqual(ag.USD_CAP, 6.0)
         self.assertEqual(hu.DAILY_CAP, 6.0)
         self.assertEqual(bb.AI_USD_PER_DAY, 1.0)

@@ -132,6 +132,30 @@ class T(unittest.TestCase):
 
 
 class DailyAiCap(unittest.TestCase):
+    def setUp(self):
+        self._ok = os.environ.get("AI_COUNTER_OK")
+        os.environ["AI_COUNTER_OK"] = "true"
+
+    def tearDown(self):
+        if self._ok is None:
+            os.environ.pop("AI_COUNTER_OK", None)
+        else:
+            os.environ["AI_COUNTER_OK"] = self._ok
+
+    def test_fails_closed_when_the_counter_was_not_restored(self):
+        import tempfile
+        os.environ.pop("AI_COUNTER_OK", None)
+        p = os.path.join(tempfile.mkdtemp(), "ops", "ai_calls_router.json")
+        self.assertFalse(R.ai_take_call(p, "2026-11-23"))
+        self.assertFalse(os.path.exists(p))
+
+    def test_workflow_restores_sets_the_flag_and_pushes_the_counter(self):
+        w = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "workflows", "mail-router.yml"), encoding="utf8").read()
+        restore = w.split('echo "log branch restored"', 1)[1].split("else", 1)[0]
+        self.assertIn("AI_COUNTER_OK=true", restore)               # only on the branch that really restored the log branch
+        self.assertIn("ROUTER_OUT_DIR: /tmp/push/ops", w)          # the counter lives in the restored folder
+        self.assertIn("ops/ai_calls_router.json", w)
+
     def test_daily_cap_counts_and_resets(self):
         import tempfile
         p = os.path.join(tempfile.mkdtemp(), "ops", "ai_calls_router.json")

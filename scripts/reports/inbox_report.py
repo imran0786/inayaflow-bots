@@ -282,6 +282,24 @@ def build(inputs, state, digests=(), digest_note="", ai=c.haiku):
     return "\n".join(L), new_state, counts
 
 
+REPORT_AI_PER_DAY = int(os.environ.get("REPORT_AI_PER_DAY", "160"))     # QA round 4: hard daily cap on this robot's Haiku calls (160 x ~$0.003 = $0.48)
+AI_COUNT_FILE = os.path.join("ops", "ai_calls_report.json")
+
+
+def ai_used_today(work, today=None):
+    today = today or c.now().strftime("%Y-%m-%d")
+    try:
+        d = c.read_json(os.path.join(work, AI_COUNT_FILE), {})
+        return int(d.get("calls", 0)) if d.get("date") == today else 0
+    except Exception:
+        return REPORT_AI_PER_DAY            # unreadable counter: fail closed, no model calls this run
+
+
+def save_ai_used(work, used_before, calls_now, today=None):
+    today = today or c.now().strftime("%Y-%m-%d")
+    c.write_json(os.path.join(work, AI_COUNT_FILE), {"date": today, "calls": used_before + calls_now})
+
+
 def read_inputs():
     return {
         "mail_audit": c.fetch_file("ops-mail-router", "ops/mail_audit.md"),
@@ -308,6 +326,8 @@ def prune_history(d, keep=80):
 def main():
     work = c.clone()
     latest = os.path.join(work, LATEST)
+    used_before = ai_used_today(work)
+    c.MAX_AI_CALLS = max(0, min(c.MAX_AI_CALLS, REPORT_AI_PER_DAY - used_before))     # daily cap: every Haiku call of this run (digests + action tracker) comes out of it
     try:
         state = c.read_json(os.path.join(work, STATE), {})
         inputs = read_inputs()
@@ -337,6 +357,7 @@ def main():
         except Exception as e:
             report = report.rstrip("\n") + "\n\n> ROBOT AGE SECTION ERROR: not built this run (%s).\n" % type(e).__name__
             print("robot ages: FAILED %s" % type(e).__name__)
+        save_ai_used(work, used_before, c.USAGE["calls"])
         c.write_text(latest, report)
         c.write_text(os.path.join(work, "ops", "history", "report_%s.md" % c.stamp()), report)
         prune_history(os.path.join(work, "ops", "history"))
@@ -348,6 +369,7 @@ def main():
     except Exception as e:
         print("report: FAILED %s" % type(e).__name__)
         try:
+            save_ai_used(work, used_before, c.USAGE["calls"])
             c.error_notice(latest, "inbox + backlinks report", e)
             c.commit_push("ops: report error notice")
         except Exception:

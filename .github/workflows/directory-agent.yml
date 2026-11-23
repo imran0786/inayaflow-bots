@@ -89,9 +89,9 @@ jobs:
           DAILY_SUCCESS_CAP: "30"
           DAILY_ATTEMPT_CAP: "150"
           DAILY_TOOL_ATTEMPT_CAP: "200"
-          DAILY_USD_CAP: "6"   # 23 Nov: hunter stops at $7.20 a day; no attempt starts unless spent + ATTEMPT_MAX_USD fits under this
+          DAILY_USD_CAP: "6"   # 23 Nov: hunter stops at $6 a day; no attempt starts unless spent + ATTEMPT_MAX_USD fits under this
           ATTEMPT_MAX_USD: "1.00"
-          UNPRICED_ATTEMPT_USD: "0.50"
+          UNPRICED_ATTEMPT_USD: "1.00"
           RUN_BUDGET_PRIMARY_USD: "0.25"
           RUN_BUDGET_FALLBACK_USD: "0.40"
           RUN_SECONDS: "8400"   # 140 min: the agent stops itself below the 150-minute step timeout

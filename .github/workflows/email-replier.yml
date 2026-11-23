@@ -47,6 +47,7 @@ jobs:
               cp "/tmp/logs/ops/$f" "ops/$f" 2>/dev/null || true
             done
             echo "logs restored"
+            echo "AI_COUNTER_OK=true" >> "$GITHUB_ENV"        # the daily model-call counter lives in this branch: no restore = no model calls this run
           else
             echo "no logs branch yet (or clone failed)"
           fi
