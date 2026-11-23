@@ -1,0 +1,88 @@
+name: DEV poster (one article a day on dev.to)
+
+# 23 Nov 2026. Publishes ONE original article a day to DEV (dev.to, @inayaflow) through the official Forem API (POST /api/articles).
+# Writer: Claude Sonnet 5.5 + web search (max $0.60 a run, one run a day). QA: Haiku + offline checks. Any FAIL = nothing is published,
+# the draft is saved to the PRIVATE repo (imran0786/genie, branch ops-dev-poster) for the Director.
+# SWITCH: scheduled runs are DRY (write + check, publish nothing) until the repository variable DEV_POSTER_LIVE is "true".
+# Manual runs default to dry_run=true. Public log = page slug, status words, cost only (never the key, never article text).
+on:
+  schedule:
+    - cron: "23 13 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = write and check the article, publish nothing"
+        default: "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-poster
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests (a failure stops the run)
+        run: python3 -W ignore scripts/dev_poster/test_poster.py
+
+      - name: Restore state from the private repo
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          mkdir -p ops
+          if git clone -q --branch ops-dev-poster --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/logs 2>/dev/null; then
+            cp /tmp/logs/ops/dev_poster_state.json ops/ 2>/dev/null || true
+            cp /tmp/logs/ops/dev_poster_log.md ops/ 2>/dev/null || true
+            echo "state restored"
+          else
+            echo "no state branch yet"
+          fi
+
+      - name: Write, check and (when live) publish
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEV_API_KEY: ${{ secrets.DEV_API_KEY }}
+          DRY_RUN: ${{ github.event_name == 'schedule' && (vars.DEV_POSTER_LIVE == 'true' && 'false' || 'true') || github.event.inputs.dry_run || 'true' }}
+          DEV_RUN_USD_CAP: "0.60"
+        run: |
+          echo "::add-mask::$DEV_API_KEY"
+          python3 scripts/dev_poster/poster.py 2>/dev/null
+
+      - name: Save state, log and drafts to the private repo (never here)
+        if: always()
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          set -e
+          rm -rf /tmp/push
+          if git clone -q --branch ops-dev-poster --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push 2>/dev/null; then
+            :
+          else
+            git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push
+            cd /tmp/push && git checkout -q --orphan ops-dev-poster && git rm -rq --cached . >/dev/null 2>&1 || true
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
+          fi
+          mkdir -p /tmp/push/ops
+          for f in dev_poster_state.json dev_poster_log.md; do
+            [ -f "ops/$f" ] && cp "ops/$f" "/tmp/push/ops/$f" || true
+          done
+          [ -d ops/dev_drafts ] && mkdir -p /tmp/push/ops/dev_drafts && cp ops/dev_drafts/* /tmp/push/ops/dev_drafts/ || true
+          cd /tmp/push
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add ops
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -q -m "ops: dev poster state and log"
+          git pull -q --rebase origin ops-dev-poster 2>/dev/null || true
+          git push -q origin ops-dev-poster
+          echo "state saved"

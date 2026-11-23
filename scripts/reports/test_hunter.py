@@ -33,9 +33,9 @@ class Hunter(unittest.TestCase):
         self.assertEqual(hu.slot(at(9), 1)[2], hu.slot(at(9), 0)[2] + 1)
         self.assertEqual(hu.slot(at(12), 0)[2], hu.slot(at(9), 1)[2] + 1)
 
-    def test_daily_stop_keeps_worst_case_under_8_dollars(self):
+    def test_daily_stop_keeps_worst_case_under_7_40_dollars(self):
         import tempfile
-        self.assertEqual(hu.DAILY_CAP, 8.0)
+        self.assertEqual(hu.DAILY_CAP, 7.4)
         now = at(21)
         with tempfile.TemporaryDirectory() as w:
             os.makedirs(os.path.join(w, "jobs", "done"))
@@ -43,9 +43,9 @@ class Hunter(unittest.TestCase):
                 open(os.path.join(w, "jobs", "done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)), "w").close()
             open(os.path.join(w, "jobs", "done", "2026-11-22-0900-hunter-old-x.md"), "w").close()    # yesterday does not count
             self.assertEqual(hu.queued_today(w, now), 12)
-        # at most floor(8 / 0.60) = 13 jobs a day can ever be queued
-        self.assertEqual(int(hu.DAILY_CAP // hu.MAX_COST), 13)
-        self.assertLessEqual(13 * hu.MAX_COST, 8.0)
+        # at most floor(7.4 / 0.60) = 12 jobs a day can ever be queued
+        self.assertEqual(int(hu.DAILY_CAP // hu.MAX_COST), 12)
+        self.assertLessEqual(12 * hu.MAX_COST, 7.4)
 
     def test_main_stops_at_the_daily_cap(self):
         import tempfile
@@ -59,7 +59,7 @@ class Hunter(unittest.TestCase):
             hu.main()
         finally:
             c.clone, c.commit_push, c.now, c.DRY, hu.MAX_WAITING = saved
-        self.assertEqual(len([n for n in os.listdir(os.path.join(w, "jobs", "pending"))]), 1)   # 12 + 1 = 13 jobs = $7.80; the 14th is refused
+        self.assertFalse(os.path.isdir(os.path.join(w, "jobs", "pending")) and os.listdir(os.path.join(w, "jobs", "pending")))   # 12 jobs = $7.20 is the stop; the 13th is refused
 
     def test_already_queued_survives_a_later_minute(self):
         import tempfile
