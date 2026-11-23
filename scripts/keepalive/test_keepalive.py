@@ -188,6 +188,14 @@ class Config(unittest.TestCase):
         self.assertIn("group: keepalive-check", t)
         self.assertIn("cancel-in-progress: false", t)
 
+    # scheduled workflows the keep-alive check deliberately does NOT start, with the reason:
+    NOT_WATCHED = {
+        "keepalive-check.yml": "this check itself",
+        "keepalive.yml": "monthly commit that keeps the schedules enabled; nothing to catch up",
+        "app-scan.yml": "manual / long scan, not a timed robot",
+        "dev-poster.yml": "publishes to dev.to only when its own repository switch DEV_POSTER_LIVE is true; a keep-alive dispatch would run it dry (default dry_run) or bypass the switch, so a missed day is simply missed",
+    }
+
     def test_ops_report_has_no_write_permission(self):
         t = open(os.path.join(self.wf, "ops-report.yml"), encoding="utf8").read()
         block = t.split("permissions:", 1)[1].split("concurrency:", 1)[0]
@@ -202,7 +210,7 @@ class Config(unittest.TestCase):
         watched = {f for f, _, _ in k.ROBOTS}
         for f in os.listdir(self.wf):
             t = open(os.path.join(self.wf, f), encoding="utf8").read()
-            if re.search(r"^\s+- cron:", t, re.M) and f not in ("keepalive-check.yml", "keepalive.yml", "app-scan.yml") :
+            if re.search(r"^\s+- cron:", t, re.M) and f not in self.NOT_WATCHED:
                 self.assertIn(f, watched, f)
 
 
