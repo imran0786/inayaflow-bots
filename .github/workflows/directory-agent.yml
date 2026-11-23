@@ -71,6 +71,9 @@ jobs:
       - name: Install browser-use (pinned)
         run: python3 -m pip install -q 'browser-use==1.0.6' 2>&1 | tail -2
 
+      - name: Check that the token limits can be installed (a failure stops the run before any spend)
+        run: python3 -c "import sys; sys.path.insert(0, 'scripts/directory_agent'); import agent; sys.exit(0 if agent.preflight_limits() else 1)" 2>/dev/null
+
       - name: Run agent
         timeout-minutes: 150   # shorter than the job (180), so the save step below always has time to run, even after a timeout
         env:
@@ -86,7 +89,11 @@ jobs:
           DAILY_SUCCESS_CAP: "30"
           DAILY_ATTEMPT_CAP: "150"
           DAILY_TOOL_ATTEMPT_CAP: "200"
-          DAILY_USD_CAP: "6.5"   # 23 Nov: raised from 6; hunter stops at $8 a day, so the worst case of both stays <= $15 (Imran: "Spend 14, maybe $15 a day" in total)
+          DAILY_USD_CAP: "6"   # 23 Nov: hunter stops at $7.20 a day; no attempt starts unless spent + ATTEMPT_MAX_USD fits under this
+          ATTEMPT_MAX_USD: "1.00"
+          UNPRICED_ATTEMPT_USD: "0.50"
+          RUN_BUDGET_PRIMARY_USD: "0.25"
+          RUN_BUDGET_FALLBACK_USD: "0.40"
           RUN_SECONDS: "8400"   # 140 min: the agent stops itself below the 150-minute step timeout
           BROWSER_USE_SETUP_LOGGING: "false"
           ANONYMIZED_TELEMETRY: "false"

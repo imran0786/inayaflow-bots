@@ -19,8 +19,17 @@ SUCCESS_CAP = int(os.environ.get("DAILY_SUCCESS_CAP", "30"))   # 22 Nov 2026: 10
 ATTEMPT_CAP = int(os.environ.get("DAILY_ATTEMPT_CAP", "150"))  # site attempts per UTC day, all runs together (was 10 / 50 before 22-23 Nov 2026)
 TOOL_ATTEMPT_CAP = int(os.environ.get("DAILY_TOOL_ATTEMPT_CAP", "200"))  # extra per-tool listings a day, on top of the site attempts
 RUN_SECONDS = int(os.environ.get("RUN_SECONDS", "8400"))   # per run (same value as the workflow)
-USD_CAP = float(os.environ.get("DAILY_USD_CAP", "6.5"))      # Director budget 23 Nov 2026: this robot may spend at most $6.50 a UTC day (23 Nov: was $6, hunter total stop $8, worst case of all robots <= $15; Imran 22 Nov: "Spend 14, maybe $15 a day" across all robots), all runs together
-UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "0.25"))  # ASSUMPTION used only when the library gives no price for an attempt
+USD_CAP = float(os.environ.get("DAILY_USD_CAP", "6"))      # Director budget 23 Nov 2026 (QA round 2): at most $6 a UTC day, all runs together; a new attempt only starts when spent + ATTEMPT_MAX_USD fits under it; hunter stop is $7.20
+UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "0.50"))  # ASSUMPTION used only when the library gives no price for an attempt (0.25 -> 0.50 in QA round 3)
+# HARD per-attempt stop (QA round 3): browser-use 1.0.6 has no live cost hook, but every run is a pydantic-ai run and a
+# UsageLimits token limit aborts it gracefully (UsageLimitExceeded -> status max_steps, partial result kept, cost still read).
+# Each model run gets a dollar budget; it is turned into token limits with CONSERVATIVE prices. One attempt = primary run + fallback run:
+# 0.25 + 0.40 plus the one response that crosses the limit (Haiku ~0.01, Sonnet <= ~0.29) = <= ~0.95 < ATTEMPT_MAX_USD (1.00).
+RUN_BUDGET_PRIMARY_USD = float(os.environ.get("RUN_BUDGET_PRIMARY_USD", "0.25"))
+RUN_BUDGET_FALLBACK_USD = float(os.environ.get("RUN_BUDGET_FALLBACK_USD", "0.40"))
+HAIKU_PRICE_PER_M = (float(os.environ.get("HAIKU_IN_PER_M", "1.0")), float(os.environ.get("HAIKU_OUT_PER_M", "5.0")))  # ASSUMPTION, 10x the 0.10/0.50 the batch robot reads off the pricing page
+_CUR_LIMITS = {"tokens": None}
+ATTEMPT_MAX_USD = float(os.environ.get("ATTEMPT_MAX_USD", "1.00"))  # RESERVE for one attempt (primary + fallback model): none starts unless spent + this fits under USD_CAP; a dearer attempt is printed as OVER_RESERVE
 SPEND_PATH = os.path.join(ROOT, "ops", "directory_agent_spend.json")
 ASSET_DIR = os.path.join(ROOT, "data", "assets")
 STATE_PATH = os.path.join(ROOT, "ops", "directory_agent_state.json")
@@ -208,9 +217,41 @@ RULES:
 Finish with one status code from: {', '.join(RESULT_CODES)} and a note of at most 25 words (no links, no e-mail addresses, no codes, no passwords)."""
 
 
-async def run_site(site, model, product=None):
+def token_limits(model, budget):
+    """(input_tokens_limit, output_tokens_limit) that keep one model run inside `budget` dollars (70% input, 30% output)."""
+    pin, pout = HAIKU_PRICE_PER_M if "haiku" in str(model).lower() else (PRICE_IN, PRICE_OUT)
+    return int(budget * 0.7 / pin * 1e6), int(budget * 0.3 / pout * 1e6)
+
+
+def install_limits():
+    """Makes every browser-use run carry the token limits in _CUR_LIMITS. Returns True when installed; raises when the library
+    does not accept the limits (the caller then stops the whole run: fail closed, nothing is spent)."""
+    import browser_use.agent.loop as bl
+    real = getattr(bl, "_REAL_USAGE_LIMITS", None) or bl.UsageLimits
+    real(request_limit=1, input_tokens_limit=1, output_tokens_limit=1)     # raises TypeError if this version has no such limits
+
+    def make(**kw):
+        t = _CUR_LIMITS["tokens"]
+        if t:
+            kw["input_tokens_limit"], kw["output_tokens_limit"] = t
+        return real(**kw)
+    bl._REAL_USAGE_LIMITS = real
+    bl.UsageLimits = make
+    return True
+
+
+def preflight_limits():
+    try:
+        return install_limits()
+    except Exception as e:
+        print("directory agent: token limits cannot be installed (%s): NO attempt started" % type(e).__name__, flush=True)
+        return False
+
+
+async def run_site(site, model, product=None, budget=None):
     from pydantic import BaseModel
     from browser_use import Agent, Browser, ChatAnthropic, Tools
+    _CUR_LIMITS["tokens"] = token_limits(model, budget if budget is not None else RUN_BUDGET_FALLBACK_USD)
 
     class Outcome(BaseModel):
         status: str
@@ -408,6 +449,8 @@ def spent_today(spend, today):
 
 def add_spend(spend, today, r):
     """Adds one attempt's cost (the logged model usage price, or the assumed flat price when unpriced) and keeps 7 days."""
+    for k, v in load_spend().items():          # another writer may have added to the file since we read it: never go below it
+        spend[k] = max(float(spend.get(k, 0.0) or 0.0), float(v or 0.0))
     spend[today] = round(spent_today(spend, today) + (r.get("cost") if r.get("cost") is not None else UNPRICED_USD), 4)
     for k in sorted(spend)[:-7]:
         del spend[k]
@@ -498,7 +541,7 @@ def run_one(s, product=None):
     out = None
     for i, model in enumerate([MODEL, FALLBACK_MODEL] if FALLBACK_MODEL and FALLBACK_MODEL != MODEL else [MODEL]):
         try:
-            r = asyncio.run(run_site(s, model, product))
+            r = asyncio.run(run_site(s, model, product, RUN_BUDGET_PRIMARY_USD if i == 0 else RUN_BUDGET_FALLBACK_USD))
         except asyncio.TimeoutError:
             r = {"status": "TIMEOUT", "note": "site budget used", "secs": SITE_SECONDS, "cost": None, "cost_estimated": False, "steps": None, "usage": None, "flags": []}
         except Exception as e:
@@ -516,6 +559,8 @@ def run_one(s, product=None):
 
 def main():
     t_start = time.time()
+    if not preflight_limits():
+        return 1
     batch = os.environ.get("BATCH_FILE", "").strip()
     only = [x.strip().lower() for x in os.environ.get("ONLY", "").split(",") if x.strip()]
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
@@ -543,6 +588,8 @@ def main():
         nonlocal tot
         r = run_one(s, product)
         tot += r["cost"] or 0
+        if (r["cost"] or 0) > ATTEMPT_MAX_USD:
+            print("OVER_RESERVE | %s | attempt cost $%.2f is above the $%.2f reserve" % (s["name"], r["cost"], ATTEMPT_MAX_USD), flush=True)
         add_spend(spend, today, r)    # every attempt counts, dry runs too (they use the model)
         cost_s = "n/a" if r["cost"] is None else ("$%.3f%s" % (r["cost"], "~" if r["cost_estimated"] else ""))
         pname = product["id"] if product else "homepage"
@@ -556,7 +603,10 @@ def main():
             json.dump(state, open(STATE_PATH, "w", encoding="utf8"), indent=1)
 
     def stop_now():
-        return time.time() - t_start > RUN_SECONDS or spent_today(spend, today) >= USD_CAP
+        fresh = load_spend()                       # re-read the shared spend file before EVERY attempt (QA round 3)
+        for k, v in fresh.items():
+            spend[k] = max(float(spend.get(k, 0.0) or 0.0), float(v or 0.0))
+        return time.time() - t_start > RUN_SECONDS or spent_today(spend, today) + ATTEMPT_MAX_USD > USD_CAP
 
     def tool_listings(s):
         """Each free tool as its OWN listing on this directory. Stops for the site when it allows one listing per company,
@@ -615,4 +665,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

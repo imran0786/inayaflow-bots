@@ -68,7 +68,7 @@ jobs:
           cd /tmp/push
           git config user.name "inayaflow-bot"
           git config user.email "contact@inayaflow.ai"
-          git add ops/mail_router_log.md ops/mail_audit.md ops/listing_status.md
+          git add ops/mail_router_log.md ops/mail_audit.md ops/listing_status.md ops/ai_calls_router.json 2>/dev/null || git add ops/mail_router_log.md ops/mail_audit.md ops/listing_status.md
           if git diff --cached --quiet; then echo "no change"; exit 0; fi
           git commit -q -m "ops: mail router"
           git push -q origin ops-mail-router

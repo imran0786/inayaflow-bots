@@ -13,6 +13,28 @@ HOST = os.environ.get("IMAP_HOST", "mail.privateemail.com")
 USER = os.environ.get("CONTACT_EMAIL", "contact@inayaflow.ai")
 HOURS = int(os.environ.get("ROUTER_HOURS", "72"))
 MAX_AI = int(os.environ.get("ROUTER_MAX_AI", "40"))
+AI_CALLS_PER_DAY = int(os.environ.get("AI_CALLS_PER_DAY", "150"))     # 23 Nov QA round 3: <= 150 Haiku calls a UTC day (~$0.0015 each: <= $0.25 a day)
+AI_COUNT_PATH = os.path.join(os.environ.get("ROUTER_OUT_DIR", "ops"), "ai_calls_router.json")
+
+
+def ai_calls_today(path=None, today=None):
+    path, today = path or AI_COUNT_PATH, today or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    try:
+        d = json.load(open(path, encoding="utf-8"))
+        return int(d.get("calls", 0)) if d.get("date") == today else 0
+    except Exception:
+        return 0
+
+
+def ai_take_call(path=None, today=None):
+    """Counts one model call before it is made. False when today's cap is used up. Written at once (a crash cannot lose it)."""
+    path, today = path or AI_COUNT_PATH, today or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    n = ai_calls_today(path, today)
+    if n >= AI_CALLS_PER_DAY:
+        return False
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    json.dump({"date": today, "calls": n + 1}, open(path, "w", encoding="utf-8"))
+    return True
 OUT_DIR = os.environ.get("ROUTER_OUT_DIR", "ops")
 DIR_JSON = os.environ.get("DIR_JSON", "ops/directories.json")
 OUTREACH_TXT = os.environ.get("OUTREACH_TXT", "ops/outreach_domains.txt")
@@ -380,8 +402,8 @@ def main():
             if det:
                 bucket, reason = det
             else:
-                if ai_used >= MAX_AI:
-                    deferred += 1
+                if ai_used >= MAX_AI or not ai_take_call():
+                    deferred += 1                     # per-run cap or the daily cap: the mail stays unrouted and is tried on a later run / day
                     continue
                 ai_used += 1
                 bucket, reason, _how = classify(frm, subj, body, irt, refs, dir_d, out_d, sent_ids, unsub)
