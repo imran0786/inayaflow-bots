@@ -13,6 +13,7 @@ on:
         default: "false"
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -33,12 +34,15 @@ jobs:
           python3 -W ignore scripts/reports/test_reports.py
           python3 -W ignore scripts/reports/test_action_tracker.py
           python3 -W ignore scripts/reports/test_targets.py
+          python3 -W ignore scripts/keepalive/test_keepalive.py
       - name: Build and save the report (private repo, never here)
         env:
           GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CONTACT_EMAIL_PASSWORD: ${{ secrets.CONTACT_EMAIL_PASSWORD }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # robot last-run ages (actions: read)
+          GITHUB_REPOSITORY: ${{ github.repository }}
           MAX_AI_CALLS: "12"
           MAX_ACTION_CALLS: "8"
         run: |

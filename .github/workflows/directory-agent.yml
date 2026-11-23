@@ -86,7 +86,7 @@ jobs:
           DAILY_SUCCESS_CAP: "30"
           DAILY_ATTEMPT_CAP: "150"
           DAILY_TOOL_ATTEMPT_CAP: "200"
-          DAILY_USD_CAP: "6"
+          DAILY_USD_CAP: "8"   # 23 Nov: raised from 6 (Imran: "Spend 14, maybe $15 a day" in total)
           RUN_SECONDS: "8400"   # 140 min: the agent stops itself below the 150-minute step timeout
           BROWSER_USE_SETUP_LOGGING: "false"
           ANONYMIZED_TELEMETRY: "false"

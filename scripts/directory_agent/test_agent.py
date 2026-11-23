@@ -69,7 +69,7 @@ class Listings(unittest.TestCase):
 class Budget(unittest.TestCase):
     def test_defaults_match_the_workflow(self):
         self.assertEqual(ag.RUN_SECONDS, 8400)                 # below the 150-minute step timeout
-        self.assertEqual(ag.USD_CAP, 6.0)
+        self.assertEqual(ag.USD_CAP, 8.0)
 
     def test_dollar_cap_counts_priced_and_unpriced_attempts(self):
         import tempfile
@@ -82,7 +82,7 @@ class Budget(unittest.TestCase):
             self.assertAlmostEqual(ag.spent_today(sp, "2026-11-25"), 1.5 + ag.UNPRICED_USD)
             self.assertEqual(ag.spent_today(sp, "2026-11-26"), 0.0)             # a new day starts at zero
             self.assertEqual(ag.load_spend(), sp)
-            ag.add_spend(sp, "2026-11-25", {"cost": 5.0})
+            ag.add_spend(sp, "2026-11-25", {"cost": ag.USD_CAP})
             self.assertGreaterEqual(ag.spent_today(sp, "2026-11-25"), ag.USD_CAP)
         finally:
             ag.SPEND_PATH = old

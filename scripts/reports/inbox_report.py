@@ -327,6 +327,16 @@ def main():
         except Exception as e:
             report = report.replace("\n", "\n\n> ACTION TRACKER ERROR: not built this run (%s).\n" % type(e).__name__, 1)
             print("action tracker: FAILED %s" % type(e).__name__)
+        try:  # ROBOT LAST-RUN AGE (23 Nov 2026): a failure here never breaks the rest of the report
+            sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "keepalive"))
+            import keepalive as ka
+            sec, reds = ka.age_section(os.environ.get("GITHUB_TOKEN", ""))
+            report = report.rstrip("\n") + "\n" + sec
+            n["robots_red"] = reds
+            print("robot ages: red=%d" % reds)
+        except Exception as e:
+            report = report.rstrip("\n") + "\n\n> ROBOT AGE SECTION ERROR: not built this run (%s).\n" % type(e).__name__
+            print("robot ages: FAILED %s" % type(e).__name__)
         c.write_text(latest, report)
         c.write_text(os.path.join(work, "ops", "history", "report_%s.md" % c.stamp()), report)
         prune_history(os.path.join(work, "ops", "history"))

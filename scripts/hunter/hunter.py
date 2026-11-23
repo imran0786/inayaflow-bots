@@ -25,7 +25,8 @@ BRANCH = "ops-jobs"
 WORK = os.environ.get("HUNTER_WORK", "/tmp/ops_jobs_hunter")
 MAX_COST = float(os.environ.get("HUNTER_MAX_COST", "0.60"))       # job-runner ceiling is $1; Director budget 23 Nov: 8 jobs a day at $0.60
 MAX_SEARCHES = int(os.environ.get("HUNTER_MAX_SEARCHES", "10"))   # job-runner ceiling is 10
-MAX_WAITING = int(os.environ.get("HUNTER_MAX_WAITING", "3"))      # never pile up more hunter jobs than the runner can clear
+JOBS_PER_RUN = int(os.environ.get("HUNTER_JOBS_PER_RUN", "2"))     # 23 Nov: 2 research jobs per 3-hour run (was 1): 16 a day at $0.60 max
+MAX_WAITING = int(os.environ.get("HUNTER_MAX_WAITING", "6"))      # never pile up more hunter jobs than the runner can clear
 
 PAGES = [  # (slug used in the job id and the result's "page" field, URL, what it is, topic words the prospect must be about)
     ("homepage", "https://inayaflow.ai/", "InayaFlow, an AI TikTok agent for creators: each morning it delivers ready-to-film ideas, hooks, scripts, trending sounds and posting times",
@@ -63,10 +64,11 @@ TYPES = [  # (type value in the result, what to find)
 ]
 
 
-def slot(now=None):
-    """(page, type, slot number): 8 slots a day (every 3 hours); every page meets every type over 55 slots."""
+def slot(now=None, k=0):
+    """(page, type, slot number): 8 runs a day (every 3 hours) x JOBS_PER_RUN jobs; k = 0..JOBS_PER_RUN-1 is the job inside the run.
+    Slot numbers step by 1 per job, so every page still meets every type over 55 slots."""
     now = now or c.now()
-    n = now.timetuple().tm_yday * 8 + now.hour // 3
+    n = (now.timetuple().tm_yday * 8 + now.hour // 3) * JOBS_PER_RUN + k
     return PAGES[n % len(PAGES)], TYPES[(n // len(PAGES)) % len(TYPES)], n
 
 
@@ -112,26 +114,45 @@ def waiting(work):
         return 0
 
 
+def already_queued(work, now, page, typ):
+    """True when this page/type job exists for today in any folder (a keep-alive run at another minute must not queue a second copy)."""
+    day = now.strftime("%Y-%m-%d")
+    tail = "-hunter-%s-%s.md" % (page[0], typ[0].replace("_", "-"))
+    for d in ("pending", "briefs", "done", "failed"):
+        try:
+            if any(n.startswith(day) and n.endswith(tail) for n in os.listdir(os.path.join(work, "jobs", d))):
+                return True
+        except OSError:
+            pass
+    return False
+
+
 def main():
     now = c.now()
-    page, typ, n = slot(now)
-    pid = job_id(now, page, typ)
+    picks = [slot(now, k) for k in range(JOBS_PER_RUN)]
     if c.DRY:
-        print("hunter: dry run, would queue %s" % pid)
+        for page, typ, n in picks:
+            print("hunter: dry run, would queue %s" % job_id(now, page, typ))
         return 0
     work = c.clone(BRANCH, WORK)
-    if waiting(work) >= MAX_WAITING:
-        print("hunter: %d hunter job(s) still waiting, nothing queued" % waiting(work))
-        return 0
-    for d in ("pending", "briefs", "done", "failed"):
-        if os.path.exists(os.path.join(work, "jobs", d, pid + ".md")):
-            print("hunter: slot already queued today (%s)" % d)
-            return 0
     os.makedirs(os.path.join(work, "jobs", "pending"), exist_ok=True)
-    with open(os.path.join(work, "jobs", "pending", pid + ".md"), "w", encoding="utf-8") as f:
-        f.write(build_brief(now, page, typ))
-    pushed = c.commit_push("job: %s (research)" % pid, BRANCH, work)
-    print("hunter: queued %s pushed=%s page=%s type=%s" % (pid, pushed, page[0], typ[0]))
+    queued = []
+    for page, typ, n in picks:
+        w = waiting(work) + len(queued)
+        if w >= MAX_WAITING:
+            print("hunter: %d hunter job(s) still waiting, nothing more queued" % w)
+            break
+        if already_queued(work, now, page, typ):
+            print("hunter: slot already queued today (%s/%s)" % (page[0], typ[0]))
+            continue
+        pid = job_id(now, page, typ)
+        with open(os.path.join(work, "jobs", "pending", pid + ".md"), "w", encoding="utf-8") as f:
+            f.write(build_brief(now, page, typ))
+        queued.append(pid)
+    if not queued:
+        return 0
+    pushed = c.commit_push("job: %d hunter research job(s)" % len(queued), BRANCH, work)
+    print("hunter: queued %d pushed=%s %s" % (len(queued), pushed, ", ".join(queued)))
     return 0
 
 

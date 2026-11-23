@@ -26,6 +26,24 @@ class Hunter(unittest.TestCase):
         self.assertEqual(len(seen), 55)
         self.assertEqual(len({hu.slot(at(h))[2] for h in range(0, 24, 3)}), 8)      # 8 different slots a day (every 3 hours)
         self.assertEqual(hu.MAX_COST, 0.60)
+        self.assertEqual(hu.JOBS_PER_RUN, 2)
+        # 2 jobs per run: 16 different slots a day, consecutive numbers, 16 different page/type pairs
+        pairs = {(hu.slot(at(h), k)[0][0], hu.slot(at(h), k)[1][0]) for h in range(0, 24, 3) for k in range(hu.JOBS_PER_RUN)}
+        self.assertEqual(len(pairs), 16)
+        self.assertEqual(hu.slot(at(9), 1)[2], hu.slot(at(9), 0)[2] + 1)
+        self.assertEqual(hu.slot(at(12), 0)[2], hu.slot(at(9), 1)[2] + 1)
+
+    def test_already_queued_survives_a_later_minute(self):
+        import tempfile
+        now = at(9)
+        page, typ, _ = hu.slot(now)
+        with tempfile.TemporaryDirectory() as w:
+            os.makedirs(os.path.join(w, "jobs", "pending"))
+            self.assertFalse(hu.already_queued(w, now, page, typ))
+            open(os.path.join(w, "jobs", "pending", hu.job_id(now, page, typ) + ".md"), "w").close()
+            later = now.replace(minute=52)                                      # a keep-alive start at another minute
+            self.assertTrue(hu.already_queued(w, later, page, typ))
+            self.assertFalse(hu.already_queued(w, at(9, d=24), page, typ))      # another day is free
 
     def test_id_has_hunter_and_the_brief_is_valid_for_the_runner(self):
         now = at(8)
