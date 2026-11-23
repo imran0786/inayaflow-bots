@@ -385,6 +385,54 @@ class ReportDailyCap(unittest.TestCase):
         open(os.path.join(w, "ops", "ai_calls_report.json"), "w").write("[1, 2]")      # valid JSON, wrong shape
         self.assertEqual(ir.ai_used_today(w, "2026-11-23"), ir.REPORT_AI_PER_DAY)
 
+    def test_action_tracker_calls_come_out_of_the_same_daily_counter(self):
+        import inspect, inbox_report as ir, action_tracker as at
+        # one shared call counter: every Haiku call (digest judge AND action tracker) goes through c.haiku and counts in c.USAGE
+        self.assertIs(inspect.signature(at.classify).parameters["ai"].default, c.haiku)
+        self.assertIs(inspect.signature(at.build_rows).parameters["ai"].default, c.haiku)
+        saved = (c.MAX_AI_CALLS, dict(c.USAGE))
+        try:
+            c.USAGE.update(calls=0, **{"in": 0, "out": 0})
+            c.MAX_AI_CALLS = 3                                           # what main() sets: min(per-run cap, 160 - used today)
+            post = lambda url, body, headers: {"content": [{"type": "text", "text": "x"}], "usage": {"input_tokens": 1, "output_tokens": 1}}
+            for _ in range(3):
+                c.haiku("s", "u", post=post)
+            with self.assertRaises(c.BudgetExceeded):
+                c.haiku("s", "u", post=post)                             # the 4th call of the day-run is refused, whoever asks
+        finally:
+            c.MAX_AI_CALLS = saved[0]
+            c.USAGE.clear()
+            c.USAGE.update(saved[1])
+
+    def test_the_counter_file_is_committed_and_pushed_with_the_report(self):
+        import subprocess, tempfile, inbox_report as ir
+        def sh(*a, cwd=None):
+            r = subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True)
+            assert r.returncode == 0, (a, r.stderr)
+            return r.stdout
+        base = tempfile.mkdtemp()
+        remote = os.path.join(base, "remote.git")
+        sh("init", "-q", "--bare", "-b", "ops", remote)
+        w = os.path.join(base, "w")
+        sh("clone", "-q", remote, w)
+        sh("config", "user.name", "t", cwd=w)
+        sh("config", "user.email", "t@example.com", cwd=w)
+        os.makedirs(os.path.join(w, "ops"))
+        open(os.path.join(w, "ops", "report_latest.md"), "w").write("r")
+        sh("add", "-A", cwd=w); sh("commit", "-q", "-m", "seed", cwd=w); sh("push", "-q", "origin", "HEAD:ops", cwd=w)
+        sh("checkout", "-q", "ops", cwd=w)
+        ir.save_ai_used(w, 40, 12, "2026-11-23")                          # what main() does before the push
+        saved = c.FIXTURE_DIR
+        c.FIXTURE_DIR = None
+        try:
+            self.assertTrue(c.commit_push("ops: report", "ops", w))
+        finally:
+            c.FIXTURE_DIR = saved
+        check = os.path.join(base, "check")
+        sh("clone", "-q", "--branch", "ops", remote, check)
+        self.assertEqual(ir.ai_used_today(check, "2026-11-23"), 52)       # the next run, cloning the branch, sees today's 52 calls
+
+
     def test_main_takes_the_daily_cap_out_of_the_per_run_cap(self):
         src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox_report.py"), encoding="utf8").read()
         self.assertIn("c.MAX_AI_CALLS = max(0, min(c.MAX_AI_CALLS, REPORT_AI_PER_DAY - used_before))", src)

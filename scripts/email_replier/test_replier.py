@@ -194,6 +194,8 @@ class ModelFallback(unittest.TestCase):
         self.assertIn("cancel-in-progress: false", w)
         self.assertIn("ai_calls_replier.json", w)
         self.assertIn("AI_COUNTER_OK=true", w)
+        self.assertIn("for i in 1 2 3 4; do", w)                         # push retried; if it still fails the job goes red
+        self.assertIn("git pull -q --rebase origin ops-email-logs", w)
 
     def test_daily_model_call_cap(self):
         import unittest.mock as mock
