@@ -227,6 +227,7 @@ class Meter:
         self.cost = 0.0
         self.calls = 0
         self.searches = 0
+        self.hook = None          # called after every change of cost: run() sets it to "save the day's spend to the state file"
 
     def add(self, model, usage):
         u = usage or {}
@@ -256,14 +257,21 @@ def anthropic(model, system, user, meter, post=None, tools=None, max_tokens=6000
     if tools:
         body["tools"] = tools
     headers = {"x-api-key": key or "", "anthropic-version": "2023-06-01", "content-type": "application/json"}
+    # BOOK the call's full reserve and SAVE it BEFORE the request goes out: a run that is killed or times out during the call still has it on record.
+    own = WRITER_RESERVE if model == WRITER else QA_RESERVE
+    meter.cost += own
+    if meter.hook:
+        meter.hook()
     try:
         data = (post or _post_json)("https://api.anthropic.com/v1/messages", body, headers)
     except BaseException:
-        # a timeout / network error / HTTP error: the request MAY have run and been billed. Charge the call's full reserve (it is saved with the day's spend).
-        meter.cost += WRITER_RESERVE if model == WRITER else QA_RESERVE
+        # a timeout / network error / HTTP error: the request MAY have run and been billed: the reserve stays booked (already saved)
         meter.calls += 1
         raise
+    meter.cost -= own                                                  # the real, metered cost replaces the reserve
     meter.add(model, data.get("usage"))
+    if meter.hook:
+        meter.hook()
     return data
 
 
@@ -481,6 +489,8 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
             del sp[k]
         write_json(STATE_PATH, state)
 
+    meter.hook = save                      # the day's spend is written to the state file around EVERY model call
+
     page = pick_page(state, today)
     if not page:
         print("dev_poster: every page is resting, nothing to write")
@@ -499,6 +509,11 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
     user = ("TARGET PAGE: %s\nIT IS: %s (%s)\nTOPIC AREA: %s\nPAGE TEXT (the only facts you may state about our page):\n%s\n\n"
             "ARTICLES WE ALREADY PUBLISHED (do not repeat these angles):\n%s\n\nWrite today's article now.") % (
         url, what, kind, topic, page_text, "\n".join("- " + t for t in past) or "(none yet)")
+    if dry:                                # counted and saved BEFORE any model call: a killed run cannot lose them
+        state.setdefault("dry", {})[today] = dry_today + 1
+    else:
+        state.setdefault("attempts", {})[today] = tries_today + 1
+    save()
     problems, art, source_texts = ["no draft"], None, {}
     for attempt in (1, 2):
         if attempt == 2 and meter.cost > RETRY_BELOW + 1e-9:
@@ -530,7 +545,6 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
             ok, reasons = qa_gate(art, url, source_texts, page_text, meter, post=post_ai)
         except Exception as e:
             ok, reasons = False, ["QA error %s" % type(e).__name__]
-    state.setdefault("attempts", {})[today] = tries_today + 1
     cost = "$%.3f" % meter.cost
     if not ok:
         if art:
@@ -538,9 +552,6 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
             open(os.path.join(DRAFT_DIR, "%s_%s.md" % (today, slug)), "w", encoding="utf8").write(
                 "# FAILED DRAFT (not published)\n\nReasons: %s\n\nTitle: %s\n\n%s\n" % ("; ".join(reasons), art["title"], art["body"]))
         log("| %s | %s | FAIL, not published | | | %s | %s |" % (today, slug, cost, "; ".join(reasons)[:300]))
-        if dry:
-            state["attempts"][today] = tries_today
-            state.setdefault("dry", {})[today] = dry_today + 1
         save()
         print("dev_poster: FAIL page=%s problems=%d cost=%s" % (slug, len(reasons), cost))
         return "FAIL"
@@ -549,8 +560,6 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
         open(os.path.join(DRAFT_DIR, "%s_%s_DRYRUN.md" % (today, slug)), "w", encoding="utf8").write(
             "# DRY RUN (not published)\n\nTitle: %s\nTags: %s\n\n%s\n" % (art["title"], ",".join(art["tags"]), art["body"]))
         log("| %s | %s | DRY RUN passed all checks, not published | | | %s | |" % (today, slug, cost))
-        state["attempts"][today] = tries_today          # a dry run does not use up a real attempt
-        state.setdefault("dry", {})[today] = dry_today + 1
         save()
         print("dev_poster: DRY RUN ok page=%s cost=%s (publish endpoint NOT called)" % (slug, cost))
         return "DRY_OK"

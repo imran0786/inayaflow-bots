@@ -296,6 +296,72 @@ class FlowFailures(unittest.TestCase):
         self.assertIn("state file is missing or unreadable: no run", arm_ok)
         self.assertNotIn("DEV_FIRST_RUN", arm_ok)
 
+    def test_a_killed_run_has_its_spend_and_its_dry_count_saved(self):
+        P.DRY = True
+        first = {"content": [{"type": "text", "text": "x"}], "stop_reason": "pause_turn", "usage": {"input_tokens": 40000, "output_tokens": 3000}}     # ~$0.11
+        calls = []
+
+        def post(url, b, h):
+            calls.append(1)
+            if len(calls) == 1:
+                return first
+            raise KeyboardInterrupt()                              # the runner kills the process during the 2nd writer call
+        with self.assertRaises(KeyboardInterrupt):
+            run_quiet(post_ai=post)
+        st = P.read_json(P.STATE_PATH, {})
+        self.assertEqual(st["dry"][today()], 1)                    # counted BEFORE the first model call
+        self.assertGreaterEqual(st["spent"][today()], 0.11 + P.WRITER_RESERVE - 0.01)      # 1st call metered + the 2nd call's reserve already booked
+        self.assertLessEqual(st["spent"][today()], P.DAY_CAP)
+        # three kills in a row cannot spend past the day: the next run starts from what the file says
+        for _ in range(2):
+            try:
+                run_quiet(post_ai=post)
+            except KeyboardInterrupt:
+                pass
+        self.assertLessEqual(P.read_json(P.STATE_PATH, {})["spent"][today()], P.DAY_CAP)
+
+    def test_killed_during_the_very_first_call_still_books_the_reserve_and_the_attempt(self):
+        def post(url, b, h):
+            raise KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            run_quiet(post_ai=post)                                 # live run (P.DRY False in Flow.setUp)
+        st = P.read_json(P.STATE_PATH, {})
+        self.assertEqual(st["attempts"][today()], 1)
+        self.assertGreaterEqual(st["spent"][today()], P.WRITER_RESERVE)
+
+    def test_the_metered_cost_replaces_the_reserve_after_a_good_call(self):
+        m = P.Meter()
+        post_ai, _ = fake_ai_factory(good_body())
+        seen = []
+        m.hook = lambda: seen.append(round(m.cost, 4))
+        P.anthropic(P.WRITER, "s", "u", m, post=post_ai)
+        self.assertEqual(seen[0], P.WRITER_RESERVE)                 # booked before the request
+        self.assertLess(seen[-1], P.WRITER_RESERVE)                 # then replaced by the real (smaller) cost
+        self.assertEqual(m.calls, 1)
+
+    def test_job_time_fits_the_worst_writer_path_and_the_save_step(self):
+        w = open(os.path.join(HERE, "..", "..", ".github", "workflows", "dev-poster.yml"), encoding="utf8").read()
+        import re as _re
+        job = int(_re.search(r"timeout-minutes: (\d+)\s+# worst writer", w).group(1))
+        step = int(_re.search(r"timeout-minutes: (\d+)\s+# shorter than the job", w).group(1))
+        worst_writer_min = 6 * 240 / 60                           # 6 requests x the 240 s socket timeout in _post_json
+        self.assertGreater(step, worst_writer_min + 5)             # + QA, page and source fetches
+        self.assertGreaterEqual(job - step, 5)                     # the save step always has time
+
+    def test_save_step_retries_and_never_creates_an_orphan_when_the_branch_exists(self):
+        w = open(os.path.join(HERE, "..", "..", ".github", "workflows", "dev-poster.yml"), encoding="utf8").read()
+        save = w.split("Save state, log and drafts")[1]
+        arm_exists = save.split('if [ "$rc" = "0" ]; then')[1].split('elif [ "$rc" = "2" ]')[0]
+        self.assertIn("exit 1", arm_exists)
+        self.assertNotIn("--orphan", arm_exists)
+        arm_absent = save.split('elif [ "$rc" = "2" ]; then')[1].split("else")[0]
+        self.assertIn("--orphan", arm_absent)                       # only when ls-remote proves the branch is absent
+        self.assertEqual(save.count("--orphan"), 1)
+        self.assertIn("for i in 1 2 3 4; do", save)
+        self.assertIn("git pull -q --rebase origin ops-dev-poster", save)
+        self.assertIn('[ "$ok" = "1" ] ||', save)
+        self.assertIn("unreachable: NOT saving", save)
+
     def test_no_dev_key_stops_before_any_spend(self):
         os.environ.pop("DEV_API_KEY", None)
         post_ai, calls = fake_ai_factory(good_body())

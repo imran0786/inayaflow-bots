@@ -26,7 +26,7 @@ concurrency:
 jobs:
   post:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45          # worst writer path = 6 calls x 240 s = 24 min + QA + fetches; the save step below needs time after it
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -62,6 +62,7 @@ jobs:
           fi
 
       - name: Write, check and (when live) publish
+        timeout-minutes: 35        # shorter than the job: the save step always has time to run, even after a timeout
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           DEV_API_KEY: ${{ secrets.DEV_API_KEY }}
@@ -80,12 +81,21 @@ jobs:
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           set -e
           rm -rf /tmp/push
-          if git clone -q --branch ops-dev-poster --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push 2>/dev/null; then
-            :
-          else
-            git clone -q --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/push
+          U="https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git"
+          if git ls-remote --exit-code --heads "$U" ops-dev-poster >/dev/null 2>&1; then rc=0; else rc=$?; fi
+          if [ "$rc" = "0" ]; then
+            # the state branch EXISTS: it must be cloned, never re-created. If that fails, stop cleanly: no orphan branch, nothing pushed.
+            if ! git clone -q --branch ops-dev-poster --depth 1 "$U" /tmp/push 2>/dev/null; then
+              echo "state branch exists but cannot be cloned: NOT saving (no orphan branch is created); the state stays in this run's ops/ folder only"
+              exit 1
+            fi
+          elif [ "$rc" = "2" ]; then
+            git clone -q --depth 1 "$U" /tmp/push
             cd /tmp/push && git checkout -q --orphan ops-dev-poster && git rm -rq --cached . >/dev/null 2>&1 || true
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
+          else
+            echo "private repo unreachable: NOT saving"
+            exit 1
           fi
           mkdir -p /tmp/push/ops
           for f in dev_poster_state.json dev_poster_log.md; do
@@ -98,6 +108,11 @@ jobs:
           git add ops
           if git diff --cached --quiet; then echo "no changes"; exit 0; fi
           git commit -q -m "ops: dev poster state and log"
-          git pull -q --rebase origin ops-dev-poster 2>/dev/null || true
-          git push -q origin ops-dev-poster
+          ok=0
+          for i in 1 2 3 4; do
+            if git push -q origin ops-dev-poster; then ok=1; break; fi
+            git pull -q --rebase origin ops-dev-poster || git rebase --abort || true
+            sleep 3
+          done
+          [ "$ok" = "1" ] || { echo "push failed after 4 tries: the day's spend was NOT saved"; exit 1; }
           echo "state saved"
