@@ -41,6 +41,8 @@ EXTRA_DOMAINS = os.environ.get("VERIFY_EXTRA_DOMAINS", "")
 KW_DONE, KW_SEEN = "IFDirHandled", "IFDirSeen"
 KW_RECHECK = "IFDirRecheck1"   # 24 Nov 2026: mails set aside (Seen) before the wider sign-up domain list get ONE more look
 KW_ROUTE_VERIFY, KW_ROUTE_PREFIX = "IFRoute_DIRECTORY_VERIFY", "IFRoute_"
+# 24 Nov 2026: the router files many sign-up confirm mails as PLATFORM_ACCOUNT (or DIRECTORY_STATUS); those are ours too when the sender is a site we signed up on
+ALT_ROUTES = {"IFRoute_PLATFORM_ACCOUNT", "IFRoute_DIRECTORY_STATUS"}
 
 VERIFY_SUBJ_RE = re.compile(r"confirm|verif|activat|magic.?link|sign.?in|log.?in|one.?time|\bcode\b|\botp\b|complete your", re.I)
 NEWSLETTER_RE = re.compile(r"subscription|subscrib|newsletter|digest|weekly", re.I)
@@ -426,8 +428,9 @@ def main():
                     continue
                 flags = parse_flags(d[0][0].decode(errors="ignore"))
                 routes = [f for f in flags if f.startswith(KW_ROUTE_PREFIX)]
-                if routes and KW_ROUTE_VERIFY not in routes:
-                    continue  # the router filed it elsewhere (status, newsletter, partner...)
+                alt = bool(routes) and KW_ROUTE_VERIFY not in routes
+                if alt and not (set(routes) & ALT_ROUTES):
+                    continue  # the router filed it elsewhere (newsletter, partner...)
                 msg = email.message_from_bytes(d[0][1], policy=policy.default)
                 try:
                     md = parsedate_to_datetime(str(msg.get("Date"))).astimezone(datetime.timezone.utc)
@@ -440,9 +443,11 @@ def main():
                 text = mail_text(msg)
                 if dom == SUPABASE_SENDER:
                     dom = supabase_site(text, known) or dom   # a directory that sends its mail through Supabase Auth
+                if alt and (dom not in known or not VERIFY_SUBJ_RE.search(subj)):
+                    continue  # filed as account/status mail: only a confirm-type subject from a site we signed up on is ours
                 age = (now - md).total_seconds() / 60
                 st = site_status_for(dom, agent_state)
-                outcome, link = decide(subj, dom, text, known, st, age, routed_verify=KW_ROUTE_VERIFY in routes)
+                outcome, link = decide(subj, dom, text, known, st, age, routed_verify=(KW_ROUTE_VERIFY in routes) or alt)
                 if outcome in ("IGNORE", "WAIT"):
                     continue
                 if uid in recheck and outcome != "OPEN_LINK":
