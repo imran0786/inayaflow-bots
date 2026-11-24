@@ -245,6 +245,38 @@ def auto_close(m, hint, kind, ask, vo, age):
     return None
 
 
+# 24 Nov 2026 (second pass): a listing mail must never sit with the verify robot for days.
+# The robot only handles mail it has an outcome for. Everything else is closed with a reason or goes to the Director.
+VERIFY_SUBJECT = re.compile(r"confirm|verif|activat|validat", re.I)
+ROBOT_GRACE_HOURS = float(os.environ.get("ACTION_ROBOT_GRACE_HOURS", "3"))   # verify robot runs every 30 min: 3 h = at least 6 chances
+OPTIONAL_STEP = re.compile(r"\boptional(ly)?\b|don'?t forget|if you (like|want|wish)|you may (also )?(want|wish)|\bconsider\b|follow makers|profile setup|"
+                           r"add (an )?icon|submit your story|story editor", re.I)
+PAID_ASK = re.compile(r"paid plan|choose a (paid )?plan|pay (to|\$|£|€)|\bpayment\b|upgrade to|take (the |your )?listing live", re.I)
+APPROVED_PLUGIN = re.compile(r"chatgpt plugin submission approved", re.I)
+
+
+def route_listing(m, row, vo, age):
+    """-> (status, owner, note) for a listing / platform mail that no earlier rule closed. Never returns 'verify robot' for a mail the robot
+    has no outcome for after ROBOT_GRACE_HOURS, and closes info-only / optional / paid mails with a reason."""
+    subj = m["subject"]
+    text = subj + " " + (row.get("ask") or "")
+    d = regd(m["addr"])
+    if APPROVED_PLUGIN.search(subj) and d == "openai.com":
+        return "IGNORED-info", "-", "plugin approval notice; already published 18 Nov 2026"
+    verify_mail = bool(VERIFY_SUBJECT.search(subj))
+    if not verify_mail and OPTIONAL_STEP.search(text):
+        return "IGNORED-info", "-", "optional step (not a verify link), nothing needed from us"
+    if not verify_mail and PAID_ASK.search(text):
+        return "IGNORED-paid offer", "-", "needs a paid plan; never paid"
+    if vo:                      # the robot looked and could not finish (captcha, unknown sender, no action found...)
+        return "OPEN", "Director", "verify robot: " + vo.lower()
+    if not verify_mail:         # a step only a person can do (submit the entry, pick a date, claim after sign-in)
+        return "OPEN", "Director", "not a verify link: needs a person / sign-in"
+    if age <= ROBOT_GRACE_HOURS:
+        return "OPEN", "verify robot", ""
+    return "OPEN", "Director", "verify robot made no outcome in %d h (mail not routed to it, or sender unknown)" % int(ROBOT_GRACE_HOURS)
+
+
 def decide(m, hint, cls, ctx, now):
     """One tracker row (dict). `cls` = remembered classification or None (not read yet)."""
     age = (now - m["date"]).total_seconds() / 3600.0
@@ -279,7 +311,9 @@ def decide(m, hint, cls, ctx, now):
         row["status"], row["owner"], row["note"] = closed
         return row
     if hint == "listing" or kind == "listing_step":
-        row["owner"] = "Director" if vo else "verify robot"
+        row["status"], row["owner"], note = route_listing(m, row, vo, age)
+        if note:
+            row["note"] = note
     elif hint == "reply" or kind == "person_reply":
         row["owner"] = "email replier"
     else:

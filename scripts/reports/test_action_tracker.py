@@ -120,8 +120,10 @@ class Status(unittest.TestCase):
         r = self.rows([stuck], ans)[0][0]
         self.assertEqual((r["status"], r["owner"]), ("OPEN", "Director"))   # verify robot tried and could not finish
         self.assertEqual(self.rows([mail("hello@tool.com", "Your listing", 20)], ans)[0][0]["status"], "DONE")  # live_links proof
+        r = self.rows([mail("hello@nowhere.com", "Confirm your email", 2)], ans)[0][0]
+        self.assertEqual((r["status"], r["owner"]), ("OPEN", "verify robot"))  # no proof -> not DONE (fresh: the robot still has its chances)
         r = self.rows([mail("hello@nowhere.com", "Confirm your email", 20)], ans)[0][0]
-        self.assertEqual((r["status"], r["owner"]), ("OPEN", "verify robot"))  # no proof -> not DONE
+        self.assertEqual((r["status"], r["owner"]), ("OPEN", "Director"))      # 20 h and the robot never made an outcome: not left with the robot
 
     def test_newsletter_and_imran(self):
         a = mail("pat@pitch.org", "Hello", 30)
@@ -257,6 +259,48 @@ class AutoClose(unittest.TestCase):
     def test_person_never_auto_closed(self):
         r = self.one("pat@somesite.org", "Re: Your magic link", 90, kind="person_reply")
         self.assertEqual(r["status"], "OPEN")
+
+
+class RobotNeverHoldsForDays(unittest.TestCase):
+    """24 Nov 2026 (second pass): 17 items sat with 'verify robot' for up to 6 days."""
+
+    def one(self, addr, subject, hours, ask="x"):
+        ans = [{"n": 1, "needs_action": True, "kind": "listing_step", "ask": ask, "link": "none"}]
+        return at.build_rows([mail(addr, subject, hours)], {}, INPUTS, NOW, read_body=lambda m: "body", ai=ai_answer(ans))[0][0]
+
+    def test_openai_plugin_approval_is_info(self):
+        r = self.one("noreply@tm.openai.com", "ChatGPT Plugin Submission Approved [asdk_app_6afba]", 140, "Publish the approved plugin")
+        self.assertEqual((r["status"], r["owner"]), ("IGNORED-info", "-"))
+        self.assertIn("already published", r["note"])
+
+    def test_optional_steps_are_info(self):
+        for addr, subj, ask in (("hi@starterstory.com", "Don't forget to submit your story (InayaFlow)", "Submit the story in the story editor"),
+                                ("hi@mcptry.com", "TikTok Scripts / InayaFlow is listed on mcptry (score 83/100)", "Optionally claim the listing by signing in with GitHub"),
+                                ("diogo@awesomeindie.com", "Welcome to Awesome Indie", "Finish profile setup (photo and bio), follow makers, and optionally submit a product")):
+            r = self.one(addr, subj, 80, ask)
+            self.assertEqual((r["status"], r["owner"]), ("IGNORED-info", "-"), subj)
+
+    def test_paid_plan_ask_is_closed(self):
+        r = self.one("hello@aiagentslive.com", "InayaFlow is one step from going live", 5, "Choose a paid plan ($7 or $10) to take the listing live")
+        self.assertEqual(r["status"], "IGNORED-paid offer")
+
+    def test_non_verify_step_goes_to_director_not_robot(self):
+        r = self.one("hi@aidirs.best", "Finish listing InayaFlow on Aidirs.best", 100, "Finish the submission via the dashboard link")
+        self.assertEqual((r["status"], r["owner"]), ("OPEN", "Director"))
+        self.assertIn("not a verify link", r["note"])
+
+    def test_robot_outcome_that_needs_a_person_goes_to_director(self):
+        v = VERIFY + "| 11-22 01:00 | capdir.com | Activate your account | CAPTCHA | - | |\n"
+        m = at_time(mail("hi@capdir.com", "Activate your account", 30), 2026, 11, 22, 1, 0)
+        ans = [{"n": 1, "needs_action": True, "kind": "listing_step", "ask": "activate", "link": "none"}]
+        r = at.build_rows([m], {}, dict(INPUTS, verify_log=v), NOW, read_body=lambda m: "b", ai=ai_answer(ans))[0][0]
+        self.assertEqual((r["owner"], r["note"]), ("Director", "verify robot: captcha"))
+
+    def test_real_verify_mail_stays_with_robot_only_while_fresh(self):
+        self.assertEqual(self.one("hi@newdir.io", "Verify your email - NewDir", 1)["owner"], "verify robot")
+        r = self.one("hi@newdir.io", "Verify your email - NewDir", 4)
+        self.assertEqual(r["owner"], "Director")
+        self.assertIn("no outcome", r["note"])
 
 
 class MailHealth(unittest.TestCase):
