@@ -93,7 +93,7 @@ def pick_targets(state, today, platforms=PLATFORMS, targets=TARGETS):
 BANNED = D.BANNED + ["genie"]
 
 
-def check_post(art, target_url, platform, page_full, source_texts, site_corpus="", others=(), past_shingles=None):
+def check_post(art, target_url, platform, page_full, source_texts, site_corpus="", others=(), past_shingles=None, anchor=None):
     """-> list of problems (empty = passes). art = dict(title, tags, body, sources). others = [(platform, plain body)] already written today."""
     p = []
     body, title = art.get("body", ""), art.get("title", "")
@@ -107,8 +107,13 @@ def check_post(art, target_url, platform, page_full, source_texts, site_corpus="
     ours = [u for _, u in links if "inayaflow.ai" in u]
     if len(ours) != 1 or ours[0].rstrip("/") != target_url.rstrip("/"):
         p.append("need exactly one inayaflow.ai link and it must be the target (%d found)" % len(ours))
-    if re.search(r"inayaflow\.ai", re.sub(r"\]\(https?://[^)\s]+\)", "]", body), re.I):
+    scan = re.sub(r"\[[^\]]*\]\(" + re.escape(target_url) + r"\)", " LINK ", body) if anchor else body      # the address as LINK TEXT is allowed; bare unlinked text never
+    if re.search(r"inayaflow\.ai", re.sub(r"\]\(https?://[^)\s]+\)", "]", scan), re.I):
         p.append("bare inayaflow.ai text outside a link")
+    if anchor:
+        txt = [t for t, u in links if u == target_url]
+        if len(txt) == 1:
+            p += D.anchor_problems(txt[0], anchor)
     ext = [u for _, u in links if "inayaflow.ai" not in u]
     allowed = {u.rstrip("/") for u in (art.get("sources") or [])}
     for u in set(ext):
@@ -171,7 +176,7 @@ RULES (all checked by code afterwards; a break means nothing is published):
 - %d to %d words of Markdown (## headings, short paragraphs, "- " lists, [text](url) links, **bold**). Your OWN angle and wording: do not copy the InayaFlow page; add examples and reasoning of your own.
 - Real numbers only, found with web_search / web_fetch in official or primary pages you OPENED. Every paragraph with a number, percent or amount needs a Markdown link to that page, and the number must be printed there exactly as you write it. If you cannot source a number leave it out (an article with no numbers and no external link is fine). Pages on tiktok.com/support or creator-academy usually come back empty: do not cite them.
 - Facts about our own page may come ONLY from the PAGE TEXT; never copy 7 or more words in a row from it.
-- Exactly ONE link to the target InayaFlow page, as [descriptive words](URL), placed where it truly helps (not in the first or last paragraph). Never write the bare text inayaflow.ai.
+- Exactly ONE link to the target InayaFlow page, as [LINK TEXT](URL), placed where it truly helps (not in the first or last paragraph); the type of LINK TEXT is set per article in the user message and checked by code. Never write the web address inayaflow.ai as plain text outside that link (as the link text itself it is allowed when the type says so).
 - No @usernames, no other creators' names, no hype, no "sign up now". Be honest: our tools are free helpers, not magic.
 - Banned: delve, game-changer, landscape, tapestry, dive into, unlock, elevate, supercharge, revolutionize, seamlessly, cutting-edge, in conclusion, it's important to note, ever-evolving, look no further, to the next level, harness, embark, realm of, testament, leverage, must-have.
 - Title: 80 characters or fewer, no clickbait.
@@ -427,9 +432,10 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
             results[pl] = "PAGE_DOWN"
             continue
         page_text = page_full[:6000]
+        anchor = D.anchor_info(slug, url, D.anchor_count(state, slug))       # one cursor per target shared by the 3 platforms; counts published posts only
         user = ("TARGET PAGE: %s\nIT IS: %s (%s)\nTOPIC AREA: %s\nPAGE TEXT (the only facts you may state about our page):\n%s\n\n"
-                "ARTICLES WE ALREADY PUBLISHED ON OUR OWN BLOGS (do not repeat these angles):\n%s\n\nWrite today's %s article now.") % (
-            url, what, kind, topic, page_text, "\n".join("- " + t for t in past_titles[-25:]) or "(none yet)", pl.capitalize())
+                "ARTICLES WE ALREADY PUBLISHED ON OUR OWN BLOGS (do not repeat these angles):\n%s\n\n%s\n\nWrite today's %s article now.") % (
+            url, what, kind, topic, page_text, "\n".join("- " + t for t in past_titles[-25:]) or "(none yet)", D.anchor_prompt(anchor), pl.capitalize())
         if not dry:
             state.setdefault("attempts", {})[today + pl] = state.get("attempts", {}).get(today + pl, 0) + 1
         save()
@@ -454,7 +460,7 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
                 ours = c.html_text(h2, 20000) if s2 == 200 else ""
                 theirs = fetched.get(u, "")[:20000]
                 source_texts[u] = theirs if len(theirs) > len(ours) else ours
-            problems = check_post(art, url, pl, page_full, source_texts, site_corpus, todays, past_sh)
+            problems = check_post(art, url, pl, page_full, source_texts, site_corpus, todays, past_sh, anchor=anchor)
             if any(len(t) < D.MIN_SOURCE_CHARS for t in source_texts.values()):
                 problems.append("a cited source page is unreadable")
             if not problems:

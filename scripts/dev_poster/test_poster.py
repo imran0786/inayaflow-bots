@@ -23,7 +23,7 @@ def good_body():
     parts = ["## Start with the viewer\n\n" + para * 2,
              "TikTok allows [5 hashtags per post](%s) so pick them with care. " % SRC1 + para,
              "One study found [12%% more reach](%s) for tidy captions. " % SRC2 + para,
-             "When you need ideas fast, a [free hashtag generator](%s) can turn a topic into a short list. " % URL + para,
+             "When you need ideas fast, a [InayaFlow's free hashtag generator](%s) can turn a topic into a short list. " % URL + para,
              "## A simple routine\n\n" + para * 4, para * 4]
     return "\n\n".join(parts)
 
@@ -55,7 +55,7 @@ class Gate(unittest.TestCase):
         self.assertTrue(any("63" in x and "not found" in x for x in probs(a)))
 
     def test_missing_link_refused(self):
-        a = art(body=good_body().replace("[free hashtag generator](%s)" % URL, "a free hashtag generator"))
+        a = art(body=good_body().replace("[InayaFlow's free hashtag generator](%s)" % URL, "a free hashtag generator"))
         self.assertTrue(any("target link missing" in x for x in probs(a)))
 
     def test_repeated_or_extra_links_refused(self):
@@ -701,7 +701,7 @@ class StateBranchScript(unittest.TestCase):
 
 class CodeChecks(unittest.TestCase):
     def test_our_link_in_the_first_or_the_last_paragraph_is_refused(self):
-        link = "a [free hashtag generator](%s) helps" % URL
+        link = "a [InayaFlow's free hashtag generator](%s) helps" % URL
         paras = good_body().split("\n\n")
         link_para = [p for p in paras if URL in p][0]
         rest = [p for p in paras if URL not in p]
@@ -712,9 +712,9 @@ class CodeChecks(unittest.TestCase):
         self.assertFalse(any("first or the last paragraph" in x for x in probs(art())))
 
     def test_inayaflow_name_more_than_twice_is_refused(self):
-        b = good_body().replace("pick them with care.", "pick them with care. InayaFlow says so. InayaFlow again. InayaFlow once more.")
+        b = good_body().replace("pick them with care.", "pick them with care. InayaFlow says so. InayaFlow again.")
         self.assertTrue(any("InayaFlow name" in x for x in probs(art(body=b))))
-        two = good_body().replace("pick them with care.", "pick them with care. InayaFlow says so. InayaFlow again.")
+        two = good_body().replace("pick them with care.", "pick them with care. InayaFlow says so.")
         self.assertFalse(any("InayaFlow name" in x for x in probs(art(body=two))))
 
     def test_similarity_to_our_earlier_articles(self):
@@ -734,6 +734,110 @@ class CodeChecks(unittest.TestCase):
             self.assertGreater(len(st["shingles"][0]), 100)
         finally:
             Flow.tearDown(self)
+
+
+class AnchorMix(unittest.TestCase):
+    """Link text mix (RULEBOOK 9a): 10-post cycle per target page."""
+    SLUG, URL = "shadowban-checker", "https://inayaflow.ai/tools/tiktok-shadowban-checker"
+    A = P
+
+    def info(self, n, slug=None, url=None):
+        return self.A.anchor_info(slug or self.SLUG, url or self.URL, n)
+
+    def test_cycle_counts_and_no_repeat(self):
+        types = [self.A.anchor_type(n, self.SLUG) for n in range(10)]
+        self.assertEqual(types, ["brand", "plain", "address", "partial", "brand", "address", "plain", "partial", "brand", "exact"])
+        self.assertEqual({t: types.count(t) for t in set(types)}, {"brand": 3, "address": 2, "plain": 2, "partial": 2, "exact": 1})
+        seq = [self.A.anchor_type(n, self.SLUG) for n in range(60)]
+        self.assertTrue(all(a != b for a, b in zip(seq, seq[1:])))        # also across the wrap exact -> brand
+
+    def test_homepage_is_brand_or_address_only(self):
+        seq = [self.A.anchor_type(n, "homepage") for n in range(30)]
+        self.assertEqual(set(seq), {"brand", "address"})
+        self.assertTrue(all(a != b for a, b in zip(seq, seq[1:])))
+
+    def test_cursor_counts_only_booked_posts_of_that_target(self):
+        st = {"posts": [{"slug": self.SLUG, "platform": "wordpress"}, {"slug": self.SLUG, "platform": "blogger"}, {"slug": "money-calculator"}], "pending": {"notion": {"slug": self.SLUG}}}
+        self.assertEqual(self.A.anchor_count(st, self.SLUG), 2)          # a pending marker alone does not move it
+        self.assertEqual(self.A.anchor_count(st, "homepage"), 0)
+        self.assertEqual(self.A.anchor_info(self.SLUG, self.URL, self.A.anchor_count(st, self.SLUG))["type"], "address")
+
+    def test_keywords_for_every_page_and_fallback(self):
+        for pg in self.A.PAGES:
+            self.assertTrue(self.A.anchor_keyword(pg[0], pg[1]))
+            self.assertIn(pg[0], self.A.ANCHOR_KEYWORDS)
+        self.assertEqual(self.A.anchor_keyword("x", "https://inayaflow.ai/tools/some-new-thing"), "some new thing")
+        self.assertEqual(self.info(0)["keyword"], "TikTok shadowban checker")
+
+    def test_brand(self):
+        i = self.info(0)
+        self.assertEqual(i["type"], "brand")
+        self.assertEqual(self.A.anchor_problems("InayaFlow", i), [])
+        self.assertEqual(self.A.anchor_problems("InayaFlow's free checker", i), [])
+        self.assertTrue(self.A.anchor_problems("this free checker", i))
+
+    def test_address(self):
+        i = self.info(2)
+        self.assertEqual(i["type"], "address")
+        self.assertEqual(self.A.anchor_problems("inayaflow.ai/tools/tiktok-shadowban-checker", i), [])
+        self.assertEqual(self.A.anchor_problems("inayaflow.ai/tools/tiktok-shadowban-checker/", i), [])
+        self.assertTrue(self.A.anchor_problems("https://inayaflow.ai/tools/tiktok-shadowban-checker", i))
+        self.assertTrue(self.A.anchor_problems("inayaflow.ai", i))
+        self.assertTrue(self.A.anchor_problems("InayaFlow", i))
+
+    def test_plain(self):
+        i = self.info(1)
+        self.assertEqual(i["type"], "plain")
+        self.assertEqual(self.A.anchor_problems("this free checker", i), [])
+        self.assertEqual(self.A.anchor_problems("a free tool for it", i), [])
+        self.assertTrue(self.A.anchor_problems("InayaFlow's free tool", i))            # brand
+        self.assertTrue(self.A.anchor_problems("TikTok shadowban checker", i))         # keyword
+        self.assertTrue(self.A.anchor_problems("the shadowban checker", i))            # half or more of the keyword words
+
+    def test_partial(self):
+        i = self.info(3)
+        self.assertEqual(i["type"], "partial")
+        self.assertEqual(self.A.anchor_problems("check whether your TikTok is shadowbanned", i), [])
+        self.assertEqual(self.A.anchor_problems("a free shadowban test", i), [])
+        self.assertTrue(self.A.anchor_problems("TikTok shadowban checker", i))         # all the words = exact
+        self.assertTrue(self.A.anchor_problems("the best TikTok shadowban checker online", i))   # contains all the words
+        self.assertTrue(self.A.anchor_problems("a free tool for it", i))               # shares none
+        self.assertTrue(self.A.anchor_problems("InayaFlow shadowban test", i))         # brand
+
+    def test_exact(self):
+        i = self.info(9)
+        self.assertEqual(i["type"], "exact")
+        self.assertEqual(self.A.anchor_problems("TikTok shadowban checker", i), [])
+        self.assertEqual(self.A.anchor_problems("tiktok Shadowban Checker", i), [])
+        self.assertTrue(self.A.anchor_problems("a TikTok shadowban checker", i))
+        self.assertTrue(self.A.anchor_problems("InayaFlow", i))
+
+    def test_prompt_carries_type_and_examples(self):
+        for n, word in ((0, "BRAND"), (1, "PLAIN WORDS"), (2, "inayaflow.ai/tools/tiktok-shadowban-checker"), (3, "PARTIAL KEYWORD"), (9, "EXACT KEYWORD")):
+            self.assertIn(word, self.A.anchor_prompt(self.info(n)))
+        self.assertIn("Examples:", self.A.anchor_prompt(self.info(0)))
+
+    def test_check_article_enforces_the_type(self):
+        def with_text(txt):
+            b = good_body().replace("[InayaFlow's free hashtag generator](%s)" % URL, "[%s](%s)" % (txt, URL))
+            return art(body=b)
+        hg = P.anchor_info("hashtag-generator", URL, 2)        # address
+        ok = P.check_article(with_text("inayaflow.ai/tools/tiktok-hashtag-generator"), URL, PAGE, SRC_TEXT, anchor=hg)
+        self.assertEqual([x for x in ok if "link text" in x or "bare" in x], [])
+        bad = P.check_article(with_text("a free hashtag generator"), URL, PAGE, SRC_TEXT, anchor=hg)
+        self.assertTrue(any("link text" in x for x in bad))
+        brand = P.anchor_info("hashtag-generator", URL, 0)
+        self.assertEqual([x for x in P.check_article(with_text("InayaFlow"), URL, PAGE, SRC_TEXT, anchor=brand) if "link text" in x], [])
+        self.assertTrue(any("link text" in x for x in P.check_article(with_text("InayaFlow"), URL, PAGE, SRC_TEXT, anchor=P.anchor_info("hashtag-generator", URL, 9))))
+        # bare unlinked address stays banned even when the type is address
+        b = good_body().replace("[InayaFlow's free hashtag generator](%s)" % URL, "[inayaflow.ai/tools/tiktok-hashtag-generator](%s)" % URL) + "\n\nSee inayaflow.ai too.\n"
+        self.assertTrue(any("bare" in x for x in P.check_article(art(body=b), URL, PAGE, SRC_TEXT, anchor=hg)))
+        # without an anchor the old behaviour is unchanged
+        self.assertEqual(P.check_article(art(), URL, PAGE, SRC_TEXT), [])
+
+    def test_prompt_has_the_link_text_line(self):
+        self.assertIn("[LINK TEXT](URL)", P.WRITER_SYSTEM)
+        self.assertNotIn("Never write the bare text inayaflow.ai.", P.WRITER_SYSTEM)
 
 
 if __name__ == "__main__":
