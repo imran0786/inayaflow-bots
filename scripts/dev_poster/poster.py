@@ -19,7 +19,7 @@ PRIVATE repo (imran0786/genie, branch ops-dev-poster) through the workflow. cano
 DEV's Terms (section 11): content must be on-topic, high-quality and "not designed primarily for the purposes of promotion or
 creating backlinks" -> one article a day, real value first, one contextual link (two at most).
 """
-import datetime, json, os, re, sys, time, urllib.request, urllib.error
+import datetime, json, os, re, sys, time, urllib.parse, urllib.request, urllib.error
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "scripts", "reports"))
@@ -116,6 +116,95 @@ def pick_page(state, today, pages=PAGES):
     return ok[0][2] if ok else None
 
 
+# ---------- link text mix (RULEBOOK 9a, 24 Nov 2026): the visible text of our ONE link follows a 10-post cycle PER TARGET PAGE ----------
+ANCHOR_CYCLE = ["brand", "plain", "address", "partial", "brand", "address", "plain", "partial", "brand", "exact"]     # 3 brand, 2 address, 2 plain, 2 partial, 1 exact; no type twice in a row
+HOME_CYCLE = ["brand", "address"]                                                                                      # homepage: brand or address only
+ANCHOR_KEYWORDS = {
+    "follower-count-checker": "TikTok follower count checker", "money-calculator": "TikTok money calculator",
+    "shadowban-checker": "TikTok shadowban checker", "hashtag-generator": "TikTok hashtag generator",
+    "hashtag-counter": "TikTok hashtag counter", "coins-to-usd": "TikTok coins to USD",
+    "engagement-rate-calculator": "TikTok engagement rate calculator", "best-time-to-post": "best time to post on TikTok",
+    "username-generator": "TikTok username generator",
+    "guide-hashtag-strategy": "TikTok hashtag strategy", "guide-trending-hashtags": "trending TikTok hashtags",
+    "guide-creator-rewards": "TikTok Creator Rewards Program", "guide-shadowban": "TikTok shadowban",
+    "guide-best-time": "best time to post on TikTok", "guide-how-much-pay": "how much does TikTok pay",
+    "guide-how-many-views": "how many views is good on TikTok", "guide-how-often-post": "how often to post on TikTok",
+    "guide-captions": "TikTok captions", "guide-analytics": "TikTok analytics", "guide-video-size-length": "TikTok video size and length",
+    "homepage": "InayaFlow",
+}
+ANCHOR_STOP = {"a", "an", "the", "to", "on", "of", "for", "is", "in", "and", "how", "does", "often", "much", "many"}
+
+
+def anchor_count(state, slug):
+    """The per-target cursor: how many posts this robot's state already books for the target. A post is booked only when it is actually published
+    (or recovered from a pending marker), so the cursor moves exactly then; dry runs, failures and refused POSTs never move it."""
+    return sum(1 for e in state.get("posts", []) if e.get("slug") == slug)
+
+
+def anchor_type(n, slug):
+    return HOME_CYCLE[n % 2] if slug == "homepage" else ANCHOR_CYCLE[n % 10]
+
+
+def anchor_keyword(slug, url=""):
+    if slug in ANCHOR_KEYWORDS:
+        return ANCHOR_KEYWORDS[slug]
+    tail = urllib.parse.urlparse(url).path.rstrip("/").rsplit("/", 1)[-1]
+    return re.sub(r"[-_]+", " ", tail).strip() or "InayaFlow"
+
+
+def anchor_url_text(url):
+    return re.sub(r"^https?://", "", url).rstrip("/")
+
+
+def _kw_words(text):
+    return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in ANCHOR_STOP}
+
+
+def anchor_info(slug, url, n):
+    """What the writer is told and what the check enforces for this post."""
+    t = anchor_type(n, slug)
+    kw = anchor_keyword(slug, url)
+    addr = anchor_url_text(url)
+    kws = kw.split()
+    if t == "brand":
+        desc, ex = "BRAND: the link text must contain the word InayaFlow", ["InayaFlow", "InayaFlow's free tool for this"]
+    elif t == "address":
+        desc, ex = "WEB ADDRESS: the link text must be exactly the web address %s (nothing else, no https://)" % addr, [addr]
+    elif t == "plain":
+        desc, ex = "PLAIN WORDS: generic link text with no brand name and none of the page's keyword words", ["this free checker", "a free tool for it"]
+    elif t == "partial":
+        desc, ex = ("PARTIAL KEYWORD: a natural phrase that uses SOME but not ALL of the words of the page keyword \"%s\", no brand name" % kw), ["a free %s" % " ".join(kws[-2:]), "this %s tool" % kws[-1]]
+    else:
+        desc, ex = "EXACT KEYWORD: the link text must be exactly \"%s\"" % kw, [kw]
+    return {"type": t, "keyword": kw, "url_text": addr, "desc": desc, "examples": ex}
+
+
+def anchor_prompt(info):
+    return "LINK TEXT FOR THE ONE LINK TO THE TARGET PAGE: %s. Examples: %s. Use only this type; the code rejects any other." % (
+        info["desc"], "; ".join('"%s"' % e for e in info["examples"]))
+
+
+def anchor_problems(text, info):
+    """-> list of problems (empty = the link text matches the chosen type)."""
+    t, kw = info["type"], info["keyword"]
+    low = text.strip().lower()
+    kww = _kw_words(kw)
+    tw = _kw_words(text)
+    shared = len(kww & tw)
+    brand = "inayaflow" in low
+    if t == "brand":
+        ok = brand
+    elif t == "address":
+        ok = low.rstrip("/") == info["url_text"].lower()
+    elif t == "plain":
+        ok = not brand and bool(tw or low) and shared * 2 < len(kww) and "." not in low.replace(" ", "")
+    elif t == "partial":
+        ok = not brand and shared >= 1 and not kww <= tw and "." not in low.replace(" ", "")
+    else:
+        ok = low == kw.lower()
+    return [] if ok else ["link text '%s' is not the required %s type (%s)" % (text.strip()[:60], t, info["desc"][:80])]
+
+
 # ---------- checks (offline) ----------
 
 def words(text):
@@ -148,7 +237,7 @@ def shingles(text, n=7):
     return {hashlib.md5(" ".join(w[i:i + n]).encode()).hexdigest()[:10] for i in range(len(w) - n + 1)}
 
 
-def check_article(art, target_url, page_text, source_texts, first_person_ok=False, past_shingles=None, page_full=None):
+def check_article(art, target_url, page_text, source_texts, first_person_ok=False, past_shingles=None, page_full=None, anchor=None):
     """-> list of problems (empty = passes the offline gate). art = dict(title, description, tags, body, sources).
     source_texts = {url: fetched text} for every external link in the body (None/'' = could not be fetched)."""
     p = []
@@ -167,8 +256,13 @@ def check_article(art, target_url, page_text, source_texts, first_person_ok=Fals
         p.append("target link missing or repeated (%d)" % ours.count(target_url))
     if len(ours) > 2:
         p.append("more than 2 inayaflow.ai links")
-    if re.search(r"inayaflow\.ai", re.sub(r"\]\(https?://[^)\s]+\)", "]", body)):
+    scan = re.sub(r"\[[^\]]*\]\(" + re.escape(target_url) + r"\)", " LINK ", body) if anchor else body      # the address as LINK TEXT is allowed; bare unlinked text never
+    if re.search(r"inayaflow\.ai", re.sub(r"\]\(https?://[^)\s]+\)", "]", scan)):
         p.append("bare inayaflow.ai text outside a link")
+    if anchor:
+        txt = [t for t, u in links if u == target_url]
+        if len(txt) == 1:
+            p += anchor_problems(txt[0], anchor)
     ext = [u for _, u in links if "inayaflow.ai" not in u]
     if len(set(ext)) < 2:
         p.append("fewer than 2 external source links")
@@ -323,7 +417,7 @@ RULES (all are checked by code afterwards; a break means nothing is published):
 - At least 2 different external source links. Use only pages you opened.
 - About OUR page: paraphrase it in your own words and never copy 7 or more words in a row from the PAGE TEXT (the checker compares). Facts about our tool (limits, hours, days, what it needs) may be stated ONLY if they are printed in the PAGE TEXT; the paragraph that links our page may use numbers from the PAGE TEXT without another source link.
 - Never use the words I, I'm, I've, I'll, I'd, me, my, mine or myself anywhere: not in questions, quotes or rhetorical lines ("am I shadowbanned?" is forbidden: write "is an account shadowbanned?" or "are your views down?").
-- Exactly ONE link to the target InayaFlow page (given below), placed where it truly helps the reader, written as [descriptive words](URL). No other inayaflow.ai link except at most one more if truly useful. Never write the bare text inayaflow.ai. Do not describe features of our page that are not in the PAGE TEXT below.
+- Exactly ONE link to the target InayaFlow page (given below), placed where it truly helps the reader, written as [LINK TEXT](URL); the type of LINK TEXT is set per article in the user message and checked by code. No other inayaflow.ai link except at most one more if truly useful. Never write the web address inayaflow.ai as plain text outside that link (as the link text itself it is allowed when the type says so). Do not describe features of our page that are not in the PAGE TEXT below.
 - No @usernames, no other creators' names, no hype, no calls like "sign up now". Be honest about limits (our tools are free helpers, not magic).
 - Banned words and phrases: delve, game-changer, landscape, tapestry, dive into, unlock, elevate, supercharge, revolutionize, seamlessly, cutting-edge, in conclusion, it's important to note, ever-evolving, look no further, to the next level, harness, embark, realm of, testament, leverage, must-have, take your ... to the next level.
 - Title: 70 characters or fewer, no clickbait. Four DEV tags (lowercase letters/digits only, e.g. tiktok, socialmedia, webdev, productivity).
@@ -527,13 +621,14 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
         print("dev_poster: target page not readable (HTTP %s), stop" % st)
         log("| %s | %s | STOP page not readable | | | $0 | HTTP %s |" % (today, slug, st))
         return "PAGE_DOWN"
+    anchor = anchor_info(slug, url, anchor_count(state, slug))
     past = [e.get("title", "") for e in state["posts"][-PAST_ARTICLES_KEPT:] if e.get("title")]
     past_sh = set()
     for lst in (state.get("shingles") or [])[-PAST_ARTICLES_KEPT:]:
         past_sh.update(lst)
     user = ("TARGET PAGE: %s\nIT IS: %s (%s)\nTOPIC AREA: %s\nPAGE TEXT (the only facts you may state about our page):\n%s\n\n"
-            "ARTICLES WE ALREADY PUBLISHED (do not repeat these angles):\n%s\n\nWrite today's article now.") % (
-        url, what, kind, topic, page_text, "\n".join("- " + t for t in past) or "(none yet)")
+            "ARTICLES WE ALREADY PUBLISHED (do not repeat these angles):\n%s\n\n%s\n\nWrite today's article now.") % (
+        url, what, kind, topic, page_text, "\n".join("- " + t for t in past) or "(none yet)", anchor_prompt(anchor))
     if dry:                                # counted and saved BEFORE any model call: a killed run cannot lose them
         state.setdefault("dry", {})[today] = dry_today + 1
     else:
@@ -564,7 +659,7 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
             theirs = fetched.get(u, "")[:20000]                    # what the writer's own fetch tool returned for that page
             source_texts[u] = theirs if len(theirs) > len(ours) else ours
         unreadable = [u for u in ext if len(source_texts.get(u, "")) < MIN_SOURCE_CHARS]
-        problems = check_article(art, url, page_text, source_texts, past_shingles=past_sh, page_full=page_full)
+        problems = check_article(art, url, page_text, source_texts, past_shingles=past_sh, page_full=page_full, anchor=anchor)
         sl, _, _ = getter(url)
         if sl != 200:
             problems.append("target link not live (HTTP %s)" % sl)
