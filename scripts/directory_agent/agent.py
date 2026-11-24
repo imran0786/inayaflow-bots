@@ -577,9 +577,16 @@ def _outbound(page, base, own):
     return out
 
 
-def follow_proof(site_url):
-    """Returns (verdict, evidence). FOLLOWED / NOFOLLOW_ONLY / NOINDEX / UNKNOWN. Never raises."""
+TIME_LIMIT_EVIDENCE = "time limit reached"
+
+
+def follow_proof(site_url, deadline=None):
+    """Returns (verdict, evidence). FOLLOWED / NOFOLLOW_ONLY / NOINDEX / UNKNOWN. Never raises.
+    deadline (optional, time.time() value): checked before EVERY page fetch (homepage and each listing page); when it has passed the check stops with
+    ("UNKNOWN", TIME_LIMIT_EVIDENCE) and the caller may treat the row as not checked. Each fetch has its own 10 s timeout (PROOF_TIMEOUT)."""
     try:
+        if deadline is not None and time.time() > deadline:
+            return "UNKNOWN", TIME_LIMIT_EVIDENCE
         pu = urlparse(site_url)
         home = "%s://%s/" % (pu.scheme or "https", pu.netloc)
         own = reg_domain(pu.hostname or "")
@@ -589,6 +596,8 @@ def follow_proof(site_url):
             return "UNKNOWN", "no listing pages found on the homepage"
         fetched, indexable, nofollow_seen = 0, 0, None
         for u in links[:3]:
+            if deadline is not None and time.time() > deadline:
+                return "UNKNOWN", TIME_LIMIT_EVIDENCE
             try:
                 body, hdr = _http_get(u)
             except Exception:

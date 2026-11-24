@@ -434,8 +434,9 @@ class Meter:
         self.save()
 
     def settle(self, usage):
-        # an answer WITHOUT a usage block keeps the booked reserve as its cost (never 0: a silent reply must not beat the cap)
-        real = self.cost_fn(usage) if isinstance(usage, dict) and usage else self.reserve
+        # an answer WITHOUT a usable usage block (no input AND output token counts for this provider) keeps the booked reserve as its cost (never 0: a silent reply must not beat the cap)
+        need = ("prompt_tokens", "completion_tokens") if self.provider == "deepseek" else ("input_tokens", "output_tokens")
+        real = self.cost_fn(usage) if isinstance(usage, dict) and all(k in usage for k in need) else self.reserve
         self.state[self.key][self.today] = round(max(0.0, self.spent - self.reserve + real), 4)
         self.save()
 
@@ -630,11 +631,19 @@ def run_proofs(rows, proof, workers=8):
         return 0
     deadline = time.time() + PROOF_SECONDS
     todo = rows[:PROOF_MAX_FETCHES]
+    try:
+        import inspect
+        takes_deadline = "deadline" in inspect.signature(proof).parameters
+    except (TypeError, ValueError):
+        takes_deadline = False
 
     def one(r):
         if time.time() > deadline:
             return None
         try:
+            if takes_deadline:
+                verdict, evidence = proof(r.get("final_url") or r["submit_url"], deadline=deadline)    # the deadline is checked before EVERY fetch inside follow_proof
+                return None if str(evidence).startswith("time limit") else verdict                    # stopped mid-row: the row stays UNCHECKED
             return proof(r.get("final_url") or r["submit_url"])[0]
         except Exception:
             return "UNKNOWN"

@@ -27,7 +27,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60     # build step 45 + tests + save step; room for 480 s of proof checks plus the AI calls
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,7 +38,7 @@ jobs:
       - name: Unit tests (a failure stops the run)
         run: python3 -W ignore scripts/list_builder/test_builder.py
       - name: Build the list (DeepSeek)
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           LIST_BUILDER_PROVIDER: deepseek
