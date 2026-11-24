@@ -74,7 +74,40 @@ PAGES = [
     ("guide-captions", "https://inayaflow.ai/blog/tiktok-captions", "guide", "our guide to TikTok captions", "writing TikTok captions"),
     ("guide-analytics", "https://inayaflow.ai/blog/tiktok-analytics", "guide", "our guide to TikTok analytics", "reading TikTok analytics"),
     ("guide-video-size-length", "https://inayaflow.ai/blog/tiktok-video-size-and-length", "guide", "our guide to TikTok video size and length", "TikTok video size, length and format"),
+    ("guide-no-views", "https://inayaflow.ai/blog/why-is-my-tiktok-getting-no-views", "guide", "our guide to why a TikTok gets no views", "why a TikTok video gets no views"),
+    ("guide-views-going-down", "https://inayaflow.ai/blog/why-are-my-tiktok-views-going-down", "guide", "our guide to why TikTok views go down", "TikTok views going down"),
+    ("guide-hooks", "https://inayaflow.ai/blog/tiktok-hooks-that-stop-the-scroll", "guide", "our guide to TikTok hooks that stop the scroll", "TikTok video hooks"),
+    ("guide-growth-tool", "https://inayaflow.ai/blog/tiktok-growth-tool", "guide", "our guide to choosing a TikTok growth tool", "TikTok growth tools"),
+    ("analyze", "https://inayaflow.ai/analyze", "tool", "free TikTok account analyzer: paste any @username for a full report", "analysing a TikTok account"),
 ]
+
+# ---------- push priority (24 Nov 2026): data/push_priority.json, edited by the Director, no code change ----------
+PRIORITY_PATH = os.path.join(ROOT, "data", "push_priority.json")
+
+
+def load_priority(pages=None, path=None):
+    """-> {slug: tier index (0 = tier 1)} for slugs that are in `pages`. Unknown slugs are ignored with a printed warning; missing/unreadable/bad file = {} (old behaviour)."""
+    pages = PAGES if pages is None else pages
+    d = read_json(path or PRIORITY_PATH, None)
+    tiers = d.get("tiers") if isinstance(d, dict) else None
+    if not isinstance(tiers, list):
+        return {}
+    known = {p[0] for p in pages}
+    out = {}
+    for ti, tier in enumerate(tiers):
+        if not isinstance(tier, list):
+            continue
+        for slug in tier:
+            if slug not in known:
+                print("WARNING: push_priority.json slug not in PAGES, ignored: %s" % (slug,))
+            elif slug not in out:
+                out[slug] = ti
+    return out
+
+
+def tier_of(slug, prio, pages=None):
+    """Tier index; pages not listed come after every listed tier (tier 3 by default)."""
+    return prio.get(slug, (max(prio.values()) + 1) if prio else 0)
 
 BANNED = ["delve", "game-changer", "game changer", "in today's fast-paced", "in today's digital", "unlock the power", "unlock your", "dive into", "dive deep",
           "navigate the", "landscape", "tapestry", "elevate your", "supercharge", "revolutionize", "seamlessly", "cutting-edge", "in conclusion", "it's important to note",
@@ -103,17 +136,18 @@ def utc_today():
 
 
 def pick_page(state, today, pages=PAGES):
-    """Oldest-used page that has rested REST_DAYS (never used = first). None when every page is still resting."""
+    """Highest-priority tier first (data/push_priority.json), then oldest-used page that has rested REST_DAYS (never used = first). None when every page is still resting."""
     d0 = datetime.date.fromisoformat(today)
     last = {e["slug"]: e["date"] for e in state.get("posts", []) if e.get("slug") and e.get("date")}
     ok = []
+    prio = load_priority(pages)
     for p in pages:
         used = last.get(p[0])
         if used and (d0 - datetime.date.fromisoformat(used)).days < REST_DAYS:
             continue
-        ok.append((used or "0000-00-00", pages.index(p), p))
-    ok.sort(key=lambda x: (x[0], x[1]))
-    return ok[0][2] if ok else None
+        ok.append((tier_of(p[0], prio), used or "0000-00-00", pages.index(p), p))
+    ok.sort(key=lambda x: x[:3])
+    return ok[0][3] if ok else None
 
 
 # ---------- link text mix (RULEBOOK 9a, 24 Nov 2026): the visible text of our ONE link follows a 10-post cycle PER TARGET PAGE ----------
@@ -130,6 +164,8 @@ ANCHOR_KEYWORDS = {
     "guide-best-time": "best time to post on TikTok", "guide-how-much-pay": "how much does TikTok pay",
     "guide-how-many-views": "how many views is good on TikTok", "guide-how-often-post": "how often to post on TikTok",
     "guide-captions": "TikTok captions", "guide-analytics": "TikTok analytics", "guide-video-size-length": "TikTok video size and length",
+    "guide-no-views": "why is my TikTok getting no views", "guide-views-going-down": "why are my TikTok views going down",
+    "guide-hooks": "TikTok hooks", "guide-growth-tool": "TikTok growth tool", "analyze": "TikTok account analyzer",
     "homepage": "InayaFlow",
 }
 ANCHOR_STOP = {"a", "an", "the", "to", "on", "of", "for", "is", "in", "and", "how", "does", "often", "much", "many"}
