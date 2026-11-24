@@ -1,0 +1,42 @@
+{
+ "cursor": 9,
+ "spent": {
+  "2026-11-24": 1.3319
+ },
+ "days": {
+  "2026-11-24": {
+   "added": 115,
+   "by_category": {
+    "ai_saas_directories": 21,
+    "launch_sites": 8,
+    "tool_roundups": 19,
+    "github_awesome_lists": 23,
+    "saas_review_platforms": 9,
+    "guest_post_pages": 13,
+    "resource_pages": 9,
+    "communities_profiles": 9,
+    "podcasts_creators": 4
+   },
+   "runs": 1,
+   "calls": 9,
+   "summary": "list-builder: +115 new (total 1435; by category github_awesome_lists 23, ai_saas_directories 21, tool_roundups 19, guest_post_pages 13, communities_profiles 9, resource_pages 9, saas_review_platforms 9, launch_sites 8, podcasts_creators 4)",
+   "total": 1435
+  }
+ },
+ "rejected": [
+  "aitoolssubmit.com",
+  "producthunt.com",
+  "guideflow.com",
+  "geelark.com",
+  "socialmelo.com",
+  "designsvalley.com",
+  "upscalefilm.com",
+  "socialmediatoday.com",
+  "justclickhere.co.uk",
+  "heidicohen.com",
+  "snhu.edu",
+  "foolishauthor.substack.com",
+  "socialmediaexaminer.com"
+ ],
+ "last_summary": "list-builder: +115 new (total 1435; by category github_awesome_lists 23, ai_saas_directories 21, tool_roundups 19, guest_post_pages 13, communities_profiles 9, resource_pages 9, saas_review_platforms 9, launch_sites 8, podcasts_creators 4)"
+}
