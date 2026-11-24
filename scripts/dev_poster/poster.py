@@ -215,7 +215,7 @@ def norm_num(s):
     return re.sub(r"[^\d.]", "", s).strip(".")
 
 
-def seven_word_overlap(article, reference, n=7):
+def seven_word_overlap(article, reference, n=7):  # n: shared-run length in words (default 7)
     """First n-word sequence the article shares with the reference text, or ''. Links and URLs are stripped first."""
     def toks(t):
         t = re.sub(r"https?://\S+", " ", t)
@@ -448,12 +448,30 @@ it names another creator, brand-new product claim or @handle; it promises result
 PASS only when every checkable claim is supported."""
 
 
+def qa_json(raw):
+    """First parseable JSON object in a model reply: skips code fences, leading/trailing prose and stray braces."""
+    raw = re.sub(r"```(?:json)?", " ", raw or "")
+    dec = json.JSONDecoder()
+    for m in re.finditer(r"\{", raw):
+        try:
+            d, _ = dec.raw_decode(raw[m.start():])
+        except ValueError:
+            continue
+        if isinstance(d, dict):
+            return d
+    return None
+
+
 def qa_gate(art, target_url, source_texts, page_text, meter, post=None):
     srcs = "\n\n".join("SOURCE %s:\n%s" % (u, (t or "")[:3500]) for u, t in source_texts.items())
     user = "TARGET PAGE %s (our own page):\n%s\n\n%s\n\nARTICLE TITLE: %s\n\n%s" % (target_url, page_text[:2500], srcs, art["title"], art["body"])
-    data = anthropic(QA_MODEL, QA_SYSTEM, user[:60000], meter, post=post, max_tokens=700)
-    raw = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-    j = c.json_obj(raw)
+    j = None
+    for _try in (1, 2):                              # an unreadable QA reply gets ONE more ask before it fails
+        data = anthropic(QA_MODEL, QA_SYSTEM, user[:60000], meter, post=post, max_tokens=700)
+        raw = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+        j = qa_json(raw)
+        if j and j.get("verdict") in ("PASS", "FAIL"):
+            break
     if not j or j.get("verdict") not in ("PASS", "FAIL"):
         return False, ["QA answer not understood"]
     return j["verdict"] == "PASS", [str(r)[:160] for r in (j.get("reasons") or [])][:5]
