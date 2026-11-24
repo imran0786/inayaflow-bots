@@ -178,6 +178,103 @@ def check_post(art, target_url, platform, page_full, source_texts, site_corpus="
     return p[:12]
 
 
+# ---------- repair (24 Nov): fix ONLY the offending sentences instead of throwing the draft away ----------
+REPAIRABLE = ("-word overlap with our site", "-word overlap with today's", "first person singular")
+FIRST_PERSON_RE = re.compile(r"\b(I|I'm|I've|I'll|I'd|my|me|mine|myself)\b")
+QUOTE_RE = re.compile(r'"[^"\n]*"|“[^”\n]*”')
+MAX_REPAIR_SENTENCES = 8
+
+
+def repairable(problems):
+    """True when EVERY problem is a copy-overlap or an 'I/me/my' problem (the only kinds a sentence rewrite can fix)."""
+    return bool(problems) and all(any(k in x for k in REPAIRABLE) for x in problems)
+
+
+def sentence_spans(body):
+    """[(start, end)] of every sentence in the body (headings and blank lines skipped). A sentence never crosses a line."""
+    spans, pos = [], 0
+    for line in body.split("\n"):
+        if line.strip() and not line.lstrip().startswith("#"):
+            start = 0
+            for m in re.finditer(r"(?<=[.!?])\s+", line):
+                if m.start() > start:
+                    spans.append((pos + start, pos + m.start()))
+                start = m.end()
+            if len(line) > start:
+                spans.append((pos + start, pos + len(line)))
+        pos += len(line) + 1
+    return spans
+
+
+def _toks(t):
+    return [w.lower() for w in re.findall(r"[A-Za-z0-9']+", re.sub(r"https?://\S+", " ", t))]
+
+
+def overlap_grams(text, reference, n):
+    """Every n-word run that text shares with reference (lower-case, space-joined)."""
+    r = _toks(reference)
+    grams = {" ".join(r[i:i + n]) for i in range(len(r) - n + 1)}
+    a = _toks(text)
+    return {" ".join(a[i:i + n]) for i in range(len(a) - n + 1)} & grams
+
+
+def offending_sentences(body, site_corpus, others):
+    """-> [(span_index, reason)]: sentences that carry a site / other-article overlap run or a first-person word."""
+    spans = sentence_spans(body)
+    sents = [body[a:b] for a, b in spans]
+    plain = [re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", x) for x in sents]
+    bad = {}
+    refs = [(SITE_OVERLAP_WORDS, site_corpus, "copies %d or more words in a row from our own site" % SITE_OVERLAP_WORDS)]
+    refs += [(7, o, "copies 7 or more words in a row from another article of ours") for _, o in others]
+    for n, ref, why in refs:
+        if not ref:
+            continue
+        for g in overlap_grams(" ".join(plain), ref, n):
+            hit = [i for i, x in enumerate(plain) if g in " ".join(_toks(x))]
+            if not hit:                       # the run straddles two neighbouring sentences: rewrite both
+                for i in range(len(plain) - 1):
+                    if g in " ".join(_toks(plain[i] + " " + plain[i + 1])):
+                        hit = [i, i + 1]
+                        break
+            for i in hit:
+                bad.setdefault(i, why)
+    for i, x in enumerate(sents):
+        if FIRST_PERSON_RE.search(QUOTE_RE.sub(" ", x)):
+            bad.setdefault(i, "uses I / me / my (must speak as 'we' / 'our')")
+    return sorted(bad.items())
+
+
+def repair_article(art, site_corpus, others, meter, post=None):
+    """ONE cheap rewrite (Haiku, no tools) of ONLY the offending sentences. -> repaired art dict, or None when nothing could be repaired."""
+    body = art["body"]
+    spans = sentence_spans(body)
+    bad = offending_sentences(body, site_corpus, others)
+    if not bad or len(bad) > MAX_REPAIR_SENTENCES:
+        return None
+    lines = "\n".join("%d. [%s] %s" % (n + 1, why, body[spans[i][0]:spans[i][1]]) for n, (i, why) in enumerate(bad))
+    system = ("You are a copy editor. Rewrite ONLY the numbered sentences. Keep the exact meaning and every number, but use completely different wording so no run of 5 or more "
+              "words is shared with the original sentence. Speak as 'we' / 'our' for the company (never I, me, my, mine, myself). Keep every Markdown link [text](url) EXACTLY as it is "
+              "(same text, same url), a list item keeps its '- ' or '1. ' start, and one sentence stays one sentence. "
+              'Answer ONLY a JSON object {"1":"new sentence","2":"new sentence"} with one entry per number.')
+    data = D.anthropic(D.QA_MODEL, system, "SENTENCES TO REWRITE:\n" + lines, meter, post=post, max_tokens=900)
+    raw = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    j = D.qa_json(raw)
+    if not isinstance(j, dict):
+        return None
+    new = body
+    for n, (i, _) in reversed(list(enumerate(bad))):
+        rep = j.get(str(n + 1))
+        old = body[spans[i][0]:spans[i][1]]
+        if not isinstance(rep, str) or not rep.strip() or "\n" in rep.strip():
+            return None
+        rep = rep.strip()
+        m = re.match(r"\s*([-*]|\d+[.)])\s", old)
+        if m and not re.match(r"([-*]|\d+[.)])\s", rep):
+            rep = m.group(0) + rep
+        new = new[:spans[i][0]] + rep + new[spans[i][1]:]
+    return dict(art, body=new)
+
+
 # ---------- writer ----------
 def writer_system(platform):
     s = SPECS[platform]
@@ -453,6 +550,20 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
         save()
         problems, art, source_texts = ["no draft"], None, {}
         left_after = len(todo) - idx - 1
+        repaired_once = False
+        fetched = {}
+
+        def evaluate(a):
+            st = {}
+            for u in sorted({u for _, u in LINK_RE.findall(a["body"]) if "inayaflow.ai" not in u})[:6]:
+                s2, _, h2 = getter(u)
+                ours = c.html_text(h2, 20000) if s2 == 200 else ""
+                theirs = fetched.get(u, "")[:20000]
+                st[u] = theirs if len(theirs) > len(ours) else ours
+            pr = check_post(a, url, pl, page_full, st, site_corpus, todays, past_sh, anchor=anchor)
+            if any(len(t) < D.MIN_SOURCE_CHARS for t in st.values()):
+                pr.append("a cited source page is unreadable")
+            return pr, st
         for attempt in (1, 2):
             if attempt == 2 and meter.cost + (left_after + 1) * (D.WRITER_RESERVE + D.QA_RESERVE) > meter.cap + 1e-9:
                 break
@@ -466,15 +577,19 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
             if not art:
                 problems = ["writer output not in the required format"]
                 continue
-            source_texts = {}
-            for u in sorted({u for _, u in LINK_RE.findall(art["body"]) if "inayaflow.ai" not in u})[:6]:
-                s2, _, h2 = getter(u)
-                ours = c.html_text(h2, 20000) if s2 == 200 else ""
-                theirs = fetched.get(u, "")[:20000]
-                source_texts[u] = theirs if len(theirs) > len(ours) else ours
-            problems = check_post(art, url, pl, page_full, source_texts, site_corpus, todays, past_sh, anchor=anchor)
-            if any(len(t) < D.MIN_SOURCE_CHARS for t in source_texts.values()):
-                problems.append("a cited source page is unreadable")
+            problems, source_texts = evaluate(art)
+            if problems and repairable(problems) and not repaired_once:
+                repaired_once = True                  # ONE sentence-level repair per platform per day; the whole article is then checked again from scratch
+                try:
+                    fixed = repair_article(art, site_corpus, todays, meter, post=post_ai)
+                except Exception as e:
+                    fixed = None
+                    print("platform_poster: repair skipped (%s)" % type(e).__name__)
+                if fixed:
+                    p2, st2 = evaluate(fixed)
+                    print("platform_poster: repair %s problems %d -> %d" % (pl, len(problems), len(p2)))
+                    if len(p2) <= len(problems):
+                        art, problems, source_texts = fixed, p2, st2
             if not problems:
                 break
         ok, reasons = not problems, problems
