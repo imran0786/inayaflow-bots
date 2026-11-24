@@ -70,4 +70,7 @@ ok(not a.eligible(site, stS, {}, "2026-11-19", {"retry": {"fivetaco.com": "2026-
 stP = {k: dict(e, status="PAID") for k, e in st.items()}
 ok(not a.eligible(site, stP, {}, "2026-11-25", {"retry": {"fivetaco.com": "2026-11-24"}}), "paid never retried")
 ok(not a.eligible(site, st, {}, "2026-11-19", {"retry": {"fivetaco.com": "2026-11-17"}}), "old confirmation gives no boost")
+ok(v.HOURS >= 336, "lookback covers at least 14 days")
+ok(v.decide("Confirm your email", "buildlist.io", "Confirm that you want to receive our weekly newsletter: https://buildlist.io/confirm?token=1", K | {"buildlist.io"}, None, 60)[0] == "SKIPPED_NEWSLETTER", "newsletter wording in body skipped")
+ok(v.decide("Confirm your email", "buildlist.io", "Welcome! Confirm your account: https://buildlist.io/confirm?token=1", K | {"buildlist.io"}, None, 9000)[0] == "OPEN_LINK", "5-day-old confirm link still opened")
 print("verify tests: %d passed" % n)

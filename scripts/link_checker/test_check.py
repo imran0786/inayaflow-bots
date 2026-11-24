@@ -30,5 +30,27 @@ class OurPage(unittest.TestCase):
         self.assertEqual(pg('<a href="https://other.com/">a</a>'), "")
 
 
+class OwnPosts(unittest.TestCase):
+    def test_own_post_checked_against_target_page(self):
+        page = '<a href="https://inayaflow.ai/">home</a><a href="https://inayaflow.ai/tools/tiktok-money-calculator/">calc</a>'
+        orig = check.get
+        try:
+            check.get = lambda u: (200, page, False)
+            r = check.check_own({"source": "https://x.blogspot.com/p", "target": "/tools/tiktok-money-calculator"})
+            self.assertEqual((r["status"], r["rel"], r["page"]), ("LIVE", "followed", "/tools/tiktok-money-calculator"))
+            r = check.check_own({"source": "https://x.blogspot.com/p", "target": "/tools/other"})
+            self.assertEqual(r["status"], "PENDING")
+            check.get = lambda u: (404, "", False)
+            self.assertEqual(check.check_own({"source": "https://x.blogspot.com/p", "target": "/"})["status"], "UNREACHABLE")
+        finally:
+            check.get = orig
+
+    def test_data_file_valid(self):
+        own = check.load_own()
+        self.assertGreaterEqual(len(own), 39)
+        for e in own:
+            self.assertTrue(e["target"].startswith("/"))
+
+
 if __name__ == "__main__":
     unittest.main()
