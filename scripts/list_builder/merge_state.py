@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Merge two versions of data/list_builder_state.json after a push conflict (24 Nov 2026, code QA finding 3a).
 
-usage: merge_state.py OURS_FILE THEIRS_FILE   -> writes the merge into THEIRS_FILE, then rebuilds data/needs_signup.md and
-data/list_builder_compare.md from the merged candidates file and state (so they never disagree with them).
+usage: merge_state.py OURS_FILE THEIRS_FILE   -> writes the merge into THEIRS_FILE (one provider's own state file; the provider is read from the file name), then
+rebuilds that provider's sign-up sheet and daily report and the side-by-side compare file from the merged states (so they never disagree).
+Each provider has its own state file now, so this only guards against a second run of the SAME provider.
 
 Nothing a robot booked is lost: the cursor is the larger one; every day's spend (Sonnet and DeepSeek) is the larger of the two values (a spend
 booking only ever grows within a day); "rejected" is the union; every per-day counter, per provider, is the larger of the two (two runs never see
@@ -47,7 +48,7 @@ def merge_day(a, t):
 def merge_state(ours, theirs):
     out = dict(theirs)
     out["cursor"] = max(int(ours.get("cursor", 0) or 0), int(theirs.get("cursor", 0) or 0))
-    for key in ("spent", "spent_deepseek"):
+    for key in ("spent",):
         out[key] = _max_dict(ours.get(key), theirs.get(key))
     out["days"] = {}
     for d in set((ours.get("days") or {})) | set((theirs.get("days") or {})):
@@ -65,10 +66,14 @@ def main(argv):
     theirs = b.read_json(theirs_path, {})
     merged = merge_state(ours if isinstance(ours, dict) else {}, theirs if isinstance(theirs, dict) else {})
     b.write_json(theirs_path, merged)
-    cand = b.read_json(b.CAND_PATH, None)
+    prov = "deepseek" if "deepseek" in os.path.basename(theirs_path) else "claude"      # the provider is read from the state file name
+    P = b.paths(prov)
+    cand = b.read_json(P["cand"], None)
     if isinstance(cand, dict) and isinstance(cand.get("sites"), list):
-        b.write_needs_signup(cand["sites"])
-    b.write_compare(merged.get("days") or {})
+        b.write_needs_signup(cand["sites"], P["signup"])
+    b.write_report(prov, merged.get("days") or {}, P["report"])
+    other = b.read_json(P["other_state"], {})
+    b.write_compare({prov: merged.get("days") or {}, ("claude" if prov == "deepseek" else "deepseek"): (other.get("days") if isinstance(other, dict) else {}) or {}})
     print("list-builder: state merged (cursor %d, %d days)" % (merged["cursor"], len(merged["days"])))
     return 0
 

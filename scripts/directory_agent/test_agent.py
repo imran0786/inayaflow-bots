@@ -587,6 +587,26 @@ class FollowProof(unittest.TestCase):
         feed = ag.build_feed(st, {}, self.T0, vstate, stats)
         return [s["name"] for s in feed], stats, st, calls
 
+    def test_feed_reads_both_list_builder_files(self):
+        """24 Nov 2026: Sonnet's and DeepSeek's candidate files are BOTH read for TODO rows."""
+        import tempfile
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "data"))
+        row = lambda n, u, fb: {"name": n, "submit_url": u, "usable": True, "free_check": "free_likely", "found_by": fb}   # noqa: E731
+        json.dump({"sites": [row("S1", "https://s1.example/submit", "sonnet")]}, open(os.path.join(d, "data", "directories_candidates.json"), "w"))
+        json.dump({"sites": [row("D1", "https://d1.example/submit", "deepseek")]}, open(os.path.join(d, "data", "directories_candidates_deepseek.json"), "w"))
+        json.dump([], open(os.path.join(d, "data", "directories.json"), "w"))
+        kp = os.path.join(d, "known.json")
+        json.dump({"domains": {}}, open(kp, "w"))
+        saved = (ag.ROOT, ag.KNOWN_PATH, ag.follow_proof)
+        ag.ROOT, ag.KNOWN_PATH, ag.follow_proof = d, kp, (lambda url: ("FOLLOWED", "ev"))
+        self.addCleanup(lambda: (setattr(ag, "ROOT", saved[0]), setattr(ag, "KNOWN_PATH", saved[1]), setattr(ag, "follow_proof", saved[2])))
+        feed = ag.build_feed({}, {}, self.T0, None, {})
+        self.assertEqual(sorted(x["name"] for x in feed), ["D1", "S1"])
+        self.assertEqual(len(ag.candidate_sites(os.path.join(d, "data"))), 2)
+        os.remove(os.path.join(d, "data", "directories_candidates_deepseek.json"))             # a missing DeepSeek file is simply empty
+        self.assertEqual([x["name"] for x in ag.build_feed({}, {}, self.T0, None, {})], ["S1"])
+
     SITES = [("A", "https://a.example/submit"), ("B", "https://b.example/submit"), ("C", "https://c.example/submit"),
              ("D", "https://d.example/submit"), ("E", "https://e.example/submit")]
 

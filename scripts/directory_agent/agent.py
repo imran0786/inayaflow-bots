@@ -638,6 +638,17 @@ def nkey(name):
     return re.sub(r"[^a-z0-9]", "", str(name).lower())
 
 
+CANDIDATE_FILES = ("directories_candidates.json", "directories_candidates_deepseek.json")   # Sonnet's file and the DeepSeek twin's file (24 Nov 2026): the feed reads BOTH
+
+
+def candidate_sites(data_dir):
+    """Every candidate row from both list-builder files (the other robots write TRIED flags into each row's own file)."""
+    out = []
+    for fn in CANDIDATE_FILES:
+        out.extend(load_json(os.path.join(data_dir, fn), {}).get("sites", []))
+    return out
+
+
 def load_json(path, default):
     try:
         return json.load(open(path, encoding="utf8"))
@@ -716,7 +727,7 @@ def eligible(site, state, old_state, today, vstate=None):
 
 
 def build_feed(state, old_state, today, vstate=None, stats=None):
-    cands = load_json(os.path.join(ROOT, "data", "directories_candidates.json"), {}).get("sites", [])
+    cands = candidate_sites(os.path.join(ROOT, "data"))
     feed = []
     # candidates: free_likely + their auto flag first
     cands = [c for c in cands if c.get("usable")]
@@ -844,7 +855,7 @@ def skip_remaining_products(state, site, todo, today, why):
 def backfill_sites(state, products, today):
     """Sites already listed (SUBMITTED / ALREADY_LISTED) that still miss tool listings. The URL comes from the feed catalogue or the state."""
     cat = {}
-    for c in load_json(os.path.join(ROOT, "data", "directories_candidates.json"), {}).get("sites", []):
+    for c in candidate_sites(os.path.join(ROOT, "data")):
         if c.get("submit_url"):
             cat[reg_domain(urlparse(c["submit_url"]).hostname or "")] = {"name": c["name"], "url": c["submit_url"]}
     for d in load_json(os.path.join(ROOT, "data", "directories.json"), []):

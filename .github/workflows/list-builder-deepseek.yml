@@ -5,6 +5,7 @@ name: List builder DeepSeek twin (same duty, side-by-side test)
 # de-duplication against every list we hold, live-URL check and output file as list-builder.yml. DeepSeek has NO web search: it names places it knows and the
 # code's live-URL check keeps only real ones. SEPARATE money cap LIST_BUILDER_DEEPSEEK_DAY_USD_CAP $1.00 a UTC day (NOT part of the $16.98 a day of the LISTED robots).
 # Offset ~30 min from list-builder.yml (04:53 and 16:53 UTC) and the SAME concurrency group: the two write the same files and never run in parallel.
+# SEPARATE SHEETS (Imran 24 Nov): it writes ONLY data/directories_candidates_deepseek.json, data/list_builder_state_deepseek.json, data/needs_signup_deepseek.md, data/list_builder_report_deepseek.md (+ the shared side-by-side data/list_builder_compare.md); it still READS Sonnet's candidates file so nothing is repeated.
 # Needs the secret DEEPSEEK_API_KEY (Imran adds it); without it the job prints "list-builder-deepseek: no key, skipped" and exits 0.
 on:
   schedule:
@@ -52,22 +53,21 @@ jobs:
         run: |
           git config user.name "inayaflow-bot"
           git config user.email "contact@inayaflow.ai"
-          for f in data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md; do if [ -f "$f" ]; then git add "$f"; fi; done
-          python3 -c "import json; [json.load(open(f, encoding='utf8')) for f in ('data/directories_candidates.json', 'data/list_builder_state.json')]" || { echo "data file unreadable, nothing saved"; exit 1; }
+          for f in data/directories_candidates_deepseek.json data/list_builder_state_deepseek.json data/needs_signup_deepseek.md data/list_builder_report_deepseek.md data/list_builder_compare.md; do if [ -f "$f" ]; then git add "$f"; fi; done
+          for f in data/directories_candidates_deepseek.json data/list_builder_state_deepseek.json; do if [ -f "$f" ] && ! python3 -c "import json,sys; json.load(open(sys.argv[1], encoding='utf8'))" "$f"; then echo "data file unreadable, nothing saved"; exit 1; fi; done
           if git diff --cached --quiet; then echo "no change"; exit 0; fi
-          git commit -q -m "data: list builder (new candidate places, state)"
+          git commit -q -m "data: list builder (deepseek, new candidate places, state)"
           for i in 1 2 3; do
             if git push -q origin HEAD:main; then echo "saved"; exit 0; fi
-            # conflict (the backlink batch also writes the candidates file): keep our rows AND theirs (union by domain), our state file
-            git show HEAD:data/directories_candidates.json > /tmp/ours.json
-            git show HEAD:data/list_builder_state.json > /tmp/ours_state.json
+            # conflict (the backlink batch also writes the candidates files): keep our rows AND theirs (union by domain); this provider's own state is merged, never copied over
+            git show HEAD:data/directories_candidates_deepseek.json > /tmp/ours.json
+            git show HEAD:data/list_builder_state_deepseek.json > /tmp/ours_state.json
             git fetch -q origin main
             git reset -q --hard origin/main
-            python3 scripts/reports/merge_candidates.py /tmp/ours.json data/directories_candidates.json
-            # MERGE the state (max spend per day, max cursor, union of rejected; rebuilds the two .md files), never copy ours over theirs
-            python3 scripts/list_builder/merge_state.py /tmp/ours_state.json data/list_builder_state.json
-            for f in data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md; do if [ -f "$f" ]; then git add "$f"; fi; done
+            if [ -f data/directories_candidates_deepseek.json ]; then python3 scripts/reports/merge_candidates.py /tmp/ours.json data/directories_candidates_deepseek.json; else cp /tmp/ours.json data/directories_candidates_deepseek.json; fi
+            if [ -f data/list_builder_state_deepseek.json ]; then python3 scripts/list_builder/merge_state.py /tmp/ours_state.json data/list_builder_state_deepseek.json; else cp /tmp/ours_state.json data/list_builder_state_deepseek.json; fi
+            for f in data/directories_candidates_deepseek.json data/list_builder_state_deepseek.json data/needs_signup_deepseek.md data/list_builder_report_deepseek.md data/list_builder_compare.md; do if [ -f "$f" ]; then git add "$f"; fi; done
             git diff --cached --quiet && { echo "nothing left to save"; exit 0; }
-            git commit -q -m "data: list builder (merged)"
+            git commit -q -m "data: list builder (deepseek, merged)"
           done
           echo "push failed"; exit 1

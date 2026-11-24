@@ -29,6 +29,7 @@ import targets as tg   # QUICK_WIN_PATHS: the one shared quick-win list (Directo
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CANDS = os.path.join(ROOT, "data", "directories_candidates.json")
+DS_CANDS = os.path.join(ROOT, "data", "directories_candidates_deepseek.json")   # the DeepSeek list builder's own file (24 Nov 2026): flags are written back to the row's own file
 SOURCES = os.path.join(ROOT, "data", "list_sources.json")
 STATE = "ops/backlink_batch_state.json"
 LATEST = "ops/backlink_batch_latest.md"
@@ -79,6 +80,16 @@ def sync_flags(sites, agent_state, old_state=None):
             s["status"] = new.strip()
             changed += 1
     return changed
+
+
+def sync_all(data, ds_data, agent_state, old_state=None):
+    """TRIED flags for BOTH list-builder files; each row's flag goes back into the row's OWN file. Returns (flags changed in total, changed in the
+    DeepSeek file, the DeepSeek file's dict or an empty one)."""
+    flags = sync_flags(data.get("sites", []), agent_state, old_state)
+    if isinstance(ds_data, dict) and isinstance(ds_data.get("sites"), list):
+        n = sync_flags(ds_data["sites"], agent_state, old_state)
+        return flags + n, n, ds_data
+    return flags, 0, {"sites": []}
 
 
 def untried(sites):
@@ -842,14 +853,19 @@ def main():
         data = c.read_json(CANDS, {"sites": []})
         agent_state = c.json_obj(c.fetch_file("ops-directory-logs", "ops/directory_agent_state.json")) or {}
         old_state = c.json_obj(c.fetch_file("ops-directory-logs", "ops/directory_state.json")) or {}
-        flags = sync_flags(data.get("sites", []), agent_state, old_state)
+        flags, ds_changed, ds_data = sync_all(data, c.read_json(DS_CANDS, None), agent_state, old_state)
         known_extra = {l.strip().lower() for l in open(os.path.join(work, "ops", "known_domains.txt"), encoding="utf-8")} if os.path.exists(os.path.join(work, "ops", "known_domains.txt")) else set()
         known_extra |= {k for k in agent_state if "." in k}
+        known_extra |= {c.reg_domain(s.get("domain", "")) for s in ds_data["sites"]} | {c.reg_domain(urlparse(s.get("submit_url", "")).hostname or "") for s in ds_data["sites"]}
         rows = list_builder(data, known_extra)
         data["generated"] = c.today()
         with open(CANDS, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=1, ensure_ascii=False)
             f.write("\n")
+        if ds_changed:
+            with open(DS_CANDS, "w", encoding="utf-8") as f:
+                json.dump(ds_data, f, indent=1, ensure_ascii=False)
+                f.write(chr(10))
         for r in rows:
             if str(r.get("status", "")).startswith("BLOCKED"):
                 state.setdefault("blocked", {})["dir:" + r["domain"]] = {"date": c.today(), "what": "directory listing", "where": r.get("submit_url", ""), "why": r["status"]}
@@ -861,7 +877,7 @@ def main():
             prospects = c.read_json(os.path.join(work, PROSPECTS), [])
             excl = {c.reg_domain(l.strip().lower()) for l in c.fetch_file("main", "ops/outreach_domains.txt").splitlines() if l.strip() and not l.startswith("#")}
             ob_idx = outbox_index(c.read_tree("ops-outbox", ["outbox/sent", "outbox/pending", "outbox/failed"]))
-            hunt = hi.ingest(done, state, prospects, data, excl, ob_idx, in_outbox, c.today())
+            hunt = hi.ingest(done, state, prospects, data, excl, ob_idx, in_outbox, c.today(), other_cands=ds_data)
             hunt["verified"] = len(verify_unchecked(data))
             if hunt.get("prospects") and not c.DRY:
                 c.write_json(os.path.join(work, PROSPECTS), prospects)

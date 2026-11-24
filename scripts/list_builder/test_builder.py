@@ -35,9 +35,12 @@ def alive(url, timeout=12, limit=0):
 class Base(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
-        self.saved = (b.DATA, b.CAND_PATH, b.STATE_PATH, b.DRY, b.SIGNUP_PATH, b.COMPARE_PATH)
-        b.SIGNUP_PATH = os.path.join(self.dir, "needs_signup.md")
-        b.COMPARE_PATH = os.path.join(self.dir, "list_builder_compare.md")
+        self.path_names = ("DATA", "CAND_PATH", "STATE_PATH", "SIGNUP_PATH", "REPORT_PATH", "DS_CAND_PATH", "DS_STATE_PATH", "DS_SIGNUP_PATH", "DS_REPORT_PATH", "COMPARE_PATH")
+        self.saved = ({n: getattr(b, n) for n in self.path_names}, b.DRY)
+        for n, fn in (("SIGNUP_PATH", "needs_signup_sonnet.md"), ("REPORT_PATH", "list_builder_report_sonnet.md"), ("DS_CAND_PATH", "directories_candidates_deepseek.json"),
+                      ("DS_STATE_PATH", "list_builder_state_deepseek.json"), ("DS_SIGNUP_PATH", "needs_signup_deepseek.md"),
+                      ("DS_REPORT_PATH", "list_builder_report_deepseek.md"), ("COMPARE_PATH", "list_builder_compare.md")):
+            setattr(b, n, os.path.join(self.dir, fn))
         b.DATA = self.dir
         b.CAND_PATH = os.path.join(self.dir, "directories_candidates.json")
         b.STATE_PATH = os.path.join(self.dir, "list_builder_state.json")
@@ -46,7 +49,9 @@ class Base(unittest.TestCase):
                            "status": "TODO", "checked": "2026-11-20"}])
 
     def tearDown(self):
-        b.DATA, b.CAND_PATH, b.STATE_PATH, b.DRY, b.SIGNUP_PATH, b.COMPARE_PATH = self.saved
+        for n, v in self.saved[0].items():
+            setattr(b, n, v)
+        b.DRY = self.saved[1]
         shutil.rmtree(self.dir, ignore_errors=True)
 
     def write_cands(self, sites):
@@ -57,6 +62,12 @@ class Base(unittest.TestCase):
 
     def state(self):
         return json.load(open(b.STATE_PATH, encoding="utf8"))
+
+    def ds_cands(self):
+        return json.load(open(b.DS_CAND_PATH, encoding="utf8"))["sites"] if os.path.exists(b.DS_CAND_PATH) else []
+
+    def ds_state(self):
+        return json.load(open(b.DS_STATE_PATH, encoding="utf8"))
 
     def go(self, post, getter=alive, **kw):
         buf = io.StringIO()
@@ -364,16 +375,6 @@ class FakeDeepSeek:
 
 
 class DeepSeekTwin(Base):
-    def setUp(self):
-        super().setUp()
-        self.saved_p = (b.SIGNUP_PATH, b.COMPARE_PATH, b.PROVIDER)
-        b.SIGNUP_PATH = os.path.join(self.dir, "needs_signup.md")
-        b.COMPARE_PATH = os.path.join(self.dir, "list_builder_compare.md")
-
-    def tearDown(self):
-        b.SIGNUP_PATH, b.COMPARE_PATH, b.PROVIDER = self.saved_p
-        super().tearDown()
-
     def test_same_prompt_text_in_both_providers(self):
         cat = b.pick_category(3)
         s1, u1 = b.build_prompts("claude", cat[0], cat[2], cat[3], ["a.com"])
@@ -392,13 +393,16 @@ class DeepSeekTwin(Base):
             return (404, url, "") if "dead-example" in url else alive(url)
         ds = FakeDeepSeek(items)
         r, out = self.go(ds, getter, provider="deepseek")
-        rows = [s for s in self.cands() if s.get("added") == TODAY]
+        before = open(b.CAND_PATH, encoding="utf8").read()
+        self.assertEqual([s for s in self.cands() if s.get("added") == TODAY], [])     # Sonnet's file is never touched by DeepSeek
+        rows = [s for s in self.ds_cands() if s.get("added") == TODAY]
         self.assertEqual({s["domain"] for s in rows}, {"new-example.com"})
         self.assertEqual({s["found_by"] for s in rows}, {"deepseek"})
         self.assertTrue(ROW_KEYS <= set(rows[0]))                                   # same row format as Sonnet rows
         self.assertTrue(ds.bodies[0][0].endswith("/chat/completions"))
         self.assertEqual(ds.bodies[0][1]["model"], b.DEEPSEEK_MODEL)
-        pc = self.state()["days"][TODAY]["providers"]["deepseek"]
+        self.assertFalse(os.path.exists(b.STATE_PATH))                                   # no shared state file: DeepSeek wrote its own
+        pc = self.ds_state()["days"][TODAY]["providers"]["deepseek"]
         n = len(ds.bodies)
         self.assertEqual(pc["spam"], n)
         self.assertGreaterEqual(pc["dup"], n)                                     # old-example.com every call, plus repeats of what was just added or rejected
@@ -409,8 +413,34 @@ class DeepSeekTwin(Base):
         self.go(lambda *a: answer([good(7, url="https://shared-example.com/")]))      # Sonnet first
         ds = FakeDeepSeek([good(8, url="https://shared-example.com/x")])
         self.go(ds, provider="deepseek")
-        mine = [s for s in self.cands() if s["domain"] == "shared-example.com"]
-        self.assertEqual([s["found_by"] for s in mine], ["sonnet"])
+        mine = [s for s in self.cands() + self.ds_cands() if s["domain"] == "shared-example.com"]
+        self.assertEqual([s["found_by"] for s in mine], ["sonnet"])                       # DeepSeek dedupes against Sonnet's FILE
+        self.assertEqual(self.ds_cands(), [])
+
+    def test_sonnet_dedupes_against_the_deepseek_file(self):
+        json.dump({"generated": "2026-11-24", "sites": [{"name": "D", "domain": "dsheld-example.com", "submit_url": "https://dsheld-example.com/add", "found_by": "deepseek"}]},
+                  open(b.DS_CAND_PATH, "w"))
+        before_ds = open(b.DS_CAND_PATH, encoding="utf8").read()
+        self.go(lambda *a: answer([good(1, url="https://dsheld-example.com/other"), good(2, url="https://fresh2-example.com/")]))
+        self.assertEqual({s["domain"] for s in self.cands() if s.get("added") == TODAY}, {"fresh2-example.com"})
+        self.assertEqual(open(b.DS_CAND_PATH, encoding="utf8").read(), before_ds)           # Sonnet never writes DeepSeek's file
+
+    def test_no_cross_writes_and_separate_sheets(self):
+        counter = iter(range(1000))
+        self.go(lambda *a: answer([good(next(counter)) for _ in range(2)]), proof=lambda u: ("FOLLOWED", ""))
+        sonnet_files = {f: open(os.path.join(self.dir, f), "rb").read() for f in os.listdir(self.dir)}
+        self.assertNotIn("directories_candidates_deepseek.json", sonnet_files)
+        self.assertNotIn("list_builder_state_deepseek.json", sonnet_files)
+        self.assertNotIn("needs_signup_deepseek.md", sonnet_files)
+        self.assertNotIn("list_builder_report_deepseek.md", sonnet_files)
+        self.go(FakeDeepSeek([good(900, url="https://dsnew-example.com/")]), provider="deepseek", proof=lambda u: ("FOLLOWED", ""))
+        for f, content in sonnet_files.items():
+            if f != "list_builder_compare.md":                                              # the side-by-side summary is the only shared file
+                self.assertEqual(open(os.path.join(self.dir, f), "rb").read(), content, f)   # Sonnet's own files are byte-identical after the DeepSeek run
+        self.assertEqual({s["found_by"] for s in self.cands() if s.get("added") == TODAY}, {"sonnet"})
+        self.assertEqual({s["found_by"] for s in self.ds_cands()}, {"deepseek"})
+        self.assertEqual(list(self.state()["days"][TODAY]["providers"]), ["claude"])
+        self.assertEqual(list(self.ds_state()["days"][TODAY]["providers"]), ["deepseek"])
 
     def test_no_key_exits_zero_with_the_skip_line(self):
         os.environ.pop("DEEPSEEK_API_KEY", None)
@@ -419,7 +449,7 @@ class DeepSeekTwin(Base):
             r = b.run(today=TODAY, provider="deepseek", proof=lambda u: ("UNKNOWN", ""))
         self.assertEqual(r["status"], "SKIPPED")
         self.assertIn("list-builder-deepseek: no key, skipped", buf.getvalue())
-        self.assertFalse(os.path.exists(b.STATE_PATH))
+        self.assertFalse(os.path.exists(b.DS_STATE_PATH))
         env = dict(os.environ, LIST_BUILDER_PROVIDER="deepseek", LIST_BUILDER_DATA=self.dir, DRY_RUN="true")
         env.pop("DEEPSEEK_API_KEY", None)
         import subprocess
@@ -429,19 +459,19 @@ class DeepSeekTwin(Base):
 
     def test_deepseek_cap_is_separate_and_enforced(self):
         self.assertEqual(b.DEEPSEEK_DAY_CAP, 1.00)
-        st = b.load_state()
-        st["spent"][TODAY] = 2.95                                                   # Sonnet nearly at its own cap
-        self.assertFalse(b.Meter(st, TODAY).room_for_call())
-        self.assertTrue(b.Meter(st, TODAY, provider="deepseek").room_for_call())    # DeepSeek is unaffected
-        st["spent_deepseek"][TODAY] = 0.99
-        m = b.Meter(st, TODAY, provider="deepseek")
+        son = {"spent": {TODAY: 2.95}, "cursor": 0, "days": {}, "rejected": []}               # Sonnet nearly at its own cap (its own state file)
+        dss = {"spent": {}, "cursor": 0, "days": {}, "rejected": []}
+        self.assertFalse(b.Meter(son, TODAY).room_for_call())
+        self.assertTrue(b.Meter(dss, TODAY, provider="deepseek").room_for_call())           # DeepSeek is unaffected
+        dss["spent"][TODAY] = 0.99
+        m = b.Meter(dss, TODAY, provider="deepseek")
         self.assertFalse(m.room_for_call())
         with self.assertRaises(b.CapReached):
             m.book()
-        json.dump({"cursor": 0, "spent": {}, "days": {}, "rejected": [], "spent_deepseek": {TODAY: 0.995}}, open(b.STATE_PATH, "w"))
+        json.dump({"cursor": 0, "spent": {TODAY: 0.995}, "days": {}, "rejected": []}, open(b.DS_STATE_PATH, "w"))
         ds = FakeDeepSeek([good(1)])
         self.go(ds, provider="deepseek")
-        self.assertEqual(ds.bodies, [])                                             # cap used: no call at all
+        self.assertEqual(ds.bodies, [])                                                      # cap used: no call at all
 
     def test_deepseek_cost_uses_the_official_prices(self):
         self.assertAlmostEqual(b.deepseek_cost({"prompt_tokens": 1000000, "completion_tokens": 1000000}), 0.30 + 1.20)
@@ -450,10 +480,10 @@ class DeepSeekTwin(Base):
     def test_deepseek_run_stays_under_its_cap_and_leaves_sonnet_spend_alone(self):
         ds = FakeDeepSeek([good(1)], usg={"prompt_tokens": 100000, "completion_tokens": 4000})    # ~$0.035 a call
         self.go(ds, provider="deepseek")
-        st = self.state()
-        self.assertLessEqual(st["spent_deepseek"][TODAY], b.DEEPSEEK_DAY_CAP + 1e-9)
-        self.assertGreater(st["spent_deepseek"][TODAY], 0.2)
-        self.assertNotIn(TODAY, st["spent"])
+        st = self.ds_state()
+        self.assertLessEqual(st["spent"][TODAY], b.DEEPSEEK_DAY_CAP + 1e-9)
+        self.assertGreater(st["spent"][TODAY], 0.2)
+        self.assertFalse(os.path.exists(b.STATE_PATH))
 
     def test_row_fields_found_by_proof_and_needs_signup(self):
         items = [good(1, url="https://signup-example.com/", signup="yes"),
@@ -501,6 +531,13 @@ class DeepSeekTwin(Base):
         self.assertNotIn("Delta", t)                                                 # no sign-up needed
         self.assertIn("sonnet | FOLLOWED", t)
 
+    def test_deepseek_has_its_own_signup_sheet(self):
+        self.go(FakeDeepSeek([good(1, url="https://dsup-example.com/", signup="yes", name="DsUp")]), provider="deepseek", proof=lambda u: ("FOLLOWED", ""))
+        t = open(b.DS_SIGNUP_PATH, encoding="utf8").read()
+        self.assertIn("| DsUp | https://dsup-example.com/ |", t)
+        self.assertIn("deepseek | FOLLOWED", t)
+        self.assertFalse(os.path.exists(b.SIGNUP_PATH))                                     # Sonnet's sheet is not touched
+
     def test_needs_signup_md_newest_first(self):
         self.write_cands([{"name": "Old", "domain": "o.com", "submit_url": "https://o.com/", "category": "x", "found_by": "sonnet", "proof": "UNKNOWN", "needs_signup": True, "added": "2026-11-01"},
                           {"name": "New", "domain": "n.com", "submit_url": "https://n.com/", "category": "x", "found_by": "deepseek", "proof": "FOLLOWED", "needs_signup": True, "added": "2026-11-20"}])
@@ -513,21 +550,28 @@ class DeepSeekTwin(Base):
         self.go(lambda *a: answer([good(next(counter)) for _ in range(2)]), proof=lambda u: ("FOLLOWED", ""))
         ds = FakeDeepSeek([good(3, url="https://d1-example.com/"), good(4, url="https://old-example.com/x")])
         r, out = self.go(ds, provider="deepseek", proof=lambda u: ("UNKNOWN", ""))
-        pr = self.state()["days"][TODAY]["providers"]
+        pr, pd = self.state()["days"][TODAY]["providers"]["claude"], self.ds_state()["days"][TODAY]["providers"]["deepseek"]
         for k in b.COUNTER_KEYS:
-            self.assertIn(k, pr["claude"])
-            self.assertIn(k, pr["deepseek"])
-        self.assertGreater(pr["claude"]["added"], 0)
-        self.assertEqual(pr["claude"]["followed"], pr["claude"]["added"])
-        self.assertEqual(pr["deepseek"]["followed"], 0)
-        self.assertGreaterEqual(pr["deepseek"]["dup"], 1)
-        self.assertGreater(pr["deepseek"]["cost"], 0)
-        line = self.state()["last_summary"]
+            self.assertIn(k, pr)
+            self.assertIn(k, pd)
+        self.assertGreater(pr["added"], 0)
+        self.assertEqual(pr["followed"], pr["added"])
+        self.assertEqual((pd["followed"], pd["unknown"], pd["added"]), (0, pd["added"], pd["added"]))
+        self.assertGreaterEqual(pd["dup"], 1)
+        self.assertGreater(pd["cost"], 0)
+        line = self.ds_state()["last_summary"]                                              # the DeepSeek run prints the side-by-side line
         self.assertRegex(line, r"^list-builder: sonnet \+\d+ new \(\d+ followed, \$[\d.]+\) \| deepseek \+\d+ new \(0 followed, \$[\d.]+\)$")
         self.assertIn(line, out)
         md = open(b.COMPARE_PATH, encoding="utf8").read()
         self.assertEqual(md.count("| %s |" % TODAY), 1)
         self.assertIn("Sonnet", md)
+        rs, rd = (open(f, encoding="utf8").read() for f in (b.REPORT_PATH, b.DS_REPORT_PATH))      # one sheet per provider, one row per day
+        self.assertIn("| calls | cost | proposed | dead | spam | dup | added | followed | nofollow | noindex | unknown | needs_signup |", rs)
+        self.assertEqual(rs.count("| %s |" % TODAY), 1)
+        self.assertEqual(rd.count("| %s |" % TODAY), 1)
+        self.assertIn("Sonnet", rs.splitlines()[0])
+        self.assertIn("DeepSeek", rd.splitlines()[0])
+        self.assertIn("| %s | %d | %.2f | %d |" % (TODAY, pd["calls"], pd["cost"], pd["proposed"]), rd)
 
     def test_no_key_value_in_deepseek_output(self):
         os.environ["DEEPSEEK_API_KEY"] = SECRET
@@ -537,8 +581,9 @@ class DeepSeekTwin(Base):
             raise RuntimeError("body " + SECRET)
         r, out = self.go(boom, provider="deepseek")
         self.assertNotIn(SECRET, out)
-        for fn in (b.STATE_PATH, b.CAND_PATH):
-            self.assertNotIn(SECRET, open(fn, encoding="utf8").read())
+        for fn in (b.DS_STATE_PATH, b.DS_CAND_PATH):
+            if os.path.exists(fn):
+                self.assertNotIn(SECRET, open(fn, encoding="utf8").read())
 
 
 class TwinConfig(unittest.TestCase):
@@ -556,59 +601,65 @@ class TwinConfig(unittest.TestCase):
         self.assertIn("list-builder-deepseek: no key, skipped", t)
         self.assertIn('LIST_BUILDER_DEEPSEEK_DAY_USD_CAP: "1.00"', t)
         self.assertIn("dry_run:", t)
-        self.assertIn("data/needs_signup.md", t)
+        save = t.split("- name: Save candidates and state", 1)[1]
+        for f in ("directories_candidates_deepseek.json", "list_builder_state_deepseek.json", "needs_signup_deepseek.md", "list_builder_report_deepseek.md"):
+            self.assertIn("data/" + f, save)
+        self.assertNotIn("data/directories_candidates.json", save)                          # the DeepSeek job never adds or merges Sonnet's files
+        self.assertNotIn("data/list_builder_state.json", save)
+        self.assertNotIn("needs_signup_sonnet", save)
+        sonnet_save = self.load_sonnet().split("- name: Save candidates and state", 1)[1]
+        self.assertNotIn("_deepseek", sonnet_save)                                           # and the Sonnet job never touches DeepSeek's
         self.assertNotIn("ANTHROPIC_API_KEY", t)
+
+    def load_sonnet(self):
+        return open(os.path.join(ROOT, ".github", "workflows", "list-builder.yml"), encoding="utf8").read()
 
     def test_env_and_code_cap_agree(self):
         t = open(self.wf, encoding="utf8").read()
         self.assertEqual(float(re.search(r'LIST_BUILDER_DEEPSEEK_DAY_USD_CAP: "([\d.]+)"', t).group(1)), b.DEEPSEEK_DAY_CAP)
 
 
-class StateMerge(unittest.TestCase):
-    """Code QA 3a: after a push conflict the state is MERGED, never overwritten (no lost spend booking or cursor)."""
+class StateMerge(Base):
+    """Code QA 3a: after a push conflict the provider's own state is MERGED, never overwritten (no lost spend booking or cursor)."""
 
     def setUp(self):
+        super().setUp()
         sys.path.insert(0, HERE)
         import merge_state as ms
         self.ms = ms
 
     def test_merge_keeps_the_larger_spend_cursor_and_union(self):
-        ours = {"cursor": 40, "spent": {"2026-11-24": 2.10}, "spent_deepseek": {"2026-11-24": 0.20}, "rejected": ["a.com", "b.com"],
+        ours = {"cursor": 40, "spent": {"2026-11-24": 2.10}, "rejected": ["a.com", "b.com"],
                 "days": {"2026-11-24": {"added": 100, "runs": 3, "calls": 9, "by_category": {"x": 60, "y": 40}, "summary": "ours",
                                         "providers": {"claude": {"calls": 9, "cost": 2.1, "added": 100, "dead": 5}}}}, "last_summary": "ours"}
-        theirs = {"cursor": 45, "spent": {"2026-11-24": 1.50, "2026-11-23": 2.0}, "spent_deepseek": {"2026-11-24": 0.60}, "rejected": ["b.com", "c.com"],
+        theirs = {"cursor": 45, "spent": {"2026-11-24": 1.50, "2026-11-23": 2.0}, "rejected": ["b.com", "c.com"],
                   "days": {"2026-11-24": {"added": 60, "runs": 4, "calls": 5, "by_category": {"x": 70}, "summary": "theirs",
-                                          "providers": {"claude": {"calls": 5, "cost": 1.5, "added": 60, "dead": 9}, "deepseek": {"calls": 3, "cost": 0.6, "added": 10}}}}}
+                                          "providers": {"claude": {"calls": 5, "cost": 1.5, "added": 60, "dead": 9}}}}}
         m = self.ms.merge_state(ours, theirs)
         self.assertEqual(m["cursor"], 45)
         self.assertEqual(m["spent"], {"2026-11-24": 2.10, "2026-11-23": 2.0})              # no booking is ever lost
-        self.assertEqual(m["spent_deepseek"], {"2026-11-24": 0.60})
         self.assertEqual(sorted(m["rejected"]), ["a.com", "b.com", "c.com"])
         d = m["days"]["2026-11-24"]
         self.assertEqual((d["added"], d["runs"], d["calls"]), (100, 4, 9))
         self.assertEqual(d["by_category"], {"x": 70, "y": 40})
         self.assertEqual(d["providers"]["claude"], {"calls": 9, "cost": 2.1, "added": 100, "dead": 9})
-        self.assertEqual(d["providers"]["deepseek"]["cost"], 0.6)
         self.assertEqual(d["summary"], "ours")                                              # we ran more calls that day
 
-    def test_cli_merges_in_place_and_rebuilds_the_md_files(self):
-        tmp = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, tmp, True)
-        saved = (b.DATA, b.CAND_PATH, b.SIGNUP_PATH, b.COMPARE_PATH)
-        b.DATA, b.CAND_PATH = tmp, os.path.join(tmp, "directories_candidates.json")
-        b.SIGNUP_PATH, b.COMPARE_PATH = os.path.join(tmp, "needs_signup.md"), os.path.join(tmp, "list_builder_compare.md")
-        self.addCleanup(lambda: (setattr(b, "DATA", saved[0]), setattr(b, "CAND_PATH", saved[1]), setattr(b, "SIGNUP_PATH", saved[2]), setattr(b, "COMPARE_PATH", saved[3])))
-        json.dump({"sites": [{"name": "N", "domain": "n.com", "submit_url": "https://n.com/", "needs_signup": True, "proof": "FOLLOWED", "added": TODAY}]}, open(b.CAND_PATH, "w"))
-        o, t = os.path.join(tmp, "o.json"), os.path.join(tmp, "t.json")
-        json.dump({"cursor": 3, "spent": {TODAY: 1.0}, "days": {TODAY: {"calls": 1, "providers": {"claude": {"calls": 1}}}}}, open(o, "w"))
-        json.dump({"cursor": 9, "spent": {TODAY: 0.5}, "days": {}}, open(t, "w"))
+    def test_cli_merges_the_deepseek_state_in_place_and_rebuilds_its_own_sheets(self):
+        json.dump({"sites": [{"name": "N", "domain": "n.com", "submit_url": "https://n.com/", "needs_signup": True, "proof": "FOLLOWED", "added": TODAY}]}, open(b.DS_CAND_PATH, "w"))
+        o = os.path.join(self.dir, "o.json")
+        json.dump({"cursor": 3, "spent": {TODAY: 1.0}, "days": {TODAY: {"calls": 1, "providers": {"deepseek": {"calls": 1}}}}}, open(o, "w"))
+        json.dump({"cursor": 9, "spent": {TODAY: 0.5}, "days": {}}, open(b.DS_STATE_PATH, "w"))
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            self.assertEqual(self.ms.main(["x", o, t]), 0)
-        m = json.load(open(t))
+            self.assertEqual(self.ms.main(["x", o, b.DS_STATE_PATH]), 0)
+        m = json.load(open(b.DS_STATE_PATH))
         self.assertEqual((m["cursor"], m["spent"][TODAY]), (9, 1.0))
-        self.assertIn("| N | https://n.com/ |", open(b.SIGNUP_PATH, encoding="utf8").read())
+        self.assertIn("| N | https://n.com/ |", open(b.DS_SIGNUP_PATH, encoding="utf8").read())
+        self.assertIn(TODAY, open(b.DS_REPORT_PATH, encoding="utf8").read())
         self.assertIn(TODAY, open(b.COMPARE_PATH, encoding="utf8").read())
+        self.assertFalse(os.path.exists(b.STATE_PATH))                                      # Sonnet's files are not created or touched
+        self.assertFalse(os.path.exists(b.SIGNUP_PATH))
 
 
 class WorkflowParity(unittest.TestCase):
@@ -633,15 +684,17 @@ class WorkflowParity(unittest.TestCase):
         for part in ("- uses: actions/checkout@v4\n        with:\n          ref: main", 'python-version: "3.12"'):
             self.assertIn(part, s)
             self.assertIn(part, d)
-        self.assertEqual(s.split("- name: Save candidates and state", 1)[1], d.split("- name: Save candidates and state", 1)[1])   # the save step is byte-identical
+        norm = lambda t: re.sub(r"_?(deepseek|sonnet)", "", t.split("- name: Save candidates and state", 1)[1])      # noqa: E731
+        self.assertEqual(norm(s), norm(d))                                                  # the save step is identical except the file names of each provider
         self.assertEqual(s.split("- name: Unit tests", 1)[1].split("- name: Build", 1)[0], d.split("- name: Unit tests", 1)[1].split("- name: Build", 1)[0])
 
     def test_save_step_is_safe(self):
         for f in ("list-builder.yml", "list-builder-deepseek.yml"):
             t = self.load(f)
-            self.assertNotIn("cp /tmp/ours_state.json", t)                                   # 3a: never copy our state over theirs
-            self.assertIn("scripts/list_builder/merge_state.py /tmp/ours_state.json data/list_builder_state.json", t)
-            self.assertNotIn("git add data/directories_candidates.json", t)                  # 3e: only existing files are added
+            for m in re.finditer(r"cp /tmp/ours_state.json", t):
+                self.assertTrue(t[:m.start()].rstrip().endswith("else"), f)                   # 3a: never copy our state over theirs (only when theirs has no file)
+            self.assertRegex(t, r"merge_state\.py /tmp/ours_state\.json data/list_builder_state(_deepseek)?\.json")
+            self.assertNotIn("git add data/directories_candidates", t)                       # 3e: only existing files are added
             self.assertIn('if [ -f "$f" ]; then git add "$f"; fi', t)
             self.assertIn("data file unreadable, nothing saved", t)                          # 3b: a damaged file is never committed
 

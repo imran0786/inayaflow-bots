@@ -162,6 +162,14 @@ class Ingest(unittest.TestCase):
         cnt = hi.ingest(files, state, prospects, cands, set(exclude), {}, in_outbox, "2026-11-23")
         return cnt, state, prospects, cands
 
+    def test_directory_dedupe_also_covers_the_deepseek_file(self):
+        files = {"jobs/done/2026-11-22-hunter-follower-checker.md": result(GOOD_DIR)}
+        other = {"sites": [{"domain": "newdir.io", "submit_url": "https://newdir.io/", "found_by": "deepseek"}]}
+        state, pros, cands = {}, [], {"sites": []}
+        cnt = hi.ingest(files, state, pros, cands, set(), {}, lambda *a: False, "2026-11-23", other_cands=other)
+        self.assertEqual((cnt["directories"], cnt["dropped"]), (0, 1))                       # already held by DeepSeek's list: not added again
+        self.assertEqual(cands["sites"], [])                                                 # and nothing is written into the other file's rows
+
     def test_rows_are_added_and_result_is_processed_once(self):
         files = {"jobs/done/2026-11-22-hunter-follower-checker.md": result(GOOD_MAIL, GOOD_DIR)}
         cnt, st, pros, cands = self.run_ingest(files)

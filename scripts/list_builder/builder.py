@@ -19,9 +19,13 @@ rows Sonnet added), same live-URL check, same data/directories_candidates.json a
 real places it KNOWS, with exact URLs; it can invent or misremember URLs. Only the code's live-URL check (HTTP 200-399), the spam filter and the
 de-duplication keep rows real and new; the "dead" counter in the comparison shows how many guesses failed. Its money cap is SEPARATE:
 LIST_BUILDER_DEEPSEEK_DAY_USD_CAP (default 1.00), NOT part of the $16.98 a day that the LISTED robots together may spend (README).
+SEPARATE SHEETS (Imran 24 Nov: "a different separate sheet so that we can analyze the performance of each helper or robot"): Sonnet writes only
+data/directories_candidates.json, data/list_builder_state.json, data/needs_signup_sonnet.md, data/list_builder_report_sonnet.md; DeepSeek writes only the
+*_deepseek twins of those. Each provider READS both candidates files, so nothing is ever repeated across the two; no state file is shared.
+data/list_builder_compare.md is the side-by-side summary built from both states.
 Every new row carries found_by (sonnet|deepseek), proof (the directory agent's follow_proof verdict FOLLOWED / NOFOLLOW_ONLY / NOINDEX / UNKNOWN, or
 UNCHECKED when the per-run fetch or time limit was used up) and needs_signup. data/needs_signup.md lists rows that need an account (proof FOLLOWED or
-UNKNOWN) so Imran can do the sign-ups at the end. Per-provider daily counters and data/list_builder_compare.md compare the two.
+UNKNOWN) so Imran can do the sign-ups at the end (one sheet per provider).
 Sends nothing, signs up nowhere, fills no form, pays nothing. PUBLIC repo: prints counts, category keys and cost only (never a key, never
 a model answer, never an error body).
 """
@@ -43,8 +47,22 @@ import common as c  # noqa: E402  (http_get, html_text)
 DATA = os.environ.get("LIST_BUILDER_DATA", os.path.join(ROOT, "data"))
 CAND_PATH = os.path.join(DATA, "directories_candidates.json")
 STATE_PATH = os.path.join(DATA, "list_builder_state.json")
-SIGNUP_PATH = os.path.join(DATA, "needs_signup.md")
-COMPARE_PATH = os.path.join(DATA, "list_builder_compare.md")
+SIGNUP_PATH = os.path.join(DATA, "needs_signup_sonnet.md")
+REPORT_PATH = os.path.join(DATA, "list_builder_report_sonnet.md")
+# SEPARATE FILES PER PROVIDER (Imran 24 Nov: "a different separate sheet so that we can analyze the performance of each helper or robot"):
+# DeepSeek writes ONLY to the *_deepseek files; Sonnet ONLY to the files above. Both READ both candidates files (dedupe across the two).
+DS_CAND_PATH = os.path.join(DATA, "directories_candidates_deepseek.json")
+DS_STATE_PATH = os.path.join(DATA, "list_builder_state_deepseek.json")
+DS_SIGNUP_PATH = os.path.join(DATA, "needs_signup_deepseek.md")
+DS_REPORT_PATH = os.path.join(DATA, "list_builder_report_deepseek.md")
+COMPARE_PATH = os.path.join(DATA, "list_builder_compare.md")        # side-by-side summary built from both states
+
+
+def paths(provider):
+    """The provider's OWN files (cand, state, signup, report) and the OTHER provider's candidates / state (read only). Resolved at call time."""
+    if provider == "deepseek":
+        return {"cand": DS_CAND_PATH, "other": CAND_PATH, "state": DS_STATE_PATH, "other_state": STATE_PATH, "signup": DS_SIGNUP_PATH, "report": DS_REPORT_PATH}
+    return {"cand": CAND_PATH, "other": DS_CAND_PATH, "state": STATE_PATH, "other_state": DS_STATE_PATH, "signup": SIGNUP_PATH, "report": REPORT_PATH}
 def _env_float(name, default):
     """Float from the environment; an empty or garbled value falls back to the default (code QA 1a)."""
     try:
@@ -339,13 +357,12 @@ def write_json(path, data, **kw):
     os.replace(tmp, path)
 
 
-def load_state():
-    st = read_json(STATE_PATH, {})
+def load_state(path=None):
+    st = read_json(path or STATE_PATH, {})
     if not isinstance(st, dict):
         st = {}
     st.setdefault("cursor", 0)
     st.setdefault("spent", {})
-    st.setdefault("spent_deepseek", {})
     st.setdefault("days", {})
     st.setdefault("rejected", [])
     return st
@@ -356,7 +373,6 @@ def trim_state(st, today):
     keep = sorted(st["days"])[-14:]
     st["days"] = {k: st["days"][k] for k in keep}
     st["spent"] = {k: st["spent"][k] for k in sorted(st["spent"])[-14:]}
-    st["spent_deepseek"] = dict(sorted((st.get("spent_deepseek") or {}).items())[-14:])
     st["rejected"] = st["rejected"][-REJECTED_KEPT:]
 
 
@@ -389,13 +405,13 @@ def call_cost(usage):
 
 
 class Meter:
-    """The day's spend, kept in the state file (state["spent"] for Sonnet, state["spent_deepseek"] for DeepSeek: two separate caps).
+    """The day's spend, kept in the provider's OWN state file (state["spent"]; Sonnet and DeepSeek have separate files and separate caps).
     book() reserves BEFORE the request; settle() replaces the reserve by the real cost."""
 
     def __init__(self, state, today, cap=None, save=None, provider="claude"):
         self.state, self.today, self.provider = state, today, provider
         ds = provider == "deepseek"
-        self.key = "spent_deepseek" if ds else "spent"
+        self.key = "spent"
         self.reserve = DS_RESERVE if ds else RESERVE
         self.cost_fn = deepseek_cost if ds else call_cost
         self.cap = (DEEPSEEK_DAY_CAP if ds else DAY_CAP) if cap is None else cap
@@ -521,22 +537,24 @@ def _load_follow_proof():
         return None
 
 
-COUNTER_KEYS = ("calls", "cost", "proposed", "spam", "dup", "dead", "added", "followed", "needs_signup")
+COUNTER_KEYS = ("calls", "cost", "proposed", "spam", "dup", "dead", "added", "followed", "nofollow", "noindex", "unknown", "needs_signup")
+PROOF_COUNTER = {"FOLLOWED": "followed", "NOFOLLOW_ONLY": "nofollow", "NOINDEX": "noindex", "UNKNOWN": "unknown"}
 
 
 def pcounters(day, provider):
-    """The provider's counters for the day (calls, cost, URLs proposed, dropped spam / dup / dead, new rows, FOLLOWED rows, needs_signup rows)."""
+    """The provider's counters for the day (calls, cost, URLs proposed, dropped spam / dup / dead, new rows, proof verdicts, needs_signup rows)."""
     p = day.setdefault("providers", {}).setdefault(provider, {})
     for k in COUNTER_KEYS:
         p.setdefault(k, 0.0 if k == "cost" else 0)
     return p
 
 
-def compare_line(day, extra=None):
-    """'list-builder: sonnet +N new (F followed, $x) | deepseek +M new (G followed, $y)'. extra = {provider: counters} to add on top (dry runs)."""
+def compare_line(days, extra=None):
+    """'list-builder: sonnet +N new (F followed, $x) | deepseek +M new (G followed, $y)'. days = {provider: that provider's day record} (each from
+    its own state file); extra = {provider: counters} to add on top (dry runs)."""
     parts = []
     for prov in ("claude", "deepseek"):
-        p = dict((day.get("providers") or {}).get(prov) or {})
+        p = dict(((days.get(prov) or {}).get("providers") or {}).get(prov) or {})
         if not p and prov == "deepseek":
             continue
         for k, v in ((extra or {}).get(prov) or {}).items():
@@ -545,8 +563,8 @@ def compare_line(day, extra=None):
     return "list-builder: " + " | ".join(parts or ["sonnet +0 new (0 followed, $0.00)"])
 
 
-def write_needs_signup(sites):
-    """data/needs_signup.md: rows that need an account AND whose proof is FOLLOWED or UNKNOWN, newest first. Imran does the sign-ups at the end."""
+def write_needs_signup(sites, path=None):
+    """The provider's sign-up sheet: rows that need an account AND whose proof is FOLLOWED or UNKNOWN, newest first. Imran does the sign-ups at the end."""
     rows = [(i, s) for i, s in enumerate(sites) if s.get("needs_signup") is True and s.get("proof") in ("FOLLOWED", "UNKNOWN")]
     rows.sort(key=lambda t: (str(t[1].get("added", "")), t[0]), reverse=True)
     out = ["# Sign-ups to do at the end (list builder)", "",
@@ -556,11 +574,30 @@ def write_needs_signup(sites):
         out.append("| %s | %s | %s | %s | %s | %s |" % (str(s.get("name") or s.get("domain"))[:60].replace("|", "/"), s.get("submit_url", ""), s.get("category", ""),
                                                     s.get("found_by", ""), s.get("proof", ""), s.get("added", "")))
     out.append("")
-    write_text(SIGNUP_PATH, "\n".join(out))
+    write_text(path or SIGNUP_PATH, "\n".join(out))
     return len(rows)
 
 
-COMPARE_HEAD = ["# List builder: Sonnet vs DeepSeek, per day", "",
+REPORT_COLS = ("calls", "cost", "proposed", "dead", "spam", "dup", "added", "followed", "nofollow", "noindex", "unknown", "needs_signup")
+
+
+def write_report(provider, days, path=None):
+    """data/list_builder_report_<provider>.md: ONE row per day for that provider alone (last 30 days), newest first. (Submitted / live per provider
+    by the directory agent can be added later: the rows carry found_by.)"""
+    name = "Sonnet (web search)" if provider == "claude" else "DeepSeek (no web search)"
+    head = ["# List builder daily sheet: %s" % name, "",
+            "One row per UTC day. calls, cost in USD, proposed URLs, dropped (dead / spam / duplicate), new rows added, proof verdicts of the new rows "
+            "(followed / nofollow / noindex / unknown), rows that need a sign-up.", "",
+            "| Date | " + " | ".join(REPORT_COLS) + " |", "|---|" + "---|" * len(REPORT_COLS)]
+    rows = []
+    for d in sorted(days, reverse=True)[:30]:
+        p = ((days[d] or {}).get("providers") or {}).get(provider)
+        if p:
+            rows.append("| %s | %s |" % (d, " | ".join(("%.2f" % p.get(k, 0.0)) if k == "cost" else str(p.get(k, 0)) for k in REPORT_COLS)))
+    write_text(path or REPORT_PATH, "\n".join(head + rows) + "\n")
+
+
+COMPARE_HEAD = ["# List builder: Sonnet vs DeepSeek, per day (summary; the full sheets are list_builder_report_sonnet.md and list_builder_report_deepseek.md)", "",
                 "Each cell: calls / $ / proposed URLs / dropped dead, spam, duplicate / new rows / FOLLOWED / needs sign-up.", "",
                 "| Date | Sonnet (web search) | DeepSeek (no web search) |", "|---|---|---|"]
 
@@ -573,13 +610,16 @@ def _cell(p):
         p.get("added", 0), p.get("followed", 0), p.get("needs_signup", 0))
 
 
-def write_compare(days):
-    """data/list_builder_compare.md: one row per day (from the state's counters), newest first, last 14 days."""
+def write_compare(days_by_provider):
+    """data/list_builder_compare.md: side by side, one row per day, newest first, last 14 days. days_by_provider = {"claude": days, "deepseek": days},
+    each read from that provider's own state file (this function reads, never writes, the other provider's state)."""
+    cl, ds = days_by_provider.get("claude") or {}, days_by_provider.get("deepseek") or {}
     rows = []
-    for d in sorted(days, reverse=True)[:14]:
-        pr = days[d].get("providers") or {}
-        if pr:
-            rows.append("| %s | %s | %s |" % (d, _cell(pr.get("claude")), _cell(pr.get("deepseek"))))
+    for d in sorted(set(cl) | set(ds), reverse=True)[:14]:
+        a = ((cl.get(d) or {}).get("providers") or {}).get("claude")
+        b2 = ((ds.get(d) or {}).get("providers") or {}).get("deepseek")
+        if a or b2:
+            rows.append("| %s | %s | %s |" % (d, _cell(a), _cell(b2)))
     write_text(COMPARE_PATH, "\n".join(COMPARE_HEAD + rows) + "\n")
 
 
@@ -622,16 +662,23 @@ def run(post=None, getter=None, today=None, workers=8, provider=None, proof=None
         return {"status": "SKIPPED"}
     if proof is None:
         proof = load_follow_proof()
-    state = load_state()
-    cand = read_json(CAND_PATH, None)
-    if not isinstance(cand, dict) or not isinstance(cand.get("sites"), list):
-        print("%s: the candidates file is missing or unreadable, nothing runs (fail closed)" % tag)
+    P = paths(provider)
+    state = load_state(P["state"])
+    own = read_json(P["cand"], None)
+    other = read_json(P["other"], None)
+    if ds and not isinstance(own, dict):
+        own = {"generated": "", "sites": []}                           # DeepSeek's own file is created by its first live run
+    if not isinstance(other, dict) and not ds:
+        other = {"sites": []}                                          # Sonnet: no DeepSeek file yet = nothing there to dedupe against
+    if not (isinstance(own, dict) and isinstance(own.get("sites"), list) and isinstance(other, dict) and isinstance(other.get("sites"), list)):
+        print("%s: a candidates file is missing or unreadable, nothing runs (fail closed)" % tag)
         return {"status": "NO_DATA"}
+    all_sites = own["sites"] + other["sites"]                          # dedupe and the 'avoid' list use BOTH providers' rows
     day = state["days"].setdefault(today, {"added": 0, "by_category": {}, "runs": 0, "calls": 0})
     pc = pcounters(day, provider)
-    meter = Meter(state, today, save=lambda: write_json(STATE_PATH, state), provider=provider)
+    meter = Meter(state, today, save=lambda: write_json(P["state"], state), provider=provider)
     extra = [p for p in os.environ.get("LIST_BUILDER_KNOWN_FILES", "").split(os.pathsep) if p]
-    known = known_keys(cand, extra) | set(state["rejected"])
+    known = known_keys({"sites": all_sites}, extra) | set(state["rejected"])
     new_rows, rejected = [], []
     day["runs"] += 1
     stats = {"asked": 0, "raw": 0, "spam": 0, "dup": 0, "dead": 0, "added": 0}
@@ -643,7 +690,7 @@ def run(post=None, getter=None, today=None, workers=8, provider=None, proof=None
         cat_key, kind, what, angle = pick_category(state["cursor"])
         state["cursor"] += 1                                          # the cursor moves on even when the call fails: no category is retried forever
         calls += 1
-        recent = [r["domain"] for r in cand["sites"][-400:] if r.get("category") == cat_key][-25:]
+        recent = [r["domain"] for r in all_sites[-400:] if r.get("category") == cat_key][-25:]
         system, user = build_prompts(provider, cat_key, what, angle, recent)
         try:
             text = (ask_deepseek if ds else ask_model)(system, user, meter, post=post)
@@ -652,7 +699,7 @@ def run(post=None, getter=None, today=None, workers=8, provider=None, proof=None
             break
         except Exception as e:
             print("%s: %s call failed (%s)" % (tag, cat_key, type(e).__name__))   # class name only: never an error body
-            write_json(STATE_PATH, state)
+            write_json(P["state"], state)
             continue
         day["calls"] += 1
         pc["calls"] += 1
@@ -710,34 +757,41 @@ def run(post=None, getter=None, today=None, workers=8, provider=None, proof=None
     for r in new_rows:
         by_cat[r["category"]] = by_cat.get(r["category"], 0) + 1
     stats["added"] = len(new_rows)
-    followed = sum(1 for r in new_rows if r["proof"] == "FOLLOWED")
+    verdicts = {k: sum(1 for r in new_rows if r["proof"] == v) for v, k in PROOF_COUNTER.items()}
+    followed = verdicts["followed"]
     signups = sum(1 for r in new_rows if r["needs_signup"])
     pc["cost"] = round(meter.spent, 4)
     run_extra = None
     if not DRY:
-        cand["sites"].extend(new_rows)
-        cand["generated"] = max(str(cand.get("generated", "")), today)
-        write_json(CAND_PATH, cand)
+        own["sites"].extend(new_rows)                               # ONLY the provider's own candidates file is written
+        own["generated"] = max(str(own.get("generated", "")), today)
+        write_json(P["cand"], own)
         day["added"] += len(new_rows)
         pc["added"] += len(new_rows)
-        pc["followed"] += followed
+        for k, v in verdicts.items():
+            pc[k] += v
         pc["needs_signup"] += signups
         for k, v in by_cat.items():
             day["by_category"][k] = day["by_category"].get(k, 0) + v
-        write_needs_signup(cand["sites"])
+        write_needs_signup(own["sites"], P["signup"])
     else:
         run_extra = {provider: {"added": len(new_rows), "followed": followed}}
     state["rejected"] = list(dict.fromkeys(state["rejected"] + rejected))
-    total = len(cand["sites"])
+    total = len(all_sites) + (0 if DRY else len(new_rows))
     cat_line = summary_line(day["added"] if not DRY else len(new_rows), total, day["by_category"] if not DRY else by_cat)
     day["category_summary"] = cat_line
-    day["summary"] = compare_line(day, run_extra) + (" [dry run: nothing saved]" if DRY else "")
+    other_state = read_json(P["other_state"], {})
+    other_prov = "claude" if ds else "deepseek"
+    days_by = {provider: day, other_prov: ((other_state.get("days") or {}).get(today) if isinstance(other_state, dict) else None) or {}}
+    day["summary"] = compare_line(days_by, run_extra) + (" [dry run: nothing saved]" if DRY else "")
     day["total"] = total
     state["last_summary"] = day["summary"]
     trim_state(state, today)
-    write_json(STATE_PATH, state)
+    write_json(P["state"], state)
     if not DRY:
-        write_compare(state["days"])
+        write_report(provider, state["days"], P["report"])
+        o_days = other_state.get("days") if isinstance(other_state, dict) else {}
+        write_compare({provider: state["days"], other_prov: o_days or {}})
     print(day["summary"])
     print(cat_line)
     print("%s: this run %s; proof checked %d, FOLLOWED %d, needs sign-up %d; cost today $%.3f of $%.2f; calls %d" % (
