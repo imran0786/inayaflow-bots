@@ -1,0 +1,76 @@
+name: List builder DeepSeek twin (same duty, side-by-side test)
+
+# 24 Nov 2026. Imran: "take one helper as well from DeepSeek and tell it to do the same duty, give him all the same information that our own helper has,
+# and let's see who do the job better." Runs scripts/list_builder/builder.py with LIST_BUILDER_PROVIDER=deepseek: SAME categories, prompt text, spam filter,
+# de-duplication against every list we hold, live-URL check and output file as list-builder.yml. DeepSeek has NO web search: it names places it knows and the
+# code's live-URL check keeps only real ones. SEPARATE money cap LIST_BUILDER_DEEPSEEK_DAY_USD_CAP $1.00 a UTC day (NOT part of the $16.98 a day of the LISTED robots).
+# Offset ~30 min from list-builder.yml (04:53 and 16:53 UTC) and the SAME concurrency group: the two write the same files and never run in parallel.
+# Needs the secret DEEPSEEK_API_KEY (Imran adds it); without it the job prints "list-builder-deepseek: no key, skipped" and exits 0.
+on:
+  schedule:
+    - cron: "53 4 * * *"
+    - cron: "53 16 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = look and check, write no candidates"
+        default: "true"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: list-builder
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests (a failure stops the run)
+        run: python3 -W ignore scripts/list_builder/test_builder.py
+      - name: Build the list (DeepSeek)
+        timeout-minutes: 30
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LIST_BUILDER_PROVIDER: deepseek
+          DRY_RUN: ${{ github.event.inputs.dry_run || (github.event_name == 'schedule' && 'false') || 'true' }}
+          LIST_BUILDER_DEEPSEEK_DAY_USD_CAP: "1.00"   # separate from the $16.98 listed-robots total
+        run: |
+          if [ -z "$DEEPSEEK_API_KEY" ]; then echo "list-builder-deepseek: no key, skipped"; exit 0; fi
+          echo "::add-mask::$DEEPSEEK_API_KEY"
+          python3 scripts/list_builder/builder.py 2>/dev/null
+      - name: Save candidates and state (this repo, data files only)
+        if: always()
+        run: |
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -q -m "data: list builder (new candidate places, state)"
+          for i in 1 2 3; do
+            if git push -q origin HEAD:main; then echo "saved"; exit 0; fi
+            # conflict (the backlink batch also writes the candidates file): keep our rows AND theirs (union by domain), our state file
+            git show HEAD:data/directories_candidates.json > /tmp/ours.json
+            git show HEAD:data/list_builder_state.json > /tmp/ours_state.json
+            git show HEAD:data/needs_signup.md > /tmp/ours_signup.md 2>/dev/null || true
+            git show HEAD:data/list_builder_compare.md > /tmp/ours_compare.md 2>/dev/null || true
+            git fetch -q origin main
+            git reset -q --hard origin/main
+            python3 scripts/reports/merge_candidates.py /tmp/ours.json data/directories_candidates.json
+            cp /tmp/ours_state.json data/list_builder_state.json
+            [ -s /tmp/ours_signup.md ] && cp /tmp/ours_signup.md data/needs_signup.md
+            [ -s /tmp/ours_compare.md ] && cp /tmp/ours_compare.md data/list_builder_compare.md
+            true
+            git add data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md
+            git diff --cached --quiet && { echo "nothing left to save"; exit 0; }
+            git commit -q -m "data: list builder (merged)"
+          done
+          echo "push failed"; exit 1

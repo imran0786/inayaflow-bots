@@ -9,17 +9,30 @@ for one category + angle -> code filters spam, de-duplicates by registrable doma
 (GET only, HTTP 200-399 or dropped) -> rows are added with status TODO (the directory agent may try them), TODO outreach (for outreach,
 never form submission) or HOLD paid. Writes the one-line summary "list-builder: +N new (total T; by category ...)" to the state file.
 
-HARD LIMITS: $1.00 a UTC day over ALL runs (env LIST_BUILDER_DAY_USD_CAP; the cost of a call is booked BEFORE it goes out and the state
-is saved, so a killed run still has it on record); no call starts unless spent + its reserve fits under the cap.
+HARD LIMITS: $3.00 a UTC day over ALL Sonnet runs (env LIST_BUILDER_DAY_USD_CAP; Imran 24 Nov: "Yes, raise it to $3 a day"; the cost of a call is booked
+BEFORE it goes out and the state is saved, so a killed run still has it on record); no call starts unless spent + its reserve fits under the cap.
+
+DEEPSEEK TWIN (24 Nov 2026, Imran: "take one helper as well from DeepSeek and tell it to do the same duty ... let's see who do the job better"): the SAME
+code runs with env LIST_BUILDER_PROVIDER=deepseek (workflow list-builder-deepseek.yml). Same category rotation (shared cursor), same prompt text (SYSTEM +
+user_prompt; DeepSeek only gets one extra note that it has no web search), same spam filter, same de-duplication against every list we hold (and against
+rows Sonnet added), same live-URL check, same data/directories_candidates.json and row format. HONEST LIMIT: DeepSeek has NO web search. It is asked for
+real places it KNOWS, with exact URLs; it can invent or misremember URLs. Only the code's live-URL check (HTTP 200-399), the spam filter and the
+de-duplication keep rows real and new; the "dead" counter in the comparison shows how many guesses failed. Its money cap is SEPARATE:
+LIST_BUILDER_DEEPSEEK_DAY_USD_CAP (default 1.00), NOT part of the $16.98 a day that the LISTED robots together may spend (README).
+Every new row carries found_by (sonnet|deepseek), proof (the directory agent's follow_proof verdict FOLLOWED / NOFOLLOW_ONLY / NOINDEX / UNKNOWN, or
+UNCHECKED when the per-run fetch or time limit was used up) and needs_signup. data/needs_signup.md lists rows that need an account (proof FOLLOWED or
+UNKNOWN) so Imran can do the sign-ups at the end. Per-provider daily counters and data/list_builder_compare.md compare the two.
 Sends nothing, signs up nowhere, fills no form, pays nothing. PUBLIC repo: prints counts, category keys and cost only (never a key, never
 a model answer, never an error body).
 """
 import concurrent.futures
 import datetime
+import importlib.util
 import json
 import os
 import re
 import sys
+import time
 import urllib.request
 from urllib.parse import urlparse
 
@@ -30,9 +43,24 @@ import common as c  # noqa: E402  (http_get, html_text)
 DATA = os.environ.get("LIST_BUILDER_DATA", os.path.join(ROOT, "data"))
 CAND_PATH = os.path.join(DATA, "directories_candidates.json")
 STATE_PATH = os.path.join(DATA, "list_builder_state.json")
+SIGNUP_PATH = os.path.join(DATA, "needs_signup.md")
+COMPARE_PATH = os.path.join(DATA, "list_builder_compare.md")
+PROVIDER = os.environ.get("LIST_BUILDER_PROVIDER", "claude").strip().lower()
+if PROVIDER not in ("claude", "deepseek"):
+    PROVIDER = "claude"
+FOUND_BY = {"claude": "sonnet", "deepseek": "deepseek"}
 DRY = os.environ.get("DRY_RUN", "true").strip().lower() != "false"
 MODEL = os.environ.get("LIST_BUILDER_MODEL", "claude-sonnet-5-5")
-DAY_CAP = float(os.environ.get("LIST_BUILDER_DAY_USD_CAP", "1.00"))   # HARD cap per UTC day over all runs (Imran's ~$15/day: 24 Nov, hunter 6.00 -> 3.00, list builder 1.50 -> 3.00)
+DAY_CAP = float(os.environ.get("LIST_BUILDER_DAY_USD_CAP", "3.00"))   # HARD cap per UTC day over all Sonnet runs (24 Nov: 1.00 -> 3.00, Imran "raise it to $3 a day"; listed robots now $16.98 a day)
+DEEPSEEK_DAY_CAP = float(os.environ.get("LIST_BUILDER_DEEPSEEK_DAY_USD_CAP", "1.00"))   # SEPARATE cap of the DeepSeek twin; not part of the $16.98 of the listed robots
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-flash")
+DEEPSEEK_BASE = os.environ.get("DEEPSEEK_BASE", "https://api.deepseek.com")
+# DeepSeek price per million tokens, READ 24 Nov 2026 from the official page https://api-docs.deepseek.com/quick_start/pricing
+# (deepseek-flash: peak $0.30 in (cache miss) / $0.006 cache hit / $1.20 out; off-peak is half). Peak prices are used for every call (over-estimate, safe).
+DS_PRICE_IN, DS_PRICE_CACHE, DS_PRICE_OUT = 0.30, 0.006, 1.20
+DS_RESERVE = 0.02       # most one DeepSeek request can cost: ~12k tokens in x $0.30/M + 4000 out x $1.20/M = ~$0.009; 0.02 is a safe booking
+PROOF_MAX_FETCHES = int(os.environ.get("LIST_BUILDER_PROOF_FETCHES", "40"))    # follow_proof checks per run (each makes up to 4 page fetches)
+PROOF_SECONDS = int(os.environ.get("LIST_BUILDER_PROOF_SECONDS", "480"))       # time limit for all proof checks of one run
 RESERVE = 0.20          # most one request can cost: <= ~45k tokens in x $2/M + 4000 out x $10/M + 4 searches x $0.01 = ~$0.17
 MAX_TOKENS = 4000
 MAX_SEARCHES = int(os.environ.get("LIST_BUILDER_MAX_SEARCHES", "4"))
@@ -235,7 +263,19 @@ def pick_category(cursor):
     return key, kind, what, angles[(cursor // len(CATEGORIES)) % len(angles)]
 
 
-def build_row(item, cat_key, kind, angle, today, http, final, page):
+SIGNUP_RE = re.compile(r"sign[\s-]*up|register|create\s+(an?\s+)?account|log[\s-]*in\s+to\s+(submit|post|list)|sign\s*in\s+to\s+(submit|post|list)|login\s+required", re.I)
+SUBMIT_RE = re.compile(r"submit|add\s+(your|a)\b|list\s+your|suggest|post\s+your", re.I)
+
+
+def needs_signup_flag(item, page):
+    """True when the model says an account is needed, or the live page shows sign-up / register / login wording together with a submit idea."""
+    if str(item.get("signup", "")).strip().lower().startswith(("yes", "true")):
+        return True
+    p = (page or "")[:60000]
+    return bool(SIGNUP_RE.search(p)) and bool(SUBMIT_RE.search(p))
+
+
+def build_row(item, cat_key, kind, angle, today, http, final, page, provider="claude"):
     """One candidate row, same fields as the existing rows + category / added / source_query."""
     url = item["_url"]
     host = urlparse(url).hostname or ""
@@ -255,7 +295,8 @@ def build_row(item, cat_key, kind, angle, today, http, final, page):
             "their_category": cat_key, "their_auto_flag": "", "their_notes": str(item.get("note", ""))[:200], "their_status": None,
             "http": http, "final_url": final, "free_check": free_check, "captcha_words_on_page": captcha,
             "has_form_on_page": bool(re.search(r"<form\b", page, re.I)), "quality": "unchecked", "usable": usable, "followed": "unknown",
-            "checked": today, "status": status, "type": str(item.get("type", ""))[:30]}
+            "checked": today, "status": status, "type": str(item.get("type", ""))[:30],
+            "found_by": FOUND_BY.get(provider, provider), "proof": "UNCHECKED", "needs_signup": needs_signup_flag(item, page)}
 
 
 def summary_line(added, total, by_cat):
@@ -287,6 +328,7 @@ def load_state():
         st = {}
     st.setdefault("cursor", 0)
     st.setdefault("spent", {})
+    st.setdefault("spent_deepseek", {})
     st.setdefault("days", {})
     st.setdefault("rejected", [])
     return st
@@ -297,6 +339,7 @@ def trim_state(st, today):
     keep = sorted(st["days"])[-14:]
     st["days"] = {k: st["days"][k] for k in keep}
     st["spent"] = {k: st["spent"][k] for k in sorted(st["spent"])[-14:]}
+    st["spent_deepseek"] = dict(sorted((st.get("spent_deepseek") or {}).items())[-14:])
     st["rejected"] = st["rejected"][-REJECTED_KEPT:]
 
 
@@ -312,6 +355,14 @@ def _post_json(url, body, headers):
         return json.load(r)
 
 
+def deepseek_cost(usage):
+    """USD of one DeepSeek chat call from its usage block (prompt_tokens, prompt_cache_hit_tokens, completion_tokens) at the peak prices above."""
+    u = usage or {}
+    pt, hit, out = (int(u.get(k, 0) or 0) for k in ("prompt_tokens", "prompt_cache_hit_tokens", "completion_tokens"))
+    hit = min(hit, pt)
+    return ((pt - hit) * DS_PRICE_IN + hit * DS_PRICE_CACHE + out * DS_PRICE_OUT) / 1e6
+
+
 def call_cost(usage):
     u = usage or {}
     pin, pout, pcr = PRICES[MODEL]
@@ -321,31 +372,37 @@ def call_cost(usage):
 
 
 class Meter:
-    """The day's spend, kept in the state file. book() reserves BEFORE the request; settle() replaces the reserve by the real cost."""
+    """The day's spend, kept in the state file (state["spent"] for Sonnet, state["spent_deepseek"] for DeepSeek: two separate caps).
+    book() reserves BEFORE the request; settle() replaces the reserve by the real cost."""
 
-    def __init__(self, state, today, cap=None, save=None):
-        self.state, self.today = state, today
-        self.cap = DAY_CAP if cap is None else cap
+    def __init__(self, state, today, cap=None, save=None, provider="claude"):
+        self.state, self.today, self.provider = state, today, provider
+        ds = provider == "deepseek"
+        self.key = "spent_deepseek" if ds else "spent"
+        self.reserve = DS_RESERVE if ds else RESERVE
+        self.cost_fn = deepseek_cost if ds else call_cost
+        self.cap = (DEEPSEEK_DAY_CAP if ds else DAY_CAP) if cap is None else cap
         self.save = save or (lambda: None)
         self.calls = 0
+        self.state.setdefault(self.key, {})
 
     @property
     def spent(self):
-        return float(self.state["spent"].get(self.today, 0.0) or 0.0)
+        return float(self.state[self.key].get(self.today, 0.0) or 0.0)
 
     def room_for_call(self):
-        return self.spent + RESERVE <= self.cap + 1e-9
+        return self.spent + self.reserve <= self.cap + 1e-9
 
     def book(self):
         if not self.room_for_call():
-            raise CapReached("daily cost cap: %.3f spent + %.2f reserve > %.2f" % (self.spent, RESERVE, self.cap))
-        self.state["spent"][self.today] = round(self.spent + RESERVE, 4)
+            raise CapReached("daily cost cap: %.3f spent + %.2f reserve > %.2f" % (self.spent, self.reserve, self.cap))
+        self.state[self.key][self.today] = round(self.spent + self.reserve, 4)
         self.calls += 1
         self.save()
 
     def settle(self, usage):
-        real = call_cost(usage)
-        self.state["spent"][self.today] = round(max(0.0, self.spent - RESERVE + real), 4)
+        real = self.cost_fn(usage)
+        self.state[self.key][self.today] = round(max(0.0, self.spent - self.reserve + real), 4)
         self.save()
 
 
@@ -374,6 +431,21 @@ def ask_model(system, user, meter, post=None):
     return text
 
 
+def ask_deepseek(system, user, meter, post=None):
+    """DeepSeek chat (no web search, no tools). One request, metered and capped like a Sonnet call. Returns the answer text."""
+    key = os.environ.get("DEEPSEEK_API_KEY")
+    if not key and post is None:
+        raise RuntimeError("no DEEPSEEK_API_KEY")
+    headers = {"Authorization": "Bearer " + (key or ""), "content-type": "application/json"}
+    meter.book()                                                       # reserve booked and SAVED before the request goes out
+    data = (post or _post_json)(DEEPSEEK_BASE + "/chat/completions",
+                                {"model": DEEPSEEK_MODEL, "max_tokens": MAX_TOKENS,
+                                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}, headers)
+    meter.settle(data.get("usage"))
+    msg = (data.get("choices") or [{}])[0].get("message") or {}
+    return str(msg.get("content") or "")
+
+
 SYSTEM = """You build a list of real web places where a free tool for TikTok creators (InayaFlow, https://inayaflow.ai) can get a listing, a mention or a link. You research with web search and answer with JSON lines only.
 RULES:
 - Only real, live sites that you saw in search results. Never invent a site or a URL. Give the page where a person submits / suggests / contacts (the submit, suggest, write-for-us, contact or list page); if you only saw the site's home page, give the home page.
@@ -381,8 +453,18 @@ RULES:
 - Never list inayaflow.ai. No duplicates. No social profile pages of single people.
 - "free" is "yes" only if you SAW that listing / submission is free, "no" if you saw it is paid only, otherwise "unknown".
 OUTPUT: first line "LIST DONE", then ONLY JSON lines (no markdown fence, no comment), then a last line "COUNT n". One object per line:
-{"name": "<site name>", "url": "<https url>", "type": "<directory|launch_site|roundup|awesome_list|review_platform|guest_post|resource_page|community|podcast|journalist|edu_guide|country_directory>", "free": "yes|no|unknown", "note": "<12 words max: what it is>"}
+{"name": "<site name>", "url": "<https url>", "type": "<directory|launch_site|roundup|awesome_list|review_platform|guest_post|resource_page|community|podcast|journalist|edu_guide|country_directory>", "free": "yes|no|unknown", "signup": "yes|no|unknown (yes = an account is needed to submit)", "note": "<12 words max: what it is>"}
 Give up to 40 places. If you find fewer, give fewer; never pad."""
+
+
+DEEPSEEK_NOTE = """
+
+NOTE FOR THIS RUN: you have NO web search and cannot open pages. Ignore every 'search' / 'saw in search results' wording above and list ONLY real, existing places you KNOW from your training, with the exact URL you are sure of (if you are not sure of the exact submit page, give the site's home page). Never invent a site or a URL: our code opens every URL and drops dead ones. Use free = "unknown" unless you are sure."""
+
+
+def build_prompts(provider, cat_key, what, angle, avoid):
+    """(system, user) for a provider. The text is the SAME for both; DeepSeek only gets DEEPSEEK_NOTE appended (it has no web search)."""
+    return SYSTEM + (DEEPSEEK_NOTE if provider == "deepseek" else ""), user_prompt(cat_key, what, angle, avoid)
 
 
 def user_prompt(cat_key, what, angle, avoid):
@@ -400,43 +482,154 @@ def check_url(url, getter):
     return None
 
 
-def run(post=None, getter=None, today=None, workers=8):
+def load_follow_proof():
+    """The directory agent's follow_proof (scripts/directory_agent/agent.py, merged 24 Nov), REUSED, not copied. None when it cannot be loaded."""
+    try:
+        spec = importlib.util.spec_from_file_location("directory_agent_for_proof", os.path.join(ROOT, "scripts", "directory_agent", "agent.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.follow_proof
+    except Exception:
+        return None
+
+
+COUNTER_KEYS = ("calls", "cost", "proposed", "spam", "dup", "dead", "added", "followed", "needs_signup")
+
+
+def pcounters(day, provider):
+    """The provider's counters for the day (calls, cost, URLs proposed, dropped spam / dup / dead, new rows, FOLLOWED rows, needs_signup rows)."""
+    p = day.setdefault("providers", {}).setdefault(provider, {})
+    for k in COUNTER_KEYS:
+        p.setdefault(k, 0.0 if k == "cost" else 0)
+    return p
+
+
+def compare_line(day, extra=None):
+    """'list-builder: sonnet +N new (F followed, $x) | deepseek +M new (G followed, $y)'. extra = {provider: counters} to add on top (dry runs)."""
+    parts = []
+    for prov in ("claude", "deepseek"):
+        p = dict((day.get("providers") or {}).get(prov) or {})
+        if not p and prov == "deepseek":
+            continue
+        for k, v in ((extra or {}).get(prov) or {}).items():
+            p[k] = p.get(k, 0) + v
+        parts.append("%s +%d new (%d followed, $%.2f)" % (FOUND_BY[prov], p.get("added", 0), p.get("followed", 0), p.get("cost", 0.0)))
+    return "list-builder: " + " | ".join(parts or ["sonnet +0 new (0 followed, $0.00)"])
+
+
+def write_needs_signup(sites):
+    """data/needs_signup.md: rows that need an account AND whose proof is FOLLOWED or UNKNOWN, newest first. Imran does the sign-ups at the end."""
+    rows = [(i, s) for i, s in enumerate(sites) if s.get("needs_signup") is True and s.get("proof") in ("FOLLOWED", "UNKNOWN")]
+    rows.sort(key=lambda t: (str(t[1].get("added", "")), t[0]), reverse=True)
+    out = ["# Sign-ups to do at the end (list builder)", "",
+           "Places that need an account to list or post, with a followed link (FOLLOWED) or not yet known (UNKNOWN). Newest first. Rebuilt by the list builder on every live run.", "",
+           "| Site | URL | Category | Found by | Proof | Added |", "|---|---|---|---|---|---|"]
+    for _, s in rows[:600]:
+        out.append("| %s | %s | %s | %s | %s | %s |" % (str(s.get("name") or s.get("domain"))[:60].replace("|", "/"), s.get("submit_url", ""), s.get("category", ""),
+                                                    s.get("found_by", ""), s.get("proof", ""), s.get("added", "")))
+    out.append("")
+    with open(SIGNUP_PATH, "w", encoding="utf8") as f:
+        f.write("\n".join(out))
+    return len(rows)
+
+
+COMPARE_HEAD = ["# List builder: Sonnet vs DeepSeek, per day", "",
+                "Each cell: calls / $ / proposed URLs / dropped dead, spam, duplicate / new rows / FOLLOWED / needs sign-up.", "",
+                "| Date | Sonnet (web search) | DeepSeek (no web search) |", "|---|---|---|"]
+
+
+def _cell(p):
+    if not p:
+        return "-"
+    return "calls %d / $%.2f / proposed %d / dead %d, spam %d, dup %d / new %d / followed %d / signup %d" % (
+        p.get("calls", 0), p.get("cost", 0.0), p.get("proposed", 0), p.get("dead", 0), p.get("spam", 0), p.get("dup", 0),
+        p.get("added", 0), p.get("followed", 0), p.get("needs_signup", 0))
+
+
+def write_compare(days):
+    """data/list_builder_compare.md: one row per day (from the state's counters), newest first, last 14 days."""
+    rows = []
+    for d in sorted(days, reverse=True)[:14]:
+        pr = days[d].get("providers") or {}
+        if pr:
+            rows.append("| %s | %s | %s |" % (d, _cell(pr.get("claude")), _cell(pr.get("deepseek"))))
+    with open(COMPARE_PATH, "w", encoding="utf8") as f:
+        f.write("\n".join(COMPARE_HEAD + rows) + "\n")
+
+
+def run_proofs(rows, proof, workers=8):
+    """Set row['proof'] with the follow_proof verdict for up to PROOF_MAX_FETCHES rows within PROOF_SECONDS; the rest stay UNCHECKED."""
+    if proof is None or not rows:
+        return 0
+    deadline = time.time() + PROOF_SECONDS
+    todo = rows[:PROOF_MAX_FETCHES]
+
+    def one(r):
+        if time.time() > deadline:
+            return None
+        try:
+            return proof(r.get("final_url") or r["submit_url"])[0]
+        except Exception:
+            return "UNKNOWN"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+        verdicts = list(ex.map(one, todo))
+    n = 0
+    for r, v in zip(todo, verdicts):
+        if v in ("FOLLOWED", "NOFOLLOW_ONLY", "NOINDEX", "UNKNOWN"):
+            r["proof"] = v
+            n += 1
+    return n
+
+
+def run(post=None, getter=None, today=None, workers=8, provider=None, proof=None):
     getter = getter or c.http_get
     today = today or utc_today()
+    provider = provider or PROVIDER
+    ds = provider == "deepseek"
+    tag = "list-builder-deepseek" if ds else "list-builder"
+    if ds and post is None and not os.environ.get("DEEPSEEK_API_KEY"):
+        print("list-builder-deepseek: no key, skipped")
+        return {"status": "SKIPPED"}
+    if proof is None:
+        proof = load_follow_proof()
     state = load_state()
     cand = read_json(CAND_PATH, None)
     if not isinstance(cand, dict) or not isinstance(cand.get("sites"), list):
-        print("list-builder: the candidates file is missing or unreadable, nothing runs (fail closed)")
+        print("%s: the candidates file is missing or unreadable, nothing runs (fail closed)" % tag)
         return {"status": "NO_DATA"}
     day = state["days"].setdefault(today, {"added": 0, "by_category": {}, "runs": 0, "calls": 0})
-    meter = Meter(state, today, save=lambda: write_json(STATE_PATH, state))
+    pc = pcounters(day, provider)
+    meter = Meter(state, today, save=lambda: write_json(STATE_PATH, state), provider=provider)
     extra = [p for p in os.environ.get("LIST_BUILDER_KNOWN_FILES", "").split(os.pathsep) if p]
     known = known_keys(cand, extra) | set(state["rejected"])
     new_rows, rejected = [], []
     day["runs"] += 1
     stats = {"asked": 0, "raw": 0, "spam": 0, "dup": 0, "dead": 0, "added": 0}
     calls = 0
-    while calls < MAX_CALLS_PER_RUN and day["added"] + len(new_rows) < TARGET_NEW and day["added"] + len(new_rows) < MAX_NEW_PER_DAY:
+    while calls < MAX_CALLS_PER_RUN and pc["added"] + len(new_rows) < TARGET_NEW and pc["added"] + len(new_rows) < MAX_NEW_PER_DAY:
         if not meter.room_for_call():
-            print("list-builder: daily cost cap reached ($%.2f of $%.2f)" % (meter.spent, meter.cap))
+            print("%s: daily cost cap reached ($%.2f of $%.2f)" % (tag, meter.spent, meter.cap))
             break
         cat_key, kind, what, angle = pick_category(state["cursor"])
         state["cursor"] += 1                                          # the cursor moves on even when the call fails: no category is retried forever
         calls += 1
         recent = [r["domain"] for r in cand["sites"][-400:] if r.get("category") == cat_key][-25:]
+        system, user = build_prompts(provider, cat_key, what, angle, recent)
         try:
-            text = ask_model(SYSTEM, user_prompt(cat_key, what, angle, recent), meter, post=post)
+            text = (ask_deepseek if ds else ask_model)(system, user, meter, post=post)
         except CapReached:
-            print("list-builder: daily cost cap reached ($%.2f of $%.2f)" % (meter.spent, meter.cap))
+            print("%s: daily cost cap reached ($%.2f of $%.2f)" % (tag, meter.spent, meter.cap))
             break
         except Exception as e:
-            print("list-builder: %s call failed (%s)" % (cat_key, type(e).__name__))   # class name only: never an error body
+            print("%s: %s call failed (%s)" % (tag, cat_key, type(e).__name__))   # class name only: never an error body
             write_json(STATE_PATH, state)
             continue
         day["calls"] += 1
+        pc["calls"] += 1
         items = parse_rows(text)
         stats["asked"] += 1
         stats["raw"] += len(items)
+        pc["proposed"] += len(items)
         todo, seen_here = [], set()
         for it in items:
             url = norm_url(it.get("url"))
@@ -444,10 +637,12 @@ def run(post=None, getter=None, today=None, workers=8):
                 continue
             if is_spam(it.get("name"), url, it.get("note")):
                 stats["spam"] += 1
+                pc["spam"] += 1
                 continue
             k = dedupe_key(url)
             if k in known or k in seen_here:
                 stats["dup"] += 1
+                pc["dup"] += 1
                 continue
             seen_here.add(k)
             it["_url"], it["_key"] = url, k
@@ -458,46 +653,65 @@ def run(post=None, getter=None, today=None, workers=8):
             k = it["_key"]
             if res is None:
                 stats["dead"] += 1
+                pc["dead"] += 1
                 rejected.append(k)
                 continue
             http, final, page = res
             fkey = dedupe_key(norm_url(final) or it["_url"])
             if fkey != k and fkey in known:                             # a redirect to a place we already hold
                 stats["dup"] += 1
+                pc["dup"] += 1
                 rejected.append(k)
                 continue
             if is_spam(it.get("name"), final, c.html_text(page, 1500)):
                 stats["spam"] += 1
+                pc["spam"] += 1
                 rejected.append(k)
                 continue
             known.add(k)
             known.add(fkey)
-            new_rows.append(build_row(it, cat_key, kind, angle, today, http, final, page))
-        print("list-builder: %s '%s' asked %d, kept so far %d, spent $%.3f" % (cat_key, angle[:40], len(items), len(new_rows), meter.spent))
+            new_rows.append(build_row(it, cat_key, kind, angle, today, http, final, page, provider))
+        print("%s: %s '%s' asked %d, kept so far %d, spent $%.3f" % (tag, cat_key, angle[:40], len(items), len(new_rows), meter.spent))
     # room left in the day for added rows
-    room = max(0, MAX_NEW_PER_DAY - day["added"])
+    room = max(0, MAX_NEW_PER_DAY - pc["added"])
     new_rows = new_rows[:room]
+    checked = run_proofs(new_rows, proof, workers=workers)          # follow_proof on the new rows (cap PROOF_MAX_FETCHES, time limit PROOF_SECONDS)
     by_cat = {}
     for r in new_rows:
         by_cat[r["category"]] = by_cat.get(r["category"], 0) + 1
     stats["added"] = len(new_rows)
+    followed = sum(1 for r in new_rows if r["proof"] == "FOLLOWED")
+    signups = sum(1 for r in new_rows if r["needs_signup"])
+    pc["cost"] = round(meter.spent, 4)
+    run_extra = None
     if not DRY:
         cand["sites"].extend(new_rows)
         cand["generated"] = max(str(cand.get("generated", "")), today)
         write_json(CAND_PATH, cand)
         day["added"] += len(new_rows)
+        pc["added"] += len(new_rows)
+        pc["followed"] += followed
+        pc["needs_signup"] += signups
         for k, v in by_cat.items():
             day["by_category"][k] = day["by_category"].get(k, 0) + v
+        write_needs_signup(cand["sites"])
+    else:
+        run_extra = {provider: {"added": len(new_rows), "followed": followed}}
     state["rejected"] = list(dict.fromkeys(state["rejected"] + rejected))
     total = len(cand["sites"])
-    line = summary_line(day["added"] if not DRY else len(new_rows), total, day["by_category"] if not DRY else by_cat)
-    day["summary"], day["total"] = line + (" [dry run: nothing saved]" if DRY else ""), total
+    cat_line = summary_line(day["added"] if not DRY else len(new_rows), total, day["by_category"] if not DRY else by_cat)
+    day["category_summary"] = cat_line
+    day["summary"] = compare_line(day, run_extra) + (" [dry run: nothing saved]" if DRY else "")
+    day["total"] = total
     state["last_summary"] = day["summary"]
     trim_state(state, today)
     write_json(STATE_PATH, state)
+    if not DRY:
+        write_compare(state["days"])
     print(day["summary"])
-    print("list-builder: this run %s; cost today $%.3f of $%.2f; calls %d" % (
-        ", ".join("%s %d" % (k, v) for k, v in stats.items()), meter.spent, meter.cap, meter.calls))
+    print(cat_line)
+    print("%s: this run %s; proof checked %d, FOLLOWED %d, needs sign-up %d; cost today $%.3f of $%.2f; calls %d" % (
+        tag, ", ".join("%s %d" % (k, v) for k, v in stats.items()), checked, followed, signups, meter.spent, meter.cap, meter.calls))
     out = os.environ.get("GITHUB_STEP_SUMMARY")
     if out:
         try:
@@ -510,4 +724,4 @@ def run(post=None, getter=None, today=None, workers=8):
 
 if __name__ == "__main__":
     r = run()
-    sys.exit(0 if r["status"] in ("DONE",) else 1)
+    sys.exit(0 if r["status"] in ("DONE", "SKIPPED") else 1)

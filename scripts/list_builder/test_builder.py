@@ -9,7 +9,8 @@ import builder as b
 TODAY = "2026-11-24"
 SECRET = "sk-ant-TESTSECRET-12345"
 ROW_KEYS = {"name", "domain", "submit_url", "source", "their_category", "their_auto_flag", "their_notes", "their_status", "http", "final_url",
-            "free_check", "captcha_words_on_page", "has_form_on_page", "quality", "usable", "followed", "checked", "status", "category", "added", "source_query"}
+            "free_check", "captcha_words_on_page", "has_form_on_page", "quality", "usable", "followed", "checked", "status", "category", "added", "source_query",
+            "found_by", "proof", "needs_signup"}
 
 
 def usage(inp=20000, out=2000, searches=3):
@@ -34,7 +35,9 @@ def alive(url, timeout=12, limit=0):
 class Base(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
-        self.saved = (b.DATA, b.CAND_PATH, b.STATE_PATH, b.DRY)
+        self.saved = (b.DATA, b.CAND_PATH, b.STATE_PATH, b.DRY, b.SIGNUP_PATH, b.COMPARE_PATH)
+        b.SIGNUP_PATH = os.path.join(self.dir, "needs_signup.md")
+        b.COMPARE_PATH = os.path.join(self.dir, "list_builder_compare.md")
         b.DATA = self.dir
         b.CAND_PATH = os.path.join(self.dir, "directories_candidates.json")
         b.STATE_PATH = os.path.join(self.dir, "list_builder_state.json")
@@ -43,7 +46,7 @@ class Base(unittest.TestCase):
                            "status": "TODO", "checked": "2026-11-20"}])
 
     def tearDown(self):
-        b.DATA, b.CAND_PATH, b.STATE_PATH, b.DRY = self.saved
+        b.DATA, b.CAND_PATH, b.STATE_PATH, b.DRY, b.SIGNUP_PATH, b.COMPARE_PATH = self.saved
         shutil.rmtree(self.dir, ignore_errors=True)
 
     def write_cands(self, sites):
@@ -57,6 +60,7 @@ class Base(unittest.TestCase):
 
     def go(self, post, getter=alive, **kw):
         buf = io.StringIO()
+        kw.setdefault("proof", lambda u: ("UNKNOWN", "test"))                       # never the network
         with contextlib.redirect_stdout(buf):
             r = b.run(post=post, getter=getter, today=TODAY, workers=1, **kw)
         return r, buf.getvalue()
@@ -243,10 +247,10 @@ class Cap(Base):
         self.assertGreaterEqual(self.state()["spent"][TODAY], b.RESERVE)                  # a failed request keeps its reserve booked
 
     def test_cap_from_env_default_and_worst_case(self):
-        self.assertEqual(b.DAY_CAP, 1.00)
+        self.assertEqual(b.DAY_CAP, 3.00)
         self.assertLessEqual(b.MAX_CALLS_PER_RUN * 3 * b.RESERVE + 0, 99)                 # (pause_turn continuations are metered too)
-        m = b.Meter({"spent": {TODAY: 0.90}}, TODAY)
-        self.assertFalse(m.room_for_call())                                               # 0.90 + 0.20 > 1.00
+        m = b.Meter({"spent": {TODAY: 2.90}}, TODAY)
+        self.assertFalse(m.room_for_call())                                               # 2.90 + 0.20 > 3.00
         with self.assertRaises(b.CapReached):
             m.book()
 
@@ -275,10 +279,12 @@ class Summary(Base):
             return answer([good(k * 10 + i) for i in range(2)])
         r, out = self.go(post)
         line = self.state()["last_summary"]
-        m = re.match(r"^list-builder: \+(\d+) new \(total (\d+); by category (.+)\)$", line)
+        m = re.match(r"^list-builder: sonnet \+(\d+) new \((\d+) followed, \$([\d.]+)\)$", line)
         self.assertTrue(m, line)
         self.assertEqual(int(m.group(1)), len(r["rows"]))
-        self.assertEqual(int(m.group(2)), len(self.cands()))
+        cm = re.match(r"^list-builder: \+(\d+) new \(total (\d+); by category (.+)\)$", self.state()["days"][TODAY]["category_summary"])
+        self.assertTrue(cm)
+        self.assertEqual(int(cm.group(2)), len(self.cands()))
         self.assertIn(line, out)
         self.assertEqual(self.state()["days"][TODAY]["added"], len(r["rows"]))
         self.assertEqual(b.summary_line(0, 5, {}), "list-builder: +0 new (total 5; by category none)")
@@ -330,7 +336,8 @@ class Config(unittest.TestCase):
         self.assertIn('cron: "23 16 * * *"', t)
         self.assertIn("workflow_dispatch", t)
         self.assertIn("dry_run:", t)
-        self.assertIn('LIST_BUILDER_DAY_USD_CAP: "1.00"', t)
+        self.assertIn('LIST_BUILDER_DAY_USD_CAP: "3.00"', t)
+        self.assertIn("$16.98 a day is the hard cap of the LISTED robots", t)
         self.assertIn("group: list-builder", t)
         self.assertIn("cancel-in-progress: false", t)
         self.assertIn("contents: write", t)
@@ -342,6 +349,219 @@ class Config(unittest.TestCase):
     def test_env_and_code_cap_agree(self):
         t = open(self.wf, encoding="utf8").read()
         self.assertEqual(float(re.search(r'LIST_BUILDER_DAY_USD_CAP: "([\d.]+)"', t).group(1)), b.DAY_CAP)
+
+
+class FakeDeepSeek:
+    """A DeepSeek chat/completions answer for the same JSON lines."""
+
+    def __init__(self, items, usg=None):
+        self.items, self.bodies, self.usg = items, [], usg or {"prompt_tokens": 3000, "completion_tokens": 2000}
+
+    def __call__(self, url, body, headers):
+        self.bodies.append((url, body))
+        text = "LIST DONE\n" + "\n".join(json.dumps(i) for i in self.items) + "\nCOUNT %d" % len(self.items)
+        return {"choices": [{"message": {"content": text}}], "usage": self.usg}
+
+
+class DeepSeekTwin(Base):
+    def setUp(self):
+        super().setUp()
+        self.saved_p = (b.SIGNUP_PATH, b.COMPARE_PATH, b.PROVIDER)
+        b.SIGNUP_PATH = os.path.join(self.dir, "needs_signup.md")
+        b.COMPARE_PATH = os.path.join(self.dir, "list_builder_compare.md")
+
+    def tearDown(self):
+        b.SIGNUP_PATH, b.COMPARE_PATH, b.PROVIDER = self.saved_p
+        super().tearDown()
+
+    def test_same_prompt_text_in_both_providers(self):
+        cat = b.pick_category(3)
+        s1, u1 = b.build_prompts("claude", cat[0], cat[2], cat[3], ["a.com"])
+        s2, u2 = b.build_prompts("deepseek", cat[0], cat[2], cat[3], ["a.com"])
+        self.assertEqual(u1, u2)
+        self.assertEqual(s1, b.SYSTEM)
+        self.assertTrue(s2.startswith(b.SYSTEM))                                    # the only difference is the appended no-web-search note
+        self.assertEqual(s2[len(b.SYSTEM):], b.DEEPSEEK_NOTE)
+        self.assertIn("NO web search", b.DEEPSEEK_NOTE)
+
+    def test_dedupe_spam_and_live_check_apply_in_deepseek_mode(self):
+        items = [good(1, url="https://old-example.com/other"), good(2, name="Buy backlinks cheap", url="https://spam-example.com/"),
+                 good(3, url="https://dead-example.com/"), good(4, url="https://new-example.com/submit")]
+
+        def getter(url, timeout=12, limit=0):
+            return (404, url, "") if "dead-example" in url else alive(url)
+        ds = FakeDeepSeek(items)
+        r, out = self.go(ds, getter, provider="deepseek")
+        rows = [s for s in self.cands() if s.get("added") == TODAY]
+        self.assertEqual({s["domain"] for s in rows}, {"new-example.com"})
+        self.assertEqual({s["found_by"] for s in rows}, {"deepseek"})
+        self.assertTrue(ROW_KEYS <= set(rows[0]))                                   # same row format as Sonnet rows
+        self.assertTrue(ds.bodies[0][0].endswith("/chat/completions"))
+        self.assertEqual(ds.bodies[0][1]["model"], b.DEEPSEEK_MODEL)
+        pc = self.state()["days"][TODAY]["providers"]["deepseek"]
+        n = len(ds.bodies)
+        self.assertEqual(pc["spam"], n)
+        self.assertGreaterEqual(pc["dup"], n)                                     # old-example.com every call, plus repeats of what was just added or rejected
+        self.assertEqual(pc["dead"], n)
+        self.assertEqual(pc["added"], 1)
+
+    def test_dedupe_against_what_sonnet_added(self):
+        self.go(lambda *a: answer([good(7, url="https://shared-example.com/")]))      # Sonnet first
+        ds = FakeDeepSeek([good(8, url="https://shared-example.com/x")])
+        self.go(ds, provider="deepseek")
+        mine = [s for s in self.cands() if s["domain"] == "shared-example.com"]
+        self.assertEqual([s["found_by"] for s in mine], ["sonnet"])
+
+    def test_no_key_exits_zero_with_the_skip_line(self):
+        os.environ.pop("DEEPSEEK_API_KEY", None)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            r = b.run(today=TODAY, provider="deepseek", proof=lambda u: ("UNKNOWN", ""))
+        self.assertEqual(r["status"], "SKIPPED")
+        self.assertIn("list-builder-deepseek: no key, skipped", buf.getvalue())
+        self.assertFalse(os.path.exists(b.STATE_PATH))
+        env = dict(os.environ, LIST_BUILDER_PROVIDER="deepseek", LIST_BUILDER_DATA=self.dir, DRY_RUN="true")
+        env.pop("DEEPSEEK_API_KEY", None)
+        import subprocess
+        p = subprocess.run([sys.executable, os.path.join(HERE, "builder.py")], env=env, capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0)
+        self.assertIn("list-builder-deepseek: no key, skipped", p.stdout)
+
+    def test_deepseek_cap_is_separate_and_enforced(self):
+        self.assertEqual(b.DEEPSEEK_DAY_CAP, 1.00)
+        st = b.load_state()
+        st["spent"][TODAY] = 2.95                                                   # Sonnet nearly at its own cap
+        self.assertFalse(b.Meter(st, TODAY).room_for_call())
+        self.assertTrue(b.Meter(st, TODAY, provider="deepseek").room_for_call())    # DeepSeek is unaffected
+        st["spent_deepseek"][TODAY] = 0.99
+        m = b.Meter(st, TODAY, provider="deepseek")
+        self.assertFalse(m.room_for_call())
+        with self.assertRaises(b.CapReached):
+            m.book()
+        json.dump({"cursor": 0, "spent": {}, "days": {}, "rejected": [], "spent_deepseek": {TODAY: 0.995}}, open(b.STATE_PATH, "w"))
+        ds = FakeDeepSeek([good(1)])
+        self.go(ds, provider="deepseek")
+        self.assertEqual(ds.bodies, [])                                             # cap used: no call at all
+
+    def test_deepseek_cost_uses_the_official_prices(self):
+        self.assertAlmostEqual(b.deepseek_cost({"prompt_tokens": 1000000, "completion_tokens": 1000000}), 0.30 + 1.20)
+        self.assertAlmostEqual(b.deepseek_cost({"prompt_tokens": 1000000, "prompt_cache_hit_tokens": 1000000}), 0.006)
+
+    def test_deepseek_run_stays_under_its_cap_and_leaves_sonnet_spend_alone(self):
+        ds = FakeDeepSeek([good(1)], usg={"prompt_tokens": 100000, "completion_tokens": 4000})    # ~$0.035 a call
+        self.go(ds, provider="deepseek")
+        st = self.state()
+        self.assertLessEqual(st["spent_deepseek"][TODAY], b.DEEPSEEK_DAY_CAP + 1e-9)
+        self.assertGreater(st["spent_deepseek"][TODAY], 0.2)
+        self.assertNotIn(TODAY, st["spent"])
+
+    def test_row_fields_found_by_proof_and_needs_signup(self):
+        items = [good(1, url="https://signup-example.com/", signup="yes"),
+                 good(2, url="https://plain-example.com/"), good(3, url="https://pagesignup-example.com/")]
+
+        def getter(url, timeout=12, limit=0):
+            if "pagesignup" in url:
+                return 200, url, "<html>Please sign up or register to submit your tool</html>" + "x" * 400
+            return alive(url)
+        verdicts = {"signup-example.com": "FOLLOWED", "plain-example.com": "NOFOLLOW_ONLY", "pagesignup-example.com": "UNKNOWN"}
+        self.go(lambda *a: answer(items), getter, proof=lambda u: (verdicts[b.dedupe_key(u)], "x"))
+        rows = {s["domain"]: s for s in self.cands() if s.get("added") == TODAY}
+        self.assertEqual(rows["signup-example.com"]["needs_signup"], True)
+        self.assertEqual(rows["plain-example.com"]["needs_signup"], False)
+        self.assertEqual(rows["pagesignup-example.com"]["needs_signup"], True)
+        self.assertEqual({v["found_by"] for v in rows.values()}, {"sonnet"})
+        self.assertEqual({d: v["proof"] for d, v in rows.items()}, verdicts)
+
+    def test_proof_limit_leaves_the_rest_unchecked(self):
+        old = b.PROOF_MAX_FETCHES
+        b.PROOF_MAX_FETCHES = 2
+        self.addCleanup(setattr, b, "PROOF_MAX_FETCHES", old)
+        calls = []
+        counter = iter(range(1000))
+        self.go(lambda *a: answer([good(next(counter)) for _ in range(6)]), proof=lambda u: calls.append(u) or ("FOLLOWED", ""))
+        rows = [s for s in self.cands() if s.get("added") == TODAY]
+        self.assertEqual(sum(1 for s in rows if s["proof"] == "FOLLOWED"), 2 * self.state()["days"][TODAY]["runs"])
+        self.assertIn("UNCHECKED", {s["proof"] for s in rows})
+
+    def test_needs_signup_md_content(self):
+        items = [good(1, url="https://a-example.com/", signup="yes", name="Alpha"), good(2, url="https://b-example.com/", signup="yes", name="Beta"),
+                 good(3, url="https://c-example.com/", signup="yes", name="Gamma"), good(4, url="https://d-example.com/", name="Delta")]
+        verdicts = {"a-example.com": "FOLLOWED", "b-example.com": "NOFOLLOW_ONLY", "c-example.com": "UNKNOWN", "d-example.com": "FOLLOWED"}
+        n = []
+
+        def post(*a):
+            n.append(1)
+            return answer(items) if len(n) == 1 else answer([])
+        self.go(post, proof=lambda u: (verdicts[b.dedupe_key(u)], ""))
+        t = open(b.SIGNUP_PATH, encoding="utf8").read()
+        self.assertIn("| Site | URL | Category | Found by | Proof |", t)
+        self.assertIn("| Alpha | https://a-example.com/ |", t)
+        self.assertIn("| Gamma | https://c-example.com/ |", t)
+        self.assertNotIn("Beta", t)                                                  # NOFOLLOW_ONLY: not worth an account
+        self.assertNotIn("Delta", t)                                                 # no sign-up needed
+        self.assertIn("sonnet | FOLLOWED", t)
+
+    def test_needs_signup_md_newest_first(self):
+        self.write_cands([{"name": "Old", "domain": "o.com", "submit_url": "https://o.com/", "category": "x", "found_by": "sonnet", "proof": "UNKNOWN", "needs_signup": True, "added": "2026-11-01"},
+                          {"name": "New", "domain": "n.com", "submit_url": "https://n.com/", "category": "x", "found_by": "deepseek", "proof": "FOLLOWED", "needs_signup": True, "added": "2026-11-20"}])
+        b.write_needs_signup(self.cands())
+        t = open(b.SIGNUP_PATH, encoding="utf8").read()
+        self.assertLess(t.index("| New |"), t.index("| Old |"))
+
+    def test_compare_counters_summary_and_md(self):
+        counter = iter(range(1000))
+        self.go(lambda *a: answer([good(next(counter)) for _ in range(2)]), proof=lambda u: ("FOLLOWED", ""))
+        ds = FakeDeepSeek([good(3, url="https://d1-example.com/"), good(4, url="https://old-example.com/x")])
+        r, out = self.go(ds, provider="deepseek", proof=lambda u: ("UNKNOWN", ""))
+        pr = self.state()["days"][TODAY]["providers"]
+        for k in b.COUNTER_KEYS:
+            self.assertIn(k, pr["claude"])
+            self.assertIn(k, pr["deepseek"])
+        self.assertGreater(pr["claude"]["added"], 0)
+        self.assertEqual(pr["claude"]["followed"], pr["claude"]["added"])
+        self.assertEqual(pr["deepseek"]["followed"], 0)
+        self.assertGreaterEqual(pr["deepseek"]["dup"], 1)
+        self.assertGreater(pr["deepseek"]["cost"], 0)
+        line = self.state()["last_summary"]
+        self.assertRegex(line, r"^list-builder: sonnet \+\d+ new \(\d+ followed, \$[\d.]+\) \| deepseek \+\d+ new \(0 followed, \$[\d.]+\)$")
+        self.assertIn(line, out)
+        md = open(b.COMPARE_PATH, encoding="utf8").read()
+        self.assertEqual(md.count("| %s |" % TODAY), 1)
+        self.assertIn("Sonnet", md)
+
+    def test_no_key_value_in_deepseek_output(self):
+        os.environ["DEEPSEEK_API_KEY"] = SECRET
+        self.addCleanup(os.environ.pop, "DEEPSEEK_API_KEY", None)
+
+        def boom(*a):
+            raise RuntimeError("body " + SECRET)
+        r, out = self.go(boom, provider="deepseek")
+        self.assertNotIn(SECRET, out)
+        for fn in (b.STATE_PATH, b.CAND_PATH):
+            self.assertNotIn(SECRET, open(fn, encoding="utf8").read())
+
+
+class TwinConfig(unittest.TestCase):
+    wf = os.path.join(ROOT, ".github", "workflows", "list-builder-deepseek.yml")
+
+    def test_workflow(self):
+        t = open(self.wf, encoding="utf8").read()
+        sonnet = open(os.path.join(ROOT, ".github", "workflows", "list-builder.yml"), encoding="utf8").read()
+        self.assertIn('cron: "53 4 * * *"', t)
+        self.assertIn('cron: "53 16 * * *"', t)
+        self.assertIn("group: list-builder\n", t)                                    # same group as the Sonnet job: never in parallel
+        self.assertIn("group: list-builder\n", sonnet)
+        self.assertIn("LIST_BUILDER_PROVIDER: deepseek", t)
+        self.assertIn("DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}", t)
+        self.assertIn("list-builder-deepseek: no key, skipped", t)
+        self.assertIn('LIST_BUILDER_DEEPSEEK_DAY_USD_CAP: "1.00"', t)
+        self.assertIn("dry_run:", t)
+        self.assertIn("data/needs_signup.md", t)
+        self.assertNotIn("ANTHROPIC_API_KEY", t)
+
+    def test_env_and_code_cap_agree(self):
+        t = open(self.wf, encoding="utf8").read()
+        self.assertEqual(float(re.search(r'LIST_BUILDER_DEEPSEEK_DAY_USD_CAP: "([\d.]+)"', t).group(1)), b.DEEPSEEK_DAY_CAP)
 
 
 class KnownSites(unittest.TestCase):
