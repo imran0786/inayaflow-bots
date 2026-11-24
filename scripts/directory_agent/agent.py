@@ -6,12 +6,15 @@ Dry run (default): the agent fills the form and STOPS right before the final sub
 """
 import asyncio, base64, datetime, email, hashlib, hmac, imaplib, json, logging, os, re, shutil, sys, tempfile, time
 from email import policy
-from urllib.parse import urlparse
+from html.parser import HTMLParser
+from urllib.parse import urljoin, urlparse
+from urllib.request import Request, urlopen
 
 os.environ.setdefault("BROWSER_USE_SETUP_LOGGING", "false")  # public logs: keep the library quiet
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "false")
 logging.disable(logging.CRITICAL)
 
+# 24 Nov 2026: follow-proof pre-check (Imran: no proof, no sign-up)
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODEL = os.environ.get("AGENT_MODEL", "claude-haiku-5-5")  # primary; no temperature is ever set
 FALLBACK_MODEL = os.environ.get("FALLBACK_MODEL", "claude-sonnet-5-5")  # used when the primary ends OTHER/ERROR/TIMEOUT
@@ -496,6 +499,128 @@ def domain_block(state, dom, today, known_path=None):
     pu = parked_until(state, dom)
     if pu == "forever" or (pu and today < pu):
         return "parked until " + pu
+    c = cached_proof(state, dom, today)   # cache only, no network: also keeps the backfill off nofollow / noindex sites
+    if c and c.get("verdict") in PROOF_BLOCK_VERDICTS:
+        return PROOF_BLOCK_VERDICTS[c["verdict"]]
+    return None
+
+
+# ---- 24 Nov 2026: follow-proof pre-check (Imran: no proof, no sign-up). Plain HTTP, no AI, no browser. ----
+PROOF_KEY = "__proof__"          # inside the state file: {domain: {verdict, date, evidence}}
+PROOF_DAYS = 30
+PROOF_CHECKS_PER_RUN = int(os.environ.get("PROOF_CHECKS_PER_RUN", "60"))
+PROOF_SECONDS = int(os.environ.get("PROOF_SECONDS", "1200"))   # all checks of one run together; the run limit is 8400 s
+PROOF_TIMEOUT, PROOF_MAX_BYTES = 10, 1_500_000
+PROOF_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+LISTING_RE = re.compile(r"/(tool|tools|product|products|startup|startups|listing|item|ai|app|apps|launch|p|project|projects|software)/[^/?#]+", re.I)
+NOT_LISTING_RE = re.compile(r"/(submit|pricing|login|signup|sign-up|blog|category|categories|tag|tags|about|privacy|terms)(/|$)", re.I)
+PLATFORM_DOMAINS = {"twitter.com", "x.com", "facebook.com", "linkedin.com", "instagram.com", "youtube.com", "tiktok.com", "github.com", "google.com",
+                    "apple.com", "discord.com", "discord.gg", "t.me", "producthunt.com", "cloudflare.com", "stripe.com"}
+PROOF_BLOCK_VERDICTS = {"NOFOLLOW_ONLY": "NO_FOLLOW_PROOF", "NOINDEX": "NOINDEX"}   # verdict -> reason code
+PROOF_RANK = {"FOLLOWED": 0, "UNKNOWN": 1}
+
+
+class _Page(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.noindex, self.links = False, []   # links: (href, rel)
+
+    def handle_starttag(self, tag, attrs):
+        a = {k.lower(): (v or "") for k, v in attrs}
+        if tag == "meta" and a.get("name", "").lower() in ("robots", "googlebot") and "noindex" in a.get("content", "").lower():
+            self.noindex = True
+        elif tag == "a" and a.get("href"):
+            self.links.append((a["href"], a.get("rel", "").lower()))
+
+
+def _http_get(url):
+    """(body text, headers dict) or raises. Reads at most PROOF_MAX_BYTES."""
+    with urlopen(Request(url, headers={"User-Agent": PROOF_UA, "Accept": "text/html"}), timeout=PROOF_TIMEOUT) as r:
+        body = r.read(PROOF_MAX_BYTES).decode("utf8", "replace")
+        return body, {k.lower(): v for k, v in r.headers.items()}
+
+
+def _parse(body):
+    p = _Page()
+    try:
+        p.feed(body)
+    except Exception:
+        pass
+    return p
+
+
+def _listing_links(page, base, own):
+    out = []
+    for href, _ in page.links:
+        u = urljoin(base, href.strip())
+        pu = urlparse(u)
+        if pu.scheme not in ("http", "https") or reg_domain(pu.hostname or "") != own or NOT_LISTING_RE.search(pu.path) or not LISTING_RE.search(pu.path):
+            continue
+        u = u.split("#")[0]
+        if u not in out:
+            out.append(u)
+        if len(out) >= 5:
+            break
+    return out
+
+
+def _outbound(page, base, own):
+    """Outbound links to OTHER non-platform domains: list of (url, followed)."""
+    out = []
+    for href, rel in page.links:
+        u = urljoin(base, href.strip())
+        pu = urlparse(u)
+        d = reg_domain(pu.hostname or "")
+        if pu.scheme not in ("http", "https") or not d or d == own or d in PLATFORM_DOMAINS:
+            continue
+        out.append((u, not (set(rel.split()) & {"nofollow", "ugc", "sponsored"})))
+    return out
+
+
+def follow_proof(site_url):
+    """Returns (verdict, evidence). FOLLOWED / NOFOLLOW_ONLY / NOINDEX / UNKNOWN. Never raises."""
+    try:
+        pu = urlparse(site_url)
+        home = "%s://%s/" % (pu.scheme or "https", pu.netloc)
+        own = reg_domain(pu.hostname or "")
+        body, _ = _http_get(home)
+        links = _listing_links(_parse(body), home, own)
+        if not links:
+            return "UNKNOWN", "no listing pages found on the homepage"
+        fetched, indexable, nofollow_seen = 0, 0, None
+        for u in links[:3]:
+            try:
+                body, hdr = _http_get(u)
+            except Exception:
+                continue
+            fetched += 1
+            page = _parse(body)
+            if page.noindex or "noindex" in hdr.get("x-robots-tag", "").lower():
+                continue
+            indexable += 1
+            out = _outbound(page, u, own)
+            for ou, followed in out:
+                if followed:
+                    return "FOLLOWED", "%s links to %s (no nofollow)" % (u, urlparse(ou).hostname)
+            if out and not nofollow_seen:
+                nofollow_seen = "%s: every outbound link is nofollow/ugc/sponsored" % u
+        if nofollow_seen:
+            return "NOFOLLOW_ONLY", nofollow_seen
+        if fetched and not indexable:
+            return "NOINDEX", "listing pages are noindex (e.g. %s)" % links[0]
+        return "UNKNOWN", "listing pages unreadable or without outbound links (maybe JS-rendered)"
+    except Exception as e:
+        return "UNKNOWN", "check failed: " + type(e).__name__
+
+
+def cached_proof(state, dom, today):
+    """The cached verdict dict when it is under PROOF_DAYS old, else None."""
+    c = (state.get(PROOF_KEY) or {}).get(dom)
+    try:
+        if c and (datetime.date.fromisoformat(today) - datetime.date.fromisoformat(c["date"])).days < PROOF_DAYS:
+            return c
+    except Exception:
+        pass
     return None
 
 
@@ -590,7 +715,7 @@ def eligible(site, state, old_state, today, vstate=None):
     return True
 
 
-def build_feed(state, old_state, today, vstate=None):
+def build_feed(state, old_state, today, vstate=None, stats=None):
     cands = load_json(os.path.join(ROOT, "data", "directories_candidates.json"), {}).get("sites", [])
     feed = []
     # candidates: free_likely + their auto flag first
@@ -608,8 +733,28 @@ def build_feed(state, old_state, today, vstate=None):
         seen.add(k)
         if eligible(s, state, old_state, today, vstate):
             out.append(s)
-    out.sort(key=lambda s: not boosted(s, state, vstate))  # stable: confirmed accounts first, they are one step from done
-    return out
+    # follow-proof: only sites that are otherwise eligible; verdict cached per domain; a limited number of fresh checks per run
+    stats = stats if stats is not None else {}
+    stats.update({"checked": 0, "FOLLOWED": 0, "NOFOLLOW_ONLY": 0, "NOINDEX": 0, "UNKNOWN": 0})
+    cache = state.setdefault(PROOF_KEY, {})
+    t0, kept, verdict = time.time(), [], {}
+    for s in out:
+        dom = dom_of(s)
+        c = cached_proof(state, dom, today)
+        if c is None:
+            if stats["checked"] >= PROOF_CHECKS_PER_RUN or time.time() - t0 > PROOF_SECONDS:
+                continue   # waits for the next run
+            v, ev = follow_proof(s["url"])
+            c = cache[dom] = {"verdict": v, "date": today, "evidence": ev[:160]}
+            stats["checked"] += 1
+            stats[v] += 1
+        if c["verdict"] in PROOF_BLOCK_VERDICTS:
+            continue
+        verdict[id(s)] = c["verdict"]
+        kept.append(s)
+    # stable: confirmed accounts that are FOLLOWED first, then FOLLOWED, then UNKNOWN
+    kept.sort(key=lambda s: (not (boosted(s, state, vstate) and verdict[id(s)] == "FOLLOWED"), PROOF_RANK.get(verdict[id(s)], 1)))
+    return kept
 
 
 def record(state, site, r, today):
@@ -766,15 +911,19 @@ def main():
     old_state = load_json(OLD_STATE_PATH, {})
     update_walls(state, today)
     manual = bool(batch)
+    proof_stats = {}
     if manual:
         sites = json.load(open(os.path.join(ROOT, batch), encoding="utf8"))["sites"]
         if only:
             sites = [s for s in sites if s["name"].lower() in only]
         untried = len(sites)
     else:
-        sites = build_feed(state, old_state, today, load_json(VSTATE_PATH, {}))
+        sites = build_feed(state, old_state, today, load_json(VSTATE_PATH, {}), proof_stats)
         untried = len(sites)
     att0, succ0 = count_today(state, today)
+    if not manual and not DRY:
+        os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
+        json.dump(state, open(STATE_PATH, "w", encoding="utf8"), indent=1)   # keep the new proof verdicts even if the run stops early
     print("directory agent: model=%s fallback=%s dry=%s signup=%s %s untried=%d today attempts=%d successes=%d" % (
         MODEL, FALLBACK_MODEL, DRY, ALLOW_SIGNUP, "BATCH" if manual else "FEED", untried, att0, succ0), flush=True)
     products = load_products()
@@ -853,6 +1002,9 @@ def main():
     left = max(0, untried - (att - att0))
     need = (" | NEEDS MORE CANDIDATES (%d untried left, below 30)" % left) if (not manual and left < 30) else ""
     line = "| %s | attempts %d | tool listings tried %d | successes today %d | cost %.2f USD | untried left %d%s |" % (today, att - att0, tool_att, succ, tot, left, need)
+    if proof_stats:
+        line = line.rstrip(" |") + " | proof checked %d (followed %d / nofollow %d / noindex %d / unknown %d) |" % (
+            proof_stats["checked"], proof_stats["FOLLOWED"], proof_stats["NOFOLLOW_ONLY"], proof_stats["NOINDEX"], proof_stats["UNKNOWN"])
     print("SUMMARY " + line.strip("| "), flush=True)
     nd = [] if manual else needs_director(state, today)
     if nd:

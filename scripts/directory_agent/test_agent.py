@@ -478,5 +478,156 @@ class NoRepeats(unittest.TestCase):
         self.assertEqual(ag.count_tool_today(st, self.T0), 0)
 
 
+class FollowProof(unittest.TestCase):
+    """24 Nov 2026: follow-proof pre-check. The network is mocked; nothing here touches the internet."""
+    T0 = "2026-11-24"
+
+    def _site(self, pages):
+        """pages: {url: (html, headers)}; installs a fake _http_get, returns the list of fetched urls."""
+        fetched = []
+
+        def fake(url):
+            fetched.append(url)
+            if url not in pages:
+                raise OSError("no route")
+            return pages[url]
+        self._orig = ag._http_get
+        ag._http_get = fake
+        self.addCleanup(lambda: setattr(ag, "_http_get", self._orig))
+        return fetched
+
+    HOME = '<a href="/tool/a">A</a> <a href="/tool/b">B</a> <a href="/submit">s</a> <a href="/blog/x">b</a> <a href="/pricing">p</a>'
+
+    def _verdict(self, listing_html, hdr=None, home=None):
+        pages = {"https://www.dir.example/": (home or self.HOME, {}),
+                 "https://www.dir.example/tool/a": (listing_html, hdr or {}),
+                 "https://www.dir.example/tool/b": (listing_html, hdr or {})}
+        self._site(pages)
+        return ag.follow_proof("https://www.dir.example/submit")[0]
+
+    def test_followed(self):
+        self.assertEqual(self._verdict('<a href="https://other.com/x">visit</a>'), "FOLLOWED")
+
+    def test_nofollow_ugc_sponsored_only(self):
+        for rel in ("nofollow", "ugc", "sponsored", "noopener nofollow"):
+            self.assertEqual(self._verdict('<a rel="%s" href="https://other.com/x">v</a>' % rel), "NOFOLLOW_ONLY", rel)
+
+    def test_one_followed_among_nofollow_is_followed(self):
+        self.assertEqual(self._verdict('<a rel="nofollow" href="https://a.com">a</a><a href="https://b.com">b</a>'), "FOLLOWED")
+
+    def test_noindex_meta_and_header(self):
+        self.assertEqual(self._verdict('<meta name="robots" content="noindex, follow"><a href="https://other.com">v</a>'), "NOINDEX")
+        self.assertEqual(self._verdict('<meta name="googlebot" content="NOINDEX"><a href="https://other.com">v</a>'), "NOINDEX")
+        self.assertEqual(self._verdict('<a href="https://other.com">v</a>', {"x-robots-tag": "noindex"}), "NOINDEX")
+
+    def test_no_listing_links_or_failed_fetch_is_unknown(self):
+        self.assertEqual(self._verdict("<a>x</a>", home='<a href="/submit">s</a><a href="/about">a</a>'), "UNKNOWN")
+        self._site({})   # homepage unreachable
+        self.assertEqual(ag.follow_proof("https://dir.example/submit")[0], "UNKNOWN")
+        self._site({"https://dir.example/": (self.HOME, {})})   # listing pages unreachable
+        self.assertEqual(ag.follow_proof("https://dir.example/submit")[0], "UNKNOWN")
+
+    def test_platform_and_own_domain_links_ignored(self):
+        html = ('<a href="https://twitter.com/x">t</a><a href="https://x.com/a">x</a><a href="https://github.com/a">g</a>'
+                '<a href="mailto:a@b.com">m</a><a href="javascript:void(0)">j</a><a href="/tool/c">own</a><a href="https://sub.dir.example/z">own2</a>')
+        self.assertEqual(self._verdict(html), "UNKNOWN")   # nothing outbound that counts
+
+    def test_at_most_three_listing_pages_fetched(self):
+        home = "".join('<a href="/tool/%d">t</a>' % i for i in range(8))
+        pages = {"https://dir.example/": (home, {})}
+        for i in range(8):
+            pages["https://dir.example/tool/%d" % i] = ('<a rel="nofollow" href="https://o.com">o</a>', {})
+        fetched = self._site(pages)
+        self.assertEqual(ag.follow_proof("https://dir.example/submit")[0], "NOFOLLOW_ONLY")
+        self.assertEqual(len(fetched), 4)   # homepage + 3 listings
+
+    def test_cache_reuse_and_expiry(self):
+        st = {ag.PROOF_KEY: {"dir.example": {"verdict": "NOINDEX", "date": "2026-10-30", "evidence": "x"}}}
+        self.assertEqual(ag.cached_proof(st, "dir.example", self.T0)["verdict"], "NOINDEX")   # 25 days old
+        self.assertEqual(ag.domain_block(st, "dir.example", self.T0), "NOINDEX")
+        self.assertIsNone(ag.cached_proof(st, "dir.example", "2026-11-30"))                # 31 days old
+        self.assertIsNone(ag.domain_block(st, "dir.example", "2026-11-30"))
+        st[ag.PROOF_KEY]["dir.example"] = {"verdict": "NOFOLLOW_ONLY", "date": self.T0, "evidence": "x"}
+        self.assertEqual(ag.domain_block(st, "dir.example", self.T0), "NO_FOLLOW_PROOF")
+        st[ag.PROOF_KEY]["dir.example"]["verdict"] = "FOLLOWED"
+        self.assertIsNone(ag.domain_block(st, "dir.example", self.T0))
+
+    def test_backfill_skips_blocked_domain_from_cache_only(self):
+        site = {"name": "Dir", "url": "https://dir.example/submit"}
+        st = {}
+        ag.record(st, site, {"status": "SUBMITTED"}, self.T0)
+        prods = ag.load_products()
+        self.assertTrue(ag.backfill_sites(st, prods, self.T0))
+        st[ag.PROOF_KEY] = {"dir.example": {"verdict": "NOFOLLOW_ONLY", "date": self.T0, "evidence": "x"}}
+        self.assertEqual(ag.backfill_sites(st, prods, self.T0), [])
+        self.assertEqual(ag.product_todo(st, site, prods, self.T0), [])
+
+    def _feed(self, sites, verdicts, state=None, vstate=None, limit=None):
+        """Runs build_feed with the data files and follow_proof replaced; returns (names, stats, state, calls)."""
+        import tempfile
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "data"))
+        json.dump({"sites": []}, open(os.path.join(d, "data", "directories_candidates.json"), "w"))
+        json.dump([{"name": n, "submit_url": u} for n, u in sites], open(os.path.join(d, "data", "directories.json"), "w"))
+        kp = os.path.join(d, "known.json")
+        json.dump({"domains": {}}, open(kp, "w"))
+        calls = []
+        saved = (ag.ROOT, ag.KNOWN_PATH, ag.follow_proof, ag.PROOF_CHECKS_PER_RUN)
+
+        def fake(url):
+            calls.append(url)
+            return verdicts[ag.dom_of(url)], "ev"
+        ag.ROOT, ag.KNOWN_PATH, ag.follow_proof = d, kp, fake
+        if limit is not None:
+            ag.PROOF_CHECKS_PER_RUN = limit
+        self.addCleanup(lambda: (setattr(ag, "ROOT", saved[0]), setattr(ag, "KNOWN_PATH", saved[1]),
+                                 setattr(ag, "follow_proof", saved[2]), setattr(ag, "PROOF_CHECKS_PER_RUN", saved[3])))
+        st = state if state is not None else {}
+        stats = {}
+        feed = ag.build_feed(st, {}, self.T0, vstate, stats)
+        return [s["name"] for s in feed], stats, st, calls
+
+    SITES = [("A", "https://a.example/submit"), ("B", "https://b.example/submit"), ("C", "https://c.example/submit"),
+             ("D", "https://d.example/submit"), ("E", "https://e.example/submit")]
+
+    def test_feed_order_blocks_and_stats(self):
+        v = {"a.example": "UNKNOWN", "b.example": "FOLLOWED", "c.example": "NOFOLLOW_ONLY", "d.example": "NOINDEX", "e.example": "FOLLOWED"}
+        names, stats, st, calls = self._feed(self.SITES, v)
+        self.assertEqual(names, ["B", "E", "A"])
+        self.assertEqual(stats, {"checked": 5, "FOLLOWED": 2, "NOFOLLOW_ONLY": 1, "NOINDEX": 1, "UNKNOWN": 1})
+        self.assertEqual(st[ag.PROOF_KEY]["c.example"]["verdict"], "NOFOLLOW_ONLY")
+        # second run the same day: all from the cache, no new checks
+        names2, stats2, _, calls2 = self._feed(self.SITES, v, state=st)
+        self.assertEqual((names2, calls2, stats2["checked"]), (["B", "E", "A"], [], 0))
+
+    def test_boosted_followed_first_and_boosted_nofollow_skipped(self):
+        st = {"c.example": {"name": "C", "status": "OTHER", "date": "2026-11-20", "tries": 1}, "e.example": {"name": "E", "status": "OTHER", "date": "2026-11-20", "tries": 1}}
+        vstate = {"retry": {"c.example": "2026-11-23", "e.example": "2026-11-23"}}
+        v = {"a.example": "FOLLOWED", "b.example": "FOLLOWED", "c.example": "NOFOLLOW_ONLY", "d.example": "UNKNOWN", "e.example": "FOLLOWED"}
+        names, _, _, _ = self._feed(self.SITES, v, state=st, vstate=vstate)
+        self.assertEqual(names, ["E", "A", "B", "D"])   # E boosted + followed first; C boosted but nofollow-only is skipped
+
+    def test_per_run_check_limit(self):
+        v = {k: "FOLLOWED" for k in ("a.example", "b.example", "c.example", "d.example", "e.example")}
+        names, stats, st, calls = self._feed(self.SITES, v, limit=2)
+        self.assertEqual(stats["checked"], 2)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(names, ["A", "B"])   # the rest wait for the next run
+        names2, stats2, _, _ = self._feed(self.SITES, v, state=st, limit=2)
+        self.assertEqual(names2, ["A", "B", "C", "D"])
+        self.assertEqual(stats2["checked"], 2)
+
+    def test_network_error_is_unknown_and_never_crashes(self):
+        def boom(url):
+            raise TimeoutError("slow")
+        self._orig = ag._http_get
+        ag._http_get = boom
+        self.addCleanup(lambda: setattr(ag, "_http_get", self._orig))
+        v, ev = ag.follow_proof("https://dir.example/submit")
+        self.assertEqual(v, "UNKNOWN")
+        self.assertIn("TimeoutError", ev)
+        self.assertEqual(ag.follow_proof("")[0], "UNKNOWN")
+
+
 if __name__ == "__main__":
     unittest.main()
