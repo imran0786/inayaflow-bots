@@ -164,6 +164,72 @@ class Convert(unittest.TestCase):
         self.assertTrue(all(len(r["text"]["content"]) <= 2000 for r in rt))
 
 
+class PushPriority(unittest.TestCase):
+    TIER1 = ["guide-no-views", "guide-views-going-down", "guide-shadowban", "guide-hashtag-strategy", "shadowban-checker", "guide-captions", "analyze", "guide-hooks", "guide-how-many-views"]
+    TIER2 = ["follower-count-checker", "guide-trending-hashtags", "hashtag-generator", "guide-growth-tool"]
+
+    def setUp(self):
+        self._p = P.D.PRIORITY_PATH
+
+    def tearDown(self):
+        P.D.PRIORITY_PATH = self._p
+
+    def run_days(self, n):
+        st, seen, days = {"posts": []}, {pl: [] for pl in P.PLATFORMS}, []
+        for d in range(1, n + 1):
+            day = "2026-12-%02d" % d
+            p = P.pick_targets(st, day)
+            days.append({k: v[0] for k, v in p.items()})
+            for k, v in p.items():
+                seen[k].append(v[0])
+                st["posts"].append({"platform": k, "slug": v[0], "date": day})
+        return days, seen
+
+    def test_tier1_first_three_distinct_each_day(self):
+        days, _ = self.run_days(9)
+        for d in days:
+            self.assertEqual(len(set(d.values())), 3)
+            self.assertTrue(set(d.values()) <= set(self.TIER1))
+
+    def test_each_platform_covers_all_tier1_before_repeating_then_tier2(self):
+        _, seen = self.run_days(13)
+        for pl, s in seen.items():
+            self.assertEqual(sorted(s[:9]), sorted(self.TIER1))
+            self.assertEqual(sorted(s[9:13]), sorted(self.TIER2))
+
+    def test_new_pages_are_targets_with_anchor_keywords(self):
+        slugs = {t[0] for t in P.TARGETS}
+        for sl, kw in [("guide-no-views", "why is my TikTok getting no views"), ("guide-views-going-down", "why are my TikTok views going down"),
+                       ("guide-hooks", "TikTok hooks"), ("guide-growth-tool", "TikTok growth tool"), ("analyze", "TikTok account analyzer")]:
+            self.assertIn(sl, slugs)
+            self.assertEqual(P.D.ANCHOR_KEYWORDS[sl], kw)
+        self.assertEqual(next(t for t in P.TARGETS if t[0] == "analyze")[1], "https://inayaflow.ai/analyze")
+
+    def test_unknown_slug_ignored_with_warning(self):
+        import tempfile
+        f = os.path.join(tempfile.mkdtemp(), "pp.json")
+        json.dump({"tiers": [["nope-slug", "analyze"]]}, open(f, "w"))
+        P.D.PRIORITY_PATH = f
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            p = P.pick_targets({"posts": []}, "2026-12-01")
+        self.assertIn("nope-slug", out.getvalue())
+        self.assertEqual(p["wordpress"][0], "analyze")
+
+    def test_missing_file_old_behaviour(self):
+        P.D.PRIORITY_PATH = os.path.join(tempfile_dir(), "does-not-exist.json")
+        p = P.pick_targets({"posts": []}, "2026-12-01")
+        self.assertEqual([v[0] for v in p.values()], [t[0] for t in P.TARGETS[:3]])
+        P.D.PRIORITY_PATH = os.path.join(tempfile_dir(), "bad.json")
+        open(P.D.PRIORITY_PATH, "w").write("{not json")
+        self.assertEqual([v[0] for v in P.pick_targets({"posts": []}, "2026-12-01").values()], [t[0] for t in P.TARGETS[:3]])
+
+
+def tempfile_dir():
+    import tempfile
+    return tempfile.mkdtemp()
+
+
 class Pick(unittest.TestCase):
     def test_three_different_targets_and_rotation(self):
         p = P.pick_targets({"posts": []}, "2026-12-01")
@@ -175,7 +241,7 @@ class Pick(unittest.TestCase):
 
     def test_week_covers_every_tool_and_homepage_eventually(self):
         st, seen = {"posts": []}, {pl: set() for pl in P.PLATFORMS}
-        for d in range(1, 8):
+        for d in range(1, len(P.TARGETS) + 1):
             p = P.pick_targets(st, "2026-12-%02d" % d)
             for k, v in p.items():
                 seen[k].add(v[0])
@@ -183,11 +249,11 @@ class Pick(unittest.TestCase):
         allseen = set().union(*seen.values())
         self.assertTrue({t[0] for t in P.TARGETS if t[2] == "tool"} <= allseen)
         for k in seen:
-            self.assertEqual(len(seen[k]), 7)
+            self.assertEqual(len(seen[k]), len(P.TARGETS))
 
     def test_targets_have_9_tools_guides_home(self):
         kinds = [t[2] for t in P.TARGETS]
-        self.assertEqual(kinds.count("tool"), 9)
+        self.assertEqual(kinds.count("tool"), 10)
         self.assertEqual(kinds.count("home"), 1)
         self.assertTrue(any(t[0] == "guide-hashtag-strategy" for t in P.TARGETS))
 

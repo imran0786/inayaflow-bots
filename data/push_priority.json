@@ -1,0 +1,23 @@
+{
+ "updated": "2026-11-24",
+ "note": "Director-edited push priority. Tier 1 = pages closest to Google's top 3 (pushed first, every platform cycles through all of them), then tier 2; every other page is tier 3. Slugs are the PAGES slugs in scripts/dev_poster/poster.py; an unknown slug is ignored with a warning. Delete the file for the old behaviour.",
+ "tiers": [
+  [
+   "guide-no-views",
+   "guide-views-going-down",
+   "guide-shadowban",
+   "guide-hashtag-strategy",
+   "shadowban-checker",
+   "guide-captions",
+   "analyze",
+   "guide-hooks",
+   "guide-how-many-views"
+  ],
+  [
+   "follower-count-checker",
+   "guide-trending-hashtags",
+   "hashtag-generator",
+   "guide-growth-tool"
+  ]
+ ]
+}

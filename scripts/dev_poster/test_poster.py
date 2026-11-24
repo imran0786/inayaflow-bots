@@ -102,8 +102,50 @@ class Rotation(unittest.TestCase):
         self.assertIsNone(REAL_PICK(state, "2026-12-05"))
 
     def test_nine_tools_and_hubs_present(self):
-        self.assertEqual(len([p for p in P.PAGES if p[2] == "tool"]), 9)
+        self.assertEqual(len([p for p in P.PAGES if p[2] == "tool"]), 10)
         self.assertTrue(any(p[2] == "guide" for p in P.PAGES))
+
+
+class PushPriority(unittest.TestCase):
+    TIER1 = ["guide-no-views", "guide-views-going-down", "guide-shadowban", "guide-hashtag-strategy", "shadowban-checker", "guide-captions", "analyze", "guide-hooks", "guide-how-many-views"]
+    TIER2 = ["follower-count-checker", "guide-trending-hashtags", "hashtag-generator", "guide-growth-tool"]
+
+    def tearDown(self):
+        P.PRIORITY_PATH = os.path.join(P.ROOT, "data", "push_priority.json")
+
+    def test_tier_order_then_lru_daily(self):
+        st, order = {"posts": []}, []
+        for i in range(13):
+            day = (__import__("datetime").date(2026, 12, 1) + __import__("datetime").timedelta(days=i)).isoformat()
+            p = REAL_PICK(st, day)
+            order.append(p[0])
+            st["posts"].append({"slug": p[0], "date": day})
+        self.assertEqual(sorted(order[:9]), sorted(self.TIER1))
+        self.assertEqual(sorted(order[9:]), sorted(self.TIER2))
+
+    def test_new_pages_and_anchor_keywords(self):
+        urls = {p[0]: p[1] for p in P.PAGES}
+        self.assertEqual(urls["guide-no-views"], "https://inayaflow.ai/blog/why-is-my-tiktok-getting-no-views")
+        self.assertEqual(urls["guide-views-going-down"], "https://inayaflow.ai/blog/why-are-my-tiktok-views-going-down")
+        self.assertEqual(urls["guide-hooks"], "https://inayaflow.ai/blog/tiktok-hooks-that-stop-the-scroll")
+        self.assertEqual(urls["guide-growth-tool"], "https://inayaflow.ai/blog/tiktok-growth-tool")
+        self.assertEqual(urls["analyze"], "https://inayaflow.ai/analyze")
+        for sl, kw in [("guide-no-views", "why is my TikTok getting no views"), ("guide-views-going-down", "why are my TikTok views going down"),
+                       ("guide-hooks", "TikTok hooks"), ("guide-growth-tool", "TikTok growth tool"), ("analyze", "TikTok account analyzer")]:
+            self.assertEqual(P.ANCHOR_KEYWORDS[sl], kw)
+
+    def test_unknown_slug_ignored_and_missing_file_fallback(self):
+        f = os.path.join(tempfile.mkdtemp(), "pp.json")
+        json.dump({"tiers": [["nope", "money-calculator"]]}, open(f, "w"))
+        P.PRIORITY_PATH = f
+        import io, contextlib
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            p = REAL_PICK({"posts": []}, "2026-12-01")
+        self.assertIn("nope", out.getvalue())
+        self.assertEqual(p[0], "money-calculator")
+        P.PRIORITY_PATH = os.path.join(tempfile.mkdtemp(), "missing.json")
+        self.assertEqual(REAL_PICK({"posts": []}, "2026-12-01")[0], P.PAGES[0][0])
 
 
 def fake_ai_factory(body, verdict="PASS"):

@@ -76,17 +76,26 @@ def log(line):
 
 
 def pick_targets(state, today, platforms=PLATFORMS, targets=TARGETS):
-    """{platform: target}. The target used longest ago on ANY platform first (never used first, list order), then by that platform's own history; no two platforms share a target the same day."""
-    last, anyp = {}, {}
+    """{platform: target}. Priority tiers first (data/push_priority.json, edited by the Director): a platform takes the highest tier that still has a page it has never linked to,
+    least-recently-used inside the tier (that platform's own history first, then any platform), so each platform cycles through every tier-1 page before repeating; once it has
+    covered every page it falls back to (tier, own LRU). No two platforms share a target the same day. Missing/bad priority file = tier-less (old behaviour)."""
+    prio = D.load_priority([(t[0],) for t in targets])
+    last, anyp, cnt = {}, {}, {}
     for e in state.get("posts", []):
         if e.get("platform") and e.get("slug") and e.get("date"):
             last[(e["platform"], e["slug"])] = e["date"]
             anyp[e["slug"]] = max(anyp.get(e["slug"], ""), e["date"])
+            cnt[(e["platform"], e["slug"])] = cnt.get((e["platform"], e["slug"]), 0) + 1
     chosen, out = set(), {}
     for pl in platforms:
-        cand = sorted((anyp.get(t[0], "0000-00-00"), last.get((pl, t[0]), "0000-00-00"), i, t) for i, t in enumerate(targets) if t[0] not in chosen)
-        out[pl] = cand[0][3]
-        chosen.add(cand[0][3][0])
+        if prio:
+            cand = sorted((1 if cnt.get((pl, t[0])) else 0, D.tier_of(t[0], prio), last.get((pl, t[0]), "0000-00-00"), anyp.get(t[0], "0000-00-00"), i, t)
+                          for i, t in enumerate(targets) if t[0] not in chosen)
+            out[pl] = cand[0][5]
+        else:
+            cand = sorted((anyp.get(t[0], "0000-00-00"), last.get((pl, t[0]), "0000-00-00"), i, t) for i, t in enumerate(targets) if t[0] not in chosen)
+            out[pl] = cand[0][3]
+        chosen.add(out[pl][0])
     return out
 
 
