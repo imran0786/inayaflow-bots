@@ -76,7 +76,7 @@ jobs:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           PLATFORM_POSTER_LIVE: ${{ vars.PLATFORM_POSTER_LIVE }}
           DRY_RUN: ${{ vars.PLATFORM_POSTER_LIVE == 'true' && ((github.event_name == 'schedule' && 'false') || github.event.inputs.dry_run || 'true') || 'true' }}
-          PLATFORM_DAY_USD_CAP: "0.02"   # the headroom left under $14.98 today; the Director raises it (max 0.90) after freeing budget elsewhere, and updates the README line
+          PLATFORM_DAY_USD_CAP: "0.90"   # 24 Nov: directory agent trimmed 6.00 -> 5.10 to fund this; sum stays $14.98
         run: |
           for v in WPCOM_APP_PASSWORD WPCOM_CLIENT_SECRET BLOGGER_CLIENT_SECRET BLOGGER_REFRESH_TOKEN NOTION_TOKEN ANTHROPIC_API_KEY; do
             [ -n "${!v}" ] && echo "::add-mask::${!v}"

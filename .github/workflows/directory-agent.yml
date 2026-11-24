@@ -91,7 +91,7 @@ jobs:
           DAILY_SUCCESS_CAP: "30"
           DAILY_ATTEMPT_CAP: "150"
           DAILY_TOOL_ATTEMPT_CAP: "200"
-          DAILY_USD_CAP: "6"   # 23 Nov: hunter stops at $6 a day; no attempt starts unless spent + ATTEMPT_MAX_USD fits under this
+          DAILY_USD_CAP: "5.10"   # 24 Nov (was 6; $0.90 moved to platform-poster). 23 Nov: hunter stops at $6 a day; no attempt starts unless spent + ATTEMPT_MAX_USD fits under this
           ATTEMPT_MAX_USD: "1.00"
           UNPRICED_ATTEMPT_USD: "1.00"
           RUN_BUDGET_PRIMARY_USD: "0.15"
