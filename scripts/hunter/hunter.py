@@ -26,7 +26,7 @@ WORK = os.environ.get("HUNTER_WORK", "/tmp/ops_jobs_hunter")
 MAX_COST = float(os.environ.get("HUNTER_MAX_COST", "0.60"))       # job-runner ceiling is $1; Director budget 23 Nov: 8 jobs a day at $0.60
 MAX_SEARCHES = int(os.environ.get("HUNTER_MAX_SEARCHES", "10"))   # job-runner ceiling is 10
 JOBS_PER_RUN = int(os.environ.get("HUNTER_JOBS_PER_RUN", "2"))     # 23 Nov: 2 research jobs per 3-hour run (was 1): 16 a day at $0.60 max
-DAILY_CAP = float(os.environ.get("HUNTER_DAILY_CAP", "4.5"))          # 24 Nov: was 6.0 ($1.50 moved to the list-builder robot; sum stays $14.98). Hunter total stop per UTC day: queued jobs x their max cost may not pass this (max 7 jobs a day)
+DAILY_CAP = float(os.environ.get("HUNTER_DAILY_CAP", "3.0"))          # 24 Nov: was 4.5, 6.0 before ($1.50 more moved to the list-builder robot; sum stays $14.98). Hunter total stop per UTC day: queued jobs x their max cost may not pass this (max 5 jobs a day)
 MAX_WAITING = int(os.environ.get("HUNTER_MAX_WAITING", "6"))      # never pile up more hunter jobs than the runner can clear
 
 PAGES = [  # (slug used in the job id and the result's "page" field, URL, what it is, topic words the prospect must be about)

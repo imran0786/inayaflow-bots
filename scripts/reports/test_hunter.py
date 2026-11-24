@@ -19,7 +19,7 @@ def at(h, d=23):
 class HunterBudget(unittest.TestCase):
     def test_workflow_env_matches_the_code(self):
         w = open(os.path.join(HERE, "..", "..", ".github", "workflows", "hunter.yml"), encoding="utf8").read()
-        self.assertIn('HUNTER_DAILY_CAP: "4.5"', w)
+        self.assertIn('HUNTER_DAILY_CAP: "3.0"', w)
 
 
 class Hunter(unittest.TestCase):
@@ -39,18 +39,18 @@ class Hunter(unittest.TestCase):
         self.assertEqual(hu.slot(at(9), 1)[2], hu.slot(at(9), 0)[2] + 1)
         self.assertEqual(hu.slot(at(12), 0)[2], hu.slot(at(9), 1)[2] + 1)
 
-    def test_daily_stop_keeps_worst_case_at_4_50_dollars(self):
+    def test_daily_stop_keeps_worst_case_at_3_dollars(self):
         import tempfile
-        self.assertEqual(hu.DAILY_CAP, 4.5)
+        self.assertEqual(hu.DAILY_CAP, 3.0)
         now = at(21)
         with tempfile.TemporaryDirectory() as w:
             os.makedirs(os.path.join(w, "jobs", "done"))
-            for i in range(7):                                    # 7 jobs today = $4.20 of caps (an 8th would pass $4.50)
+            for i in range(5):                                    # 5 jobs today = $3.00 of caps (a 6th would pass $3.00)
                 open(os.path.join(w, "jobs", "done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)), "w").close()
             open(os.path.join(w, "jobs", "done", "2026-11-22-0900-hunter-old-x.md"), "w").close()    # yesterday does not count
-            self.assertEqual(hu.queued_today(w, now), 7)
-        # at most floor(4.50 / 0.60) = 7 jobs a day can ever be queued; the runner enforces the $0.60 per job (max_cost in the brief)
-        self.assertEqual(int((hu.DAILY_CAP + 1e-9) // hu.MAX_COST), 7)
+            self.assertEqual(hu.queued_today(w, now), 5)
+        # at most floor(3.00 / 0.60) = 5 jobs a day can ever be queued; the runner enforces the $0.60 per job (max_cost in the brief)
+        self.assertEqual(int((hu.DAILY_CAP + 1e-9) // hu.MAX_COST), 5)
         # a hunter job still pending from yesterday counts against today; a done one from yesterday does not
         with tempfile.TemporaryDirectory() as w:
             for d in ("pending", "done"):
@@ -75,17 +75,17 @@ class Hunter(unittest.TestCase):
         return len(os.listdir(os.path.join(w, "jobs", "pending")))
 
     def test_main_11_done_plus_2_picks_queues_one_more_only_if_it_fits(self):
+        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(3)]
+        self.assertEqual(self.run_main(done), 2)                  # 3 + 2 = 5 jobs = $3.00: both fit (the QA double-count case)
+        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(4)]
+        self.assertEqual(self.run_main(done), 1)                  # 4 + 1 = 5 fits, the 6th is refused
         done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(5)]
-        self.assertEqual(self.run_main(done), 2)                  # 5 + 2 = 7 jobs = $4.20: both fit (the QA double-count case)
-        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(6)]
-        self.assertEqual(self.run_main(done), 1)                  # 6 + 1 = 7 fits, the 8th is refused
-        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(7)]
-        self.assertEqual(self.run_main(done), 0)                  # 7 already: nothing
+        self.assertEqual(self.run_main(done), 0)                  # 5 already: nothing
 
     def test_main_old_pending_jobs_count_against_today(self):
-        old = [("pending", "2026-11-22-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(3)]
-        done = [("done", "2026-11-23-%02d00-hunter-q%d-x.md" % (i, i)) for i in range(3)]
-        self.assertEqual(self.run_main(old + done), 3 + 1)        # 3 carried over + 3 done = 6: one more fits (7), the second does not
+        old = [("pending", "2026-11-22-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(2)]
+        done = [("done", "2026-11-23-%02d00-hunter-q%d-x.md" % (i, i)) for i in range(2)]
+        self.assertEqual(self.run_main(old + done), 2 + 1)        # 2 carried over + 2 done = 4: one more fits (5), the second does not
 
     def test_job_queued_yesterday_that_ran_today_counts_today(self):
         import tempfile

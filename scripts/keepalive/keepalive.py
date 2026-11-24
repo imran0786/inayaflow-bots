@@ -38,7 +38,7 @@ ROBOTS = [
     ("inbox-digest.yml", 60, {}),
     ("backlink-batch.yml", 60, {"dry_run": "false"}),
     ("hunter.yml", 180, {}),
-    ("list-builder.yml", 1440, {"dry_run": "false"}),   # its manual default is dry_run=true: a bare dispatch would write nothing
+    ("list-builder.yml", 720, {"dry_run": "false"}),   # its manual default is dry_run=true: a bare dispatch would write nothing
     ("directory-agent.yml", 180, {"dry_run": "false"}),
     ("ops-report.yml", 180, {}),
     ("heartbeat.yml", 180, {}),

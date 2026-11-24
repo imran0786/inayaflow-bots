@@ -37,7 +37,7 @@ jobs:
         env:
           GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-          HUNTER_DAILY_CAP: "4.5"   # 24 Nov: was 6.0; $1.50 moved to the list-builder robot (sum stays $14.98); max 7 jobs a day
+          HUNTER_DAILY_CAP: "3.0"   # 24 Nov: was 4.5 (6.0 before); another $1.50 moved to the list-builder robot (sum stays $14.98); max 5 jobs a day
         run: |
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           python3 scripts/hunter/hunter.py 2>/dev/null
