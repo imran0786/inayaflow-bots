@@ -44,7 +44,9 @@ jobs:
             if [ $((n % 6)) = 0 ]; then nudge inbox-digest.yml; fi
             h=$(date -u +%H%M)
             # directory verify sweeper (24 Nov 2026): its own cron (13,43 * * * *) is best effort and was 62+ min late; start it when the last run is 40+ min old
-            if [ "$(age_min directory-verify.yml)" -ge 40 ]; then nudge directory-verify.yml -f dry_run=false; fi
+            # nudge() itself never starts a run while one is queued or in progress (busy check); an unreadable age counts as "start once"
+            va=$(age_min directory-verify.yml); case "$va" in ''|*[!0-9]*) va=99999;; esac
+            if [ "$va" -ge 40 ]; then nudge directory-verify.yml -f dry_run=false; fi
             if [ "$h" -ge 0700 ] && [ "$(ran_today directory-agent.yml)" = "0" ]; then nudge directory-agent.yml -f dry_run=false; fi
             if [ "$h" -ge 0815 ] && [ "$(ran_today link-checker.yml)" = "0" ]; then nudge link-checker.yml; fi
             # report robots (19 Nov): inbox + backlinks report every 3 h; funnel numbers 07:30 UK; backlink batch 13:07 and 18:07 UK

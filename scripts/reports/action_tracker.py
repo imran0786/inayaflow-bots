@@ -236,6 +236,8 @@ def auto_close(m, hint, kind, ask, vo, age):
     paid = bool(PAID_OFFER.search(text))
     if person:
         return ("FOR IMRAN", "Imran", "person mentions money / an offer") if paid else None
+    if REPLY_FWD.match(m["subject"]):
+        return None              # never auto-closed (paid / info / expired): stays OPEN for a person
     if vo in VERIFY_EXPIRED or (age > EXPIRE_HOURS and ONE_TIME.search(text)):
         return "EXPIRED (no action possible)", "-", "one-time link / code"
     if paid and not STEP_WORDS.search(m["subject"]):
@@ -255,12 +257,17 @@ PAID_ASK = re.compile(r"paid plan|choose a (paid )?plan|pay (to|\$|£|€)|\bpay
 APPROVED_PLUGIN = re.compile(r"chatgpt plugin submission approved", re.I)
 
 
+REPLY_FWD = re.compile(r"\s*(re|fwd?|aw|sv)\s*:", re.I)      # Re: / RE: / Fwd: / FW: / AW: / SV: = a person is answering or passing mail on
+
+
 def route_listing(m, row, vo, age):
     """-> (status, owner, note) for a listing / platform mail that no earlier rule closed. Never returns 'verify robot' for a mail the robot
     has no outcome for after ROBOT_GRACE_HOURS, and closes info-only / optional / paid mails with a reason."""
     subj = m["subject"]
     text = subj + " " + (row.get("ask") or "")
     d = regd(m["addr"])
+    if REPLY_FWD.match(subj):    # a reply / forward is never auto-closed or left with a robot: the Director reads it
+        return "OPEN", "Director", "reply / forward: a person looks"
     if APPROVED_PLUGIN.search(subj) and d == "openai.com":
         return "IGNORED-info", "-", "plugin approval notice; already published 18 Nov 2026"
     verify_mail = bool(VERIFY_SUBJECT.search(subj))

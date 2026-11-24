@@ -296,6 +296,11 @@ class RobotNeverHoldsForDays(unittest.TestCase):
         r = at.build_rows([m], {}, dict(INPUTS, verify_log=v), NOW, read_body=lambda m: "b", ai=ai_answer(ans))[0][0]
         self.assertEqual((r["owner"], r["note"]), ("Director", "verify robot: captcha"))
 
+    def test_replies_and_forwards_are_never_auto_closed(self):
+        for subj in ("Re: Your listing: choose a paid plan", "RE: Welcome, your listing is ready", "Fwd: Don't forget to submit your listing story", "FW: ChatGPT Plugin Submission Approved listing", "AW: optional listing profile setup", "SV: listing upgrade offer $49"):
+            r = self.one("noreply@newdir.io", subj, 50, "Choose a paid plan; optional profile setup; upgrade")
+            self.assertEqual((r["status"], r["owner"]), ("OPEN", "Director"), subj)
+
     def test_real_verify_mail_stays_with_robot_only_while_fresh(self):
         self.assertEqual(self.one("hi@newdir.io", "Verify your email - NewDir", 1)["owner"], "verify robot")
         r = self.one("hi@newdir.io", "Verify your email - NewDir", 4)

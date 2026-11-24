@@ -241,12 +241,15 @@ def link_label(u):
     return "%s%s" % (p.hostname or "", re.sub(r"[A-Za-z0-9_-]{16,}", "[token]", p.path or "")[:60])
 
 
+REPLY_FWD_RE = re.compile(r"\s*(re|fwd?|aw|sv)\s*:", re.I)   # Re: / Fwd: / FW: / AW: / SV: : confirm links only come in fresh confirm mails
+
+
 def ours_when_filed_elsewhere(dom, known, subject, other):
     """Mail the router filed as account/status mail (other=False) or somewhere else (other=True): ours only for a confirm-type subject from a site we
     signed up on, and never a person's reply ("Re:") when it was filed elsewhere."""
-    if dom not in known or not VERIFY_SUBJ_RE.search(subject or ""):
+    if dom not in known or not VERIFY_SUBJ_RE.search(subject or "") or REPLY_FWD_RE.match(subject or ""):
         return False
-    return not (other and re.match(r"\s*(re|aw|sv)\s*:", subject or "", re.I))
+    return True
 
 
 def decide(subject, sender_dom, text, known, site_status, age_min, routed_verify=True):
@@ -454,6 +457,9 @@ def main():
                 if alt and not ours_when_filed_elsewhere(dom, known, subj, other):
                     skipped["other_route" if other else "account_mail_not_ours"] = skipped.get("other_route" if other else "account_mail_not_ours", 0) + 1
                     continue  # filed as account/status mail: only a confirm-type subject from a site we signed up on is ours (never a person's reply)
+                if REPLY_FWD_RE.match(subj):   # on ANY route: a reply or forward is never a fresh confirm mail
+                    skipped["reply_or_forward"] = skipped.get("reply_or_forward", 0) + 1
+                    continue
                 age = (now - md).total_seconds() / 60
                 st = site_status_for(dom, agent_state)
                 outcome, link = decide(subj, dom, text, known, st, age, routed_verify=(KW_ROUTE_VERIFY in routes) or alt)
