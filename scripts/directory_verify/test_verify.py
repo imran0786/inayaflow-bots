@@ -73,4 +73,37 @@ ok(not a.eligible(site, st, {}, "2026-11-19", {"retry": {"fivetaco.com": "2026-1
 ok(v.HOURS >= 336, "lookback covers at least 14 days")
 ok(v.decide("Confirm your email", "buildlist.io", "Confirm that you want to receive our weekly newsletter: https://buildlist.io/confirm?token=1", K | {"buildlist.io"}, None, 60)[0] == "SKIPPED_NEWSLETTER", "newsletter wording in body skipped")
 ok(v.decide("Confirm your email", "buildlist.io", "Welcome! Confirm your account: https://buildlist.io/confirm?token=1", K | {"buildlist.io"}, None, 9000)[0] == "OPEN_LINK", "5-day-old confirm link still opened")
+# 24 Nov 2026: mail follow-through fixes
+import json as _json
+KD = v.known_domains(root=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for _d in ("aidirs.best", "agenthunter.io", "opentools.ai", "shipgrowth.dev", "launchpadindia.org", "findstack.com", "tinystartups.co", "diigo.com",
+           "hackmd.io", "codepen.io", "hackernoon.com", "devsuite.co", "sitepatent.com", "aiagentslisting.com", "tinylaunchpad.com",
+           "directree.io", "earlyhunt.com", "saashub.com", "shipboost.io", "about.me"):
+    ok(_d in KD, "signup domain known: " + _d)
+for _d in ("github.com", "gitlab.com", "google.com", "openai.com", "supabase.io"):
+    ok(_d not in KD, "never a sign-up site: " + _d)
+# known_sites.json and own_backlinks.json sources count too
+ok("awesomeindie.com" in KD and "inayaflow.blogspot.com" not in KD and "blogspot.com" in KD, "known_sites + own_backlinks feed the list")
+# invisible characters before / inside the link
+ZW = "​‌⁠﻿"
+AH = '<p>Hi</p>' + ZW + '<a href="https://agenthunter.io/e/Zx81qpLm">' + ZW + 'Confirm your email</a>'
+ok(v.strip_invisible("a" + ZW + "b") == "ab", "invisible chars stripped")
+ok(v.confirm_links(AH, "agenthunter.io")[0] == ["https://agenthunter.io/e/Zx81qpLm"], "button link found though the URL has no confirm word")
+ok(v.decide("Please confirm your email", "agenthunter.io", AH, KD, None, 300) == ("OPEN_LINK", "https://agenthunter.io/e/Zx81qpLm"), "agenthunter mail now opens")
+ZWURL = "Confirm: https://agenthunter.io/verify/" + ZW + "abc123"
+ok(v.confirm_links(ZWURL, "agenthunter.io")[0] == ["https://agenthunter.io/verify/abc123"], "zero-width inside the URL removed")
+ok(v.anchor_links('<a href="https://x.io/a">Sign in</a><a href="https://x.io/b">Pricing</a><a href="http://x.io/c">Verify</a>') == ["https://x.io/a"], "anchor text rule, https only")
+ok(v.confirm_links('<a href="https://x.io/pricing">Confirm</a>', "x.io")[0] == [], "button text never beats the pay-page block")
+ok(v.confirm_links('<a href="https://evil.example/a">Confirm</a>', "x.io") == ([], ["https://evil.example/a"]), "button on another domain is not opened")
+# sender rules
+ok(v.decide("Confirm your email", "shipgrowth.dev", "https://shipgrowth.dev/confirm?token=1", KD, None, 90)[0] == "OPEN_LINK", "shipgrowth confirm opened")
+ok(v.decide("Verify your account", "findstack.com", "https://findstack.com/verify?token=1", KD, None, 400)[0] == "OPEN_LINK", "findstack confirm opened")
+ok(v.decide("Confirm your email", "supabase.io", "https://inayaflow.ai/auth/confirm?token=1", KD, None, 90) == ("IGNORE_OUR_APP", None), "supabase.io = our own app, ignored")
+ok(v.decide("Confirm your email", "supabase.io", "https://abc.supabase.co/auth/v1/verify?token=1&type=signup&redirect_to=https://inayaflow.ai/", KD, None, 90)[0] == "IGNORE_OUR_APP", "supabase link back to inayaflow.ai ignored")
+ok(v.decide("Confirm your email", "supabase.io", "https://abc.supabase.co/auth/v1/verify?token=1&redirect_to=https://other-site.example/", KD, None, 90)[0] == "UNKNOWN_SENDER", "supabase mail for another site goes to a person")
+for _g in ("github.com", "gitlab.com", "google.com", "openai.com"):
+    ok(v.decide("Confirm your email", _g, "https://%s/confirm?token=1" % _g, KD | {_g}, None, 90) == ("ACCOUNT_MAIL_DIRECTOR", None), "never opened: " + _g)
+ok(v.decide("Your DeepSeek verification code", "deepseek.com", "Your code is 123456", KD | {"deepseek.com"}, None, 90)[0] == "SESSION_ONLY_EXPIRED", "numeric code mail is never opened")
+ok("IGNORE_OUR_APP" in v.HANDLED_OUTCOMES and "ACCOUNT_MAIL_DIRECTOR" in v.HUMAN_OUTCOMES, "outcomes flagged")
+print("verify tests (24 Nov): ok")
 print("verify tests: %d passed" % n)
