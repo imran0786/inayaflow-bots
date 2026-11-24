@@ -1,0 +1,35 @@
+{
+ "cursor": 12,
+ "spent": {
+  "2026-11-24": 0.0586
+ },
+ "days": {
+  "2026-11-24": {
+   "added": 0,
+   "by_category": {},
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "deepseek": {
+     "calls": 12,
+     "cost": 0.0586,
+     "proposed": 0,
+     "spam": 0,
+     "dup": 0,
+     "dead": 0,
+     "added": 0,
+     "followed": 0,
+     "nofollow": 0,
+     "noindex": 0,
+     "unknown": 0,
+     "needs_signup": 0
+    }
+   },
+   "category_summary": "list-builder: +0 new (total 1956; by category none)",
+   "summary": "list-builder: sonnet +0 new (0 followed, $0.00) | deepseek +0 new (0 followed, $0.06) [dry run: nothing saved]",
+   "total": 1956
+  }
+ },
+ "rejected": [],
+ "last_summary": "list-builder: sonnet +0 new (0 followed, $0.00) | deepseek +0 new (0 followed, $0.06) [dry run: nothing saved]"
+}
