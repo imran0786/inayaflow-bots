@@ -186,6 +186,11 @@ def known_keys(cand, extra_files=()):
                 stack.extend(v for v in x.values() if isinstance(v, (dict, list)))
             elif isinstance(x, list):
                 stack.extend(x)
+    try:   # shared skip list (24 Nov 2026): domains the directory agent must never try again are never re-listed either
+        for dom in (json.load(open(os.path.join(DATA, "known_sites.json"), encoding="utf8")).get("domains") or {}):
+            add(dom)
+    except Exception:
+        pass
     for fn in extra_files:
         try:
             raw = open(fn, encoding="utf8", errors="ignore").read()

@@ -397,6 +397,117 @@ PRODUCT_DONE = NEVER_AGAIN | {"ONE_PER_DOMAIN"}
 RETRY_DAYS = {"CAPTCHA": 30, "OTHER": 3, "ERROR": 3, "TIMEOUT": 3, "EMAIL_CODE_NOT_RECEIVED": 3}
 MAX_TRIES = 2  # for the 3-day retry group
 
+# ---- domain-level memory (24 Nov 2026): a wall or a finished site at ANY product blocks the whole domain ----
+KNOWN_PATH = os.path.join(ROOT, "data", "known_sites.json")   # shared skip list: {"updated": "...", "domains": {"example.com": "why"}}
+WALL_STATUSES = {"PAID", "ONE_PER_DOMAIN", "CAPTCHA", "SOCIAL_LOGIN_ONLY", "BADGE_REQUIRED", "PHONE_REQUIRED"}
+WALL_NOTE_RE = re.compile(r"already have an account|account (already )?exists?|you already have|free (launch|slot|listing|submission)[^.]{0,30}(used|taken|already)|already used (your|the|this) free", re.I)
+SOFT = ("OTHER", "ERROR", "TIMEOUT")
+MAX_SOFT_PER_DOMAIN = 2
+PARK_DAYS = 14
+MAX_ALREADY_LISTED_PER_DOMAIN = 2
+WALLS_KEY, FAILS_KEY = "__walls__", "__domfails__"   # inside the state file (the workflow only carries that file)
+
+
+def dom_of(site_or_url):
+    u = site_or_url.get("url") if isinstance(site_or_url, dict) else site_or_url
+    return reg_domain(urlparse(u or "").hostname or "")
+
+
+def _is_entry(k, e):
+    return isinstance(e, dict) and not str(k).startswith("__") and "status" in e
+
+
+def load_known(path=None):
+    d = load_json(path or KNOWN_PATH, {})
+    if not isinstance(d, dict):
+        return {}
+    return {str(k).lower().removeprefix("www."): v for k, v in (d.get("domains") or {}).items()}
+
+
+def known_reason(domain, path=None):
+    return load_known(path).get((domain or "").lower().removeprefix("www."))
+
+
+def derive_wall(state, dom):
+    """Reason string when ANY record at this domain (site result or any product) shows a wall; else None."""
+    e = state.get(dom)
+    if not isinstance(e, dict):
+        return None
+    recs = [(e.get("status"), e.get("note"))] + [(p.get("status"), p.get("note")) for p in (e.get("products") or {}).values() if isinstance(p, dict)]
+    for st, note in recs:
+        if st in WALL_STATUSES:
+            return st
+        if note and WALL_NOTE_RE.search(str(note)):
+            return "account exists / free slot used"
+    return None
+
+
+def update_walls(state, today):
+    """Records each walled domain ONCE in state as WALLED with the reason (sticky: never cleared)."""
+    walls = state.setdefault(WALLS_KEY, {})
+    for k, e in list(state.items()):
+        if not _is_entry(k, e) or "." not in k:
+            continue
+        why = derive_wall(state, k)
+        if why and k not in walls:
+            walls[k] = {"status": "WALLED", "reason": why, "date": today}
+    return walls
+
+
+def note_soft(state, dom, status, today):
+    """Counts OTHER/ERROR/TIMEOUT per DOMAIN (all products together); the 2nd one parks the domain for 14 days."""
+    if status not in SOFT or not dom:
+        return
+    f = state.setdefault(FAILS_KEY, {}).setdefault(dom, {"n": 0, "parks": 0})
+    f["n"] += 1
+    f["last"] = today
+    if f["n"] >= MAX_SOFT_PER_DOMAIN:
+        f["parked_on"], f["n"], f["parks"] = today, 0, f.get("parks", 0) + 1
+
+
+def parked_until(state, dom):
+    """ISO date until which the domain is parked, 'forever' after a second park (needs the Director), or None."""
+    f = (state.get(FAILS_KEY) or {}).get(dom)
+    if not f or not f.get("parked_on"):
+        return None
+    if f.get("parks", 1) >= 2:
+        return "forever"
+    return (datetime.date.fromisoformat(f["parked_on"]) + datetime.timedelta(days=PARK_DAYS)).isoformat()
+
+
+def already_listed_count(state, dom):
+    e = state.get(dom) or {}
+    return sum(1 for p in (e.get("products") or {}).values() if isinstance(p, dict) and p.get("status") == "ALREADY_LISTED")
+
+
+def domain_block(state, dom, today, known_path=None):
+    """Why this domain must not be tried at all today (any product, main feed or backfill), or None."""
+    if not dom:
+        return None
+    k = known_reason(dom, known_path)
+    if k is not None:
+        return "known site: " + str(k)[:60]
+    w = (state.get(WALLS_KEY) or {}).get(dom)
+    why = (w or {}).get("reason") or derive_wall(state, dom)
+    if why:
+        return "walled: " + str(why)
+    if already_listed_count(state, dom) >= MAX_ALREADY_LISTED_PER_DOMAIN:
+        return "already listed (2 products)"
+    pu = parked_until(state, dom)
+    if pu == "forever" or (pu and today < pu):
+        return "parked until " + pu
+    return None
+
+
+def needs_director(state, today):
+    out = []
+    for dom in sorted(state.get(FAILS_KEY) or {}):
+        pu = parked_until(state, dom)
+        if pu == "forever" or (pu and today < pu):
+            out.append("%s (parked until %s)" % (dom, pu))
+    return out
+
+
 
 def nkey(name):
     return re.sub(r"[^a-z0-9]", "", str(name).lower())
@@ -441,6 +552,8 @@ def boosted(site, state, vstate):
 def eligible(site, state, old_state, today, vstate=None):
     """True when this site may be tried today. Never retries submitted/paid/dead/social/badge/phone sites."""
     if site.get("skip"):
+        return False
+    if domain_block(state, dom_of(site), today):
         return False
     keys = {nkey(site["name"]), reg_domain(urlparse(site["url"]).hostname or "")}
     boost = boosted(site, state, vstate)
@@ -500,13 +613,17 @@ def build_feed(state, old_state, today, vstate=None):
 
 
 def record(state, site, r, today):
+    note_soft(state, dom_of(site), r["status"], today)
     for k in (nkey(site["name"]), reg_domain(urlparse(site["url"]).hostname or "")):
         e = state.get(k, {})
         state[k] = {"name": site["name"], "status": r["status"], "date": today, "tries": e.get("tries", 0) + 1}
+        if r.get("note"):
+            state[k]["note"] = scrub(r["note"])[:80]
         if e.get("products"):
             state[k]["products"] = e["products"]
         if site.get("url"):
             state[k]["url"] = site["url"]
+    update_walls(state, today)
 
 
 def load_spend():
@@ -537,6 +654,8 @@ SOFT_FAILS = ("OTHER", "ERROR", "TIMEOUT")
 
 def product_todo(state, site, products, today):
     """Tool listings still to do on this site: no final result yet; a failed one (OTHER/ERROR/TIMEOUT) is retried once on a later day."""
+    if domain_block(state, dom_of(site), today):
+        return []
     e = state.get(reg_domain(urlparse(site["url"]).hostname or "")) or state.get(nkey(site["name"])) or {}
     done = e.get("products", {})
     out = []
@@ -554,8 +673,8 @@ def product_todo(state, site, products, today):
 def count_tool_today(state, today):
     """Tool-listing attempts already made today (all runs), from the per-product results in the state."""
     n, seen = 0, set()
-    for e in state.values():
-        if not isinstance(e, dict) or e.get("name") in seen:
+    for k, e in state.items():
+        if not _is_entry(k, e) or e.get("name") in seen:
             continue
         seen.add(e.get("name"))
         n += sum(1 for pr in (e.get("products") or {}).values() if pr.get("date") == today)
@@ -563,11 +682,13 @@ def count_tool_today(state, today):
 
 
 def record_product(state, site, product, r, today):
+    note_soft(state, dom_of(site), r["status"], today)
     for k in (nkey(site["name"]), reg_domain(urlparse(site["url"]).hostname or "")):
         e = state.setdefault(k, {"name": site["name"], "status": "SUBMITTED", "date": today, "tries": 1})
         pr = e.setdefault("products", {})
         old = pr.get(product["id"], {})
         pr[product["id"]] = {"status": r["status"], "date": today, "tries": old.get("tries", 0) + 1, "note": scrub(r.get("note", ""))[:80]}
+    update_walls(state, today)
 
 
 def skip_remaining_products(state, site, todo, today, why):
@@ -586,7 +707,7 @@ def backfill_sites(state, products, today):
             cat.setdefault(reg_domain(urlparse(d["submit_url"]).hostname or ""), {"name": d["name"], "url": d["submit_url"]})
     out, seen = [], set()
     for k, e in state.items():
-        if e.get("status") not in ("SUBMITTED", "ALREADY_LISTED") or e.get("name") in seen:
+        if not _is_entry(k, e) or e.get("status") not in ("SUBMITTED", "ALREADY_LISTED") or e.get("name") in seen:
             continue
         site = cat.get(k) or ({"name": e["name"], "url": e["url"]} if e.get("url") else None)
         if not site:
@@ -601,7 +722,7 @@ def backfill_sites(state, products, today):
 def count_today(state, today):
     seen, attempts, succ = set(), 0, 0
     for k, e in state.items():
-        if e.get("date") != today or e.get("name") in seen:
+        if not _is_entry(k, e) or e.get("date") != today or e.get("name") in seen:
             continue
         seen.add(e.get("name"))
         attempts += 1
@@ -643,6 +764,7 @@ def main():
     today = datetime.date.today().isoformat()
     state = load_json(STATE_PATH, {})
     old_state = load_json(OLD_STATE_PATH, {})
+    update_walls(state, today)
     manual = bool(batch)
     if manual:
         sites = json.load(open(os.path.join(ROOT, batch), encoding="utf8"))["sites"]
@@ -701,6 +823,8 @@ def main():
             fails = fails + 1 if r["status"] in SOFT_FAILS else 0
             if fails >= MAX_FAILS_IN_A_ROW:
                 break
+            if not manual and not DRY and domain_block(state, dom_of(s), today):
+                break   # a wall / 2nd ALREADY_LISTED / 2nd failure at this domain: no other product is tried here
             if r["status"] == "ONE_PER_DOMAIN":
                 if not manual and not DRY:
                     skip_remaining_products(state, s, todo[i + 1:], today, "one listing per company here")
@@ -730,6 +854,12 @@ def main():
     need = (" | NEEDS MORE CANDIDATES (%d untried left, below 30)" % left) if (not manual and left < 30) else ""
     line = "| %s | attempts %d | tool listings tried %d | successes today %d | cost %.2f USD | untried left %d%s |" % (today, att - att0, tool_att, succ, tot, left, need)
     print("SUMMARY " + line.strip("| "), flush=True)
+    nd = [] if manual else needs_director(state, today)
+    if nd:
+        print("NEEDS DIRECTOR LOOK: " + "; ".join(nd), flush=True)
+        line += " NEEDS DIRECTOR LOOK: " + "; ".join(nd) + " |"
+    if not manual and not DRY:
+        save()
     with open(LOG_PATH, "a", encoding="utf8") as f:
         f.write("\n## %s %s dry=%s primary=%s %s\n| site | product | group | status | model | secs | steps | cost | flags | note |\n|---|---|---|---|---|---|---|---|---|---|\n" % (
             today, datetime.datetime.utcnow().strftime("%H:%M UTC"), DRY, MODEL, "BATCH" if manual else "FEED"))

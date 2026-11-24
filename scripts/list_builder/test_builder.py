@@ -344,5 +344,12 @@ class Config(unittest.TestCase):
         self.assertEqual(float(re.search(r'LIST_BUILDER_DAY_USD_CAP: "([\d.]+)"', t).group(1)), b.DAY_CAP)
 
 
+class KnownSites(unittest.TestCase):
+    def test_known_sites_domains_are_deduped(self):
+        keys = b.known_keys({"sites": []})
+        for dom in ("awesomeindie.com", "apilist.fun", "saashub.com"):
+            self.assertIn(dom, keys)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -371,5 +371,112 @@ class HardAttemptStop(unittest.TestCase):
         self.assertIn("agent.preflight_limits()", w)
 
 
+class NoRepeats(unittest.TestCase):
+    """24 Nov 2026: a domain that is done or walled is never tried again (any product, feed or backfill)."""
+    T0, T1 = "2026-11-24", "2026-11-25"
+
+    def setUp(self):
+        import tempfile
+        self.kp = os.path.join(tempfile.mkdtemp(), "known.json")
+        json.dump({"domains": {}}, open(self.kp, "w"))
+        self._old = ag.KNOWN_PATH
+        ag.KNOWN_PATH = self.kp
+        self.site = {"name": "Dir", "url": "https://www.dir.example/submit"}
+        self.prods = ag.load_products()
+
+    def tearDown(self):
+        ag.KNOWN_PATH = self._old
+
+    def _listed(self, st):
+        ag.record(st, self.site, {"status": "SUBMITTED"}, self.T0)
+
+    def test_every_wall_status_blocks_the_whole_domain(self):
+        for wall in ("PAID", "ONE_PER_DOMAIN", "CAPTCHA", "SOCIAL_LOGIN_ONLY", "BADGE_REQUIRED", "PHONE_REQUIRED"):
+            st = {}
+            self._listed(st)
+            todo = ag.product_todo(st, self.site, self.prods, self.T0)
+            ag.record_product(st, self.site, todo[0], {"status": wall, "note": ""}, self.T0)
+            self.assertEqual(st[ag.WALLS_KEY]["dir.example"]["status"], "WALLED", wall)
+            self.assertEqual(ag.product_todo(st, self.site, self.prods, self.T1), [], wall)
+            self.assertFalse(ag.eligible(self.site, st, {}, self.T1), wall)
+            self.assertEqual(ag.backfill_sites(st, self.prods, self.T1), [], wall)
+
+    def test_wall_note_text_blocks_the_domain(self):
+        for note in ("You already have an account", "free launch already used on this account", "account exists"):
+            st = {}
+            self._listed(st)
+            todo = ag.product_todo(st, self.site, self.prods, self.T0)
+            ag.record_product(st, self.site, todo[0], {"status": "OTHER", "note": note}, self.T0)
+            self.assertIn("dir.example", st[ag.WALLS_KEY], note)
+            self.assertEqual(ag.product_todo(st, self.site, self.prods, self.T1), [], note)
+
+    def test_wall_is_found_in_old_state_without_the_walls_key(self):
+        st = {"dir.example": {"name": "Dir", "status": "SUBMITTED", "date": self.T0, "tries": 1, "url": self.site["url"],
+                              "products": {"x": {"status": "PAID", "date": self.T0, "tries": 1, "note": ""}}}}
+        self.assertEqual(ag.product_todo(st, self.site, self.prods, self.T1), [])
+        ag.update_walls(st, self.T1)
+        self.assertEqual(st[ag.WALLS_KEY]["dir.example"]["reason"], "PAID")
+
+    def test_already_listed_is_done_and_two_stop_the_domain(self):
+        st = {}
+        self._listed(st)
+        todo = ag.product_todo(st, self.site, self.prods, self.T0)
+        ag.record_product(st, self.site, todo[0], {"status": "ALREADY_LISTED", "note": ""}, self.T0)
+        self.assertNotIn(todo[0]["id"], [p["id"] for p in ag.product_todo(st, self.site, self.prods, self.T1)])   # that product is done
+        self.assertTrue(ag.product_todo(st, self.site, self.prods, self.T1))                                       # others still allowed
+        ag.record_product(st, self.site, todo[1], {"status": "ALREADY_LISTED", "note": ""}, self.T0)
+        self.assertEqual(ag.product_todo(st, self.site, self.prods, self.T1), [])
+        self.assertEqual(ag.backfill_sites(st, self.prods, self.T1), [])
+
+    def test_two_soft_failures_per_domain_park_it_14_days_across_products(self):
+        st = {}
+        self._listed(st)
+        todo = ag.product_todo(st, self.site, self.prods, self.T0)
+        ag.record_product(st, self.site, todo[0], {"status": "TIMEOUT", "note": ""}, self.T0)
+        self.assertTrue(ag.product_todo(st, self.site, self.prods, self.T1))        # one failure: still fine
+        ag.record_product(st, self.site, todo[1], {"status": "ERROR", "note": ""}, self.T0)   # a different product, same domain
+        self.assertEqual(ag.product_todo(st, self.site, self.prods, "2026-12-07"), [])   # day 13
+        self.assertTrue(ag.product_todo(st, self.site, self.prods, "2026-12-08"))        # day 14: parked period over
+        self.assertEqual(len(ag.needs_director(st, self.T1)), 1)
+        self.assertIn("dir.example", ag.needs_director(st, self.T1)[0])
+        self.assertEqual(ag.needs_director(st, "2026-12-08"), [])
+
+    def test_second_park_is_permanent(self):
+        st = {}
+        for d in ("2026-11-24", "2026-11-24", "2026-12-10", "2026-12-10"):
+            ag.note_soft(st, "dir.example", "OTHER", d)
+        self.assertEqual(ag.parked_until(st, "dir.example"), "forever")
+        self.assertIsNotNone(ag.domain_block(st, "dir.example", "2027-06-01"))
+
+    def test_site_level_soft_failures_count_with_product_ones(self):
+        st = {}
+        ag.record(st, self.site, {"status": "OTHER", "note": ""}, self.T0)
+        ag.record(st, self.site, {"status": "OTHER", "note": ""}, self.T0)
+        self.assertFalse(ag.eligible(self.site, st, {}, "2026-11-30"))
+
+    def test_known_sites_list_blocks_feed_and_backfill(self):
+        json.dump({"domains": {"dir.example": "listed"}}, open(self.kp, "w"))
+        self.assertFalse(ag.eligible(self.site, {}, {}, self.T0))
+        st = {"dir.example": {"name": "Dir", "status": "SUBMITTED", "date": self.T0, "tries": 1, "url": self.site["url"]}}
+        self.assertEqual(ag.product_todo(st, self.site, self.prods, self.T0), [])
+        self.assertEqual(ag.backfill_sites(st, self.prods, self.T0), [])
+        self.assertTrue(ag.eligible({"name": "Other", "url": "https://other.example/x"}, {}, {}, self.T0))
+
+    def test_the_shipped_known_sites_file_has_the_agreed_domains(self):
+        d = ag.load_known(self._old)
+        for dom in ("awesomeindie.com", "apilist.fun", "shipboost.io", "tipseason.com", "uiuxshowcase.com", "tinystartups.com", "findstack.com", "aidude.info",
+                    "thesaasdir.com", "saashub.com", "directree.io", "huntscreens.com", "rankmyai.com", "startupdope.com", "ainave.com", "toools.design",
+                    "zplatform.ai", "aitoolboard.com"):
+            self.assertIn(dom, d)
+
+    def test_state_helper_keys_do_not_break_the_counters(self):
+        st = {}
+        self._listed(st)
+        ag.note_soft(st, "dir.example", "OTHER", self.T0)
+        ag.update_walls(st, self.T0)
+        self.assertEqual(ag.count_today(st, self.T0), (1, 1))
+        self.assertEqual(ag.count_tool_today(st, self.T0), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
