@@ -39,6 +39,7 @@ AGENT_STATE_PATH = os.path.join(OPS, "directory_agent_state.json")
 EXTRA_DOMAINS = os.environ.get("VERIFY_EXTRA_DOMAINS", "")
 
 KW_DONE, KW_SEEN = "IFDirHandled", "IFDirSeen"
+KW_RECHECK = "IFDirRecheck1"   # 24 Nov 2026: mails set aside (Seen) before the wider sign-up domain list get ONE more look
 KW_ROUTE_VERIFY, KW_ROUTE_PREFIX = "IFRoute_DIRECTORY_VERIFY", "IFRoute_"
 
 VERIFY_SUBJ_RE = re.compile(r"confirm|verif|activat|magic.?link|sign.?in|log.?in|one.?time|\bcode\b|\botp\b|complete your", re.I)
@@ -412,6 +413,12 @@ def main():
                 recheck = set((d2s[0] or b"").split()) if t2 == "OK" else set()
             except Exception:
                 recheck = set()
+            try:   # 24 Nov 2026: every mail set aside as Seen (needs a person) before the wider sign-up list gets ONE more look
+                t3, d3s = imap.uid("SEARCH", None, "SINCE", since.strftime("%d-%b-%Y"), "KEYWORD", KW_SEEN, "UNKEYWORD", KW_DONE, "UNKEYWORD", KW_RECHECK)
+                once = set((d3s[0] or b"").split()) if t3 == "OK" else set()
+            except Exception:
+                once = set()
+            recheck |= once
             uids += [u for u in recheck if u not in uids]
             for uid in uids:
                 t, d = imap.uid("FETCH", uid, "(FLAGS BODY.PEEK[])")
@@ -485,6 +492,8 @@ def main():
                     kw = KW_DONE if outcome in HANDLED_OUTCOMES else KW_SEEN if outcome in HUMAN_OUTCOMES else None
                     if kw:
                         imap.uid("STORE", uid, "+FLAGS", "(%s)" % kw)
+                    if uid in once:
+                        imap.uid("STORE", uid, "+FLAGS", "(%s)" % KW_RECHECK)
                 counts[outcome] = counts.get(outcome, 0) + 1
                 print("RESULT | %s | %s" % (dom or "?", outcome), flush=True)
                 rows.append({"mail": md.strftime("%m-%d %H:%M"), "dom": dom, "subj": subj.replace("|", "/")[:90], "outcome": outcome,
