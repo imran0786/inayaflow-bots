@@ -105,5 +105,14 @@ for _g in ("github.com", "gitlab.com", "google.com", "openai.com"):
     ok(v.decide("Confirm your email", _g, "https://%s/confirm?token=1" % _g, KD | {_g}, None, 90) == ("ACCOUNT_MAIL_DIRECTOR", None), "never opened: " + _g)
 ok(v.decide("Your DeepSeek verification code", "deepseek.com", "Your code is 123456", KD | {"deepseek.com"}, None, 90)[0] == "SESSION_ONLY_EXPIRED", "numeric code mail is never opened")
 ok("IGNORE_OUR_APP" in v.HANDLED_OUTCOMES and "ACCOUNT_MAIL_DIRECTOR" in v.HUMAN_OUTCOMES, "outcomes flagged")
+# 24 Nov 2026 (second pass): mail filed elsewhere by the router is ours only for a confirm-type subject from a known sign-up site, never a person's reply
+KK = {"newdir.io"}
+ok(v.ours_when_filed_elsewhere("newdir.io", KK, "Verify your email - NewDir", True), "other route + verify subject + known site = ours")
+ok(not v.ours_when_filed_elsewhere("newdir.io", KK, "Re: Verify your email", True), "other route + a Re: reply = a person, never ours")
+ok(not v.ours_when_filed_elsewhere("newdir.io", KK, "Re: Confirm your email", False), "Re: is never ours on the account-mail route either")
+ok(not v.ours_when_filed_elsewhere("newdir.io", KK, "Fwd: Verify your email", True) and not v.ours_when_filed_elsewhere("newdir.io", KK, "FW: Verify your email", False), "Fwd:/FW: never ours")
+ok(all(v.REPLY_FWD_RE.match(x) for x in ("Re: a", "RE: a", "Fwd: a", "FW: a", "AW: a", "SV: a")) and not v.REPLY_FWD_RE.match("Verify your email"), "reply/forward prefix regex")
+ok(not v.ours_when_filed_elsewhere("stranger.com", KK, "Verify your email", True), "unknown site = not ours")
+ok(not v.ours_when_filed_elsewhere("newdir.io", KK, "Weekly digest", True), "no verify subject = not ours")
 print("verify tests (24 Nov): ok")
 print("verify tests: %d passed" % n)

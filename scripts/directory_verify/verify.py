@@ -241,6 +241,17 @@ def link_label(u):
     return "%s%s" % (p.hostname or "", re.sub(r"[A-Za-z0-9_-]{16,}", "[token]", p.path or "")[:60])
 
 
+REPLY_FWD_RE = re.compile(r"\s*(re|fwd?|aw|sv)\s*:", re.I)   # Re: / Fwd: / FW: / AW: / SV: : confirm links only come in fresh confirm mails
+
+
+def ours_when_filed_elsewhere(dom, known, subject, other):
+    """Mail the router filed as account/status mail (other=False) or somewhere else (other=True): ours only for a confirm-type subject from a site we
+    signed up on, and never a person's reply ("Re:") when it was filed elsewhere."""
+    if dom not in known or not VERIFY_SUBJ_RE.search(subject or "") or REPLY_FWD_RE.match(subject or ""):
+        return False
+    return True
+
+
 def decide(subject, sender_dom, text, known, site_status, age_min, routed_verify=True):
     """Pure decision for one mail. Returns (outcome, link or None).
     outcome: IGNORE | WAIT | UNKNOWN_SENDER | SKIPPED_NEWSLETTER | SITE_CLOSED | BADGE_ASK | SKIPPED_PAID_OFFER | OPEN_LINK | SESSION_ONLY_SITE_FINISHED |
@@ -400,6 +411,7 @@ def main():
         print("verify: IMAP LOGIN FAILED")
         return 3
     rows, counts, pending, opened = [], {}, 0, 0
+    skipped = {}   # 24 Nov 2026: mails passed over without an outcome, by reason (shown in the SUMMARY line so nothing vanishes silently)
     browser = ctx = pw_ctx = None
     try:
         for folder in folders(imap):
@@ -429,8 +441,7 @@ def main():
                 flags = parse_flags(d[0][0].decode(errors="ignore"))
                 routes = [f for f in flags if f.startswith(KW_ROUTE_PREFIX)]
                 alt = bool(routes) and KW_ROUTE_VERIFY not in routes
-                if alt and not (set(routes) & ALT_ROUTES):
-                    continue  # the router filed it elsewhere (newsletter, partner...)
+                other = alt and not (set(routes) & ALT_ROUTES)   # 24 Nov 2026: filed elsewhere (newsletter, partner...): ours only when a confirm-type subject comes from a site we signed up on
                 msg = email.message_from_bytes(d[0][1], policy=policy.default)
                 try:
                     md = parsedate_to_datetime(str(msg.get("Date"))).astimezone(datetime.timezone.utc)
@@ -443,12 +454,17 @@ def main():
                 text = mail_text(msg)
                 if dom == SUPABASE_SENDER:
                     dom = supabase_site(text, known) or dom   # a directory that sends its mail through Supabase Auth
-                if alt and (dom not in known or not VERIFY_SUBJ_RE.search(subj)):
-                    continue  # filed as account/status mail: only a confirm-type subject from a site we signed up on is ours
+                if alt and not ours_when_filed_elsewhere(dom, known, subj, other):
+                    skipped["other_route" if other else "account_mail_not_ours"] = skipped.get("other_route" if other else "account_mail_not_ours", 0) + 1
+                    continue  # filed as account/status mail: only a confirm-type subject from a site we signed up on is ours (never a person's reply)
+                if REPLY_FWD_RE.match(subj):   # on ANY route: a reply or forward is never a fresh confirm mail
+                    skipped["reply_or_forward"] = skipped.get("reply_or_forward", 0) + 1
+                    continue
                 age = (now - md).total_seconds() / 60
                 st = site_status_for(dom, agent_state)
                 outcome, link = decide(subj, dom, text, known, st, age, routed_verify=(KW_ROUTE_VERIFY in routes) or alt)
                 if outcome in ("IGNORE", "WAIT"):
+                    skipped[outcome.lower()] = skipped.get(outcome.lower(), 0) + 1
                     continue
                 if uid in recheck and outcome != "OPEN_LINK":
                     continue  # still nothing we may do: already listed for a person, do not list it twice
@@ -539,8 +555,9 @@ def main():
                 for r in human:
                     f.write("\n- %s | %s | %s | **%s** | %s\n  - excerpt: %s\n" % (r["mail"], r["dom"], r["subj"], r["outcome"], r["detail"], r["excerpt"]))
         json.dump(vstate, open(VSTATE_PATH, "w", encoding="utf8"), indent=1, sort_keys=True)
-    print("SUMMARY verify: dry=%s open=%s known_domains=%d mails=%d links_pending=%d %s" % (
-        DRY, do_open, len(known), len(rows), pending, " ".join("%s=%d" % kv for kv in sorted(counts.items()))), flush=True)
+    print("SUMMARY verify: dry=%s open=%s known_domains=%d mails=%d links_pending=%d %s skipped: %s" % (
+        DRY, do_open, len(known), len(rows), pending, " ".join("%s=%d" % kv for kv in sorted(counts.items())),
+        " ".join("%s=%d" % kv for kv in sorted(skipped.items())) or "none"), flush=True)
     out = os.environ.get("GITHUB_OUTPUT")
     if out:
         with open(out, "a") as f:
