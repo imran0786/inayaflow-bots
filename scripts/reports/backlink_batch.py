@@ -25,6 +25,7 @@ from urllib.parse import urljoin, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as c
+import targets as tg   # QUICK_WIN_PATHS: the one shared quick-win list (Director updates weekly from Search Console; last 24 Nov 2026)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CANDS = os.path.join(ROOT, "data", "directories_candidates.json")
@@ -332,7 +333,13 @@ def list_builder(data, known_extra, limit=MAX_NEW_SITES, get=c.http_get, ai=c.ha
 TARGET_PAGES = ["https://inayaflow.ai/", "https://inayaflow.ai/blog/tiktok-hashtag-strategy"] + [
     "https://inayaflow.ai/tools/" + t for t in ("tiktok-follower-count-checker", "tiktok-money-calculator", "tiktok-shadowban-checker", "tiktok-hashtag-generator",
                                                 "tiktok-hashtag-counter", "tiktok-engagement-rate-calculator", "best-time-to-post-on-tiktok-today",
-                                                "tiktok-coins-to-usd", "tiktok-username-generator")]
+                                                "tiktok-coins-to-usd", "tiktok-username-generator")] + [
+    "https://inayaflow.ai" + p for p in tg.QUICK_WIN_PATHS if p != "/blog/tiktok-hashtag-strategy"]   # the 6 other quick-win pages (24 Nov 2026)
+
+
+def page_load(u, counts):
+    """Mails so far today for our page u, divided by its weight: a quick-win page counts as half as busy, so it is offered twice as many mails."""
+    return counts.get(u, 0) / (tg.QUICK_WIN_WEIGHT if tg.is_quick_win(u) else 1)
 
 
 def sent_today_by_page(state, today):
@@ -349,13 +356,14 @@ def sent_today_by_page(state, today):
 # generator, the hashtag counter or the hashtag guide; a tools round-up can get the tools page or the homepage (Director decision, 23 Nov 2026:
 # "a /tools round-up article may be offered the /tools page OR the homepage - allowed"). Nothing else is ever swapped in.
 _HASH = ["hashtags", "hashtag-strategy", "hashtag-counter"]
-ALTERNATES = {"hashtags": _HASH, "hashtag-strategy": _HASH, "hashtag-counter": _HASH, "/tools": ["/tools", "home"]}
+ALTERNATES = {"hashtags": _HASH, "hashtag-strategy": _HASH, "hashtag-counter": _HASH, "/tools": ["/tools", "home"],
+              "shadowban": ["shadowban", "shadowban-guide"], "shadowban-guide": ["shadowban-guide", "shadowban"]}   # same topic: the self-check tool or our shadowban guide (quick win)
 
 
 def best_match(p, counts):
     """The match key (one of ALTERNATES for the prospect's topic) whose page has had the fewest mails today; target pages first."""
     opts = [m for m in ALTERNATES.get(p["match"], [p["match"]]) if m in MATCH]
-    return min(opts, key=lambda m: (MATCH[m][0] not in TARGET_PAGES, counts.get(MATCH[m][0], 0), opts.index(m)))
+    return min(opts, key=lambda m: (MATCH[m][0] not in TARGET_PAGES, page_load(MATCH[m][0], counts), opts.index(m)))
 
 
 def next_by_rotation(remaining, counts):
@@ -364,7 +372,7 @@ def next_by_rotation(remaining, counts):
     def key(ip):
         i, p = ip
         u = MATCH[best_match(p, counts)][0]
-        return (u not in TARGET_PAGES, counts.get(u, 0), i)
+        return (u not in TARGET_PAGES, page_load(u, counts), i)
     return min(enumerate(remaining), key=key)[0] if remaining else None
 
 
@@ -393,6 +401,18 @@ MATCH = {  # our page per topic: url, topic words for the judge, one TRUE line a
                         "We built a free TikTok hashtag counter and caption length checker. It counts hashtags and characters, and needs no account.", "our free hashtag counter"),
     "username": ("https://inayaflow.ai/tools/tiktok-username-generator", "choosing a TikTok username or handle (ideas, rules for usernames)",
                  "We built a free TikTok username generator. It gives 20 ideas from a name and niche, each checked against TikTok's username rules, and needs no account.", "our free username generator"),
+    "no-views": ("https://inayaflow.ai/blog/why-is-my-tiktok-getting-no-views", "why a TikTok video gets no views (views stuck at 0 or a couple of hundred)",
+                 "We published a guide on why a TikTok gets no views: it works through the checks in order, from TikTok's own eligibility rules to your hook and timing.", "our guide"),
+    "shadowban-guide": ("https://inayaflow.ai/blog/tiktok-shadowban", "TikTok shadowbans: what is real, how to check an account, how to appeal",
+                        "We published a guide on TikTok shadowbans: what TikTok does and does not say, how to check your account step by step, and how to appeal.", "our guide"),
+    "analyze": ("https://inayaflow.ai/analyze", "TikTok analytics tools / analysing a TikTok account",
+                "We built a free TikTok analytics tool and profile analyzer: type a public @username to see typical views, engagement rate and what to fix.", "our free analyzer"),
+    "how-many-views": ("https://inayaflow.ai/blog/how-many-views-is-good-on-tiktok", "what counts as a good number of views on TikTok / TikTok view benchmarks",
+                       "We published a guide on how many views is good on TikTok, with what 213 channels got per video.", "our guide"),
+    "hooks": ("https://inayaflow.ai/blog/tiktok-hooks-that-stop-the-scroll", "TikTok video hooks / the first seconds of a TikTok",
+              "We published a guide to 7 TikTok hook types with examples, and how to test which hook works for you.", "our guide"),
+    "captions": ("https://inayaflow.ai/blog/tiktok-captions", "writing TikTok captions (length, hashtags, examples)",
+                 "We published a guide on how to write TikTok captions: what TikTok says about length and hashtags, a simple formula and examples.", "our guide"),
     "guide": ("https://inayaflow.ai/blog/best-time-to-post-on-tiktok", "the best time to post on TikTok",
               "We published a guide on the best time to post on TikTok.", "our guide"),
     "scripts": ("https://inayaflow.ai/blog/tiktok-scripts-chatgpt-plugin", "writing TikTok scripts or hooks with ChatGPT / AI prompts for TikTok scripts",
@@ -403,7 +423,10 @@ SUBJECT = {"hashtag-counter": "A free hashtag counter to go with your TikTok cap
            "best-time tool": "A free tool to go with your best time to post article", "engagement": "A free calculator to go with your engagement rate article",
            "shadowban": "A free self-check to go with your shadowban article", "money": "A free calculator to go with your TikTok earnings article",
            "coins": "A free calculator to go with your TikTok coins article", "guide": "A guide to go with your best time to post article",
-           "scripts": "A TikTok script guide to go with your ChatGPT article"}
+           "scripts": "A TikTok script guide to go with your ChatGPT article",
+           "no-views": "A guide to go with your TikTok no-views article", "shadowban-guide": "A shadowban guide to go with your article",
+           "analyze": "A free TikTok analyzer for your tools list", "how-many-views": "A views benchmark guide to go with your article",
+           "hooks": "A TikTok hooks guide to go with your article", "captions": "A captions guide to go with your TikTok caption article"}
 EMAIL_RE = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
 BANNED = [r"\$", "£", "€", r"\bpay\b", r"\bpaying\b", r"\bpayment", r"\bprice", r"\binvoice", r"\bdiscount", r"\bfee\b", r"\bcost",
           r"\bguarantee", r"\bbest\b.*\bin the world", r"#1\b"]
@@ -496,7 +519,7 @@ def build_followup(subject, title):
 def guard(subject, body, covers=""):
     """None when the mail is safe to queue, else the reason."""
     text = subject + "\n" + body
-    if re.search(FIRST_PERSON, text):
+    if re.search(FIRST_PERSON, re.sub(r"https?://[^\s)>\]]+", " ", text)):     # URL slugs like why-is-my-tiktok-... are not first person
         return "not company voice (I / me / my)"
     for pat in BANNED:
         if re.search(pat, text, re.I):

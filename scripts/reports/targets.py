@@ -27,7 +27,35 @@ PAGES = [  # (label, path on inayaflow.ai, listing id in data/listings.json, min
     ("Best time to post", "/tools/best-time-to-post-on-tiktok-today", "best-time-to-post", 4),
     ("Coins to USD", "/tools/tiktok-coins-to-usd", "coins-to-usd", 4),
     ("Username generator", "/tools/tiktok-username-generator", "username-generator", 4),
+    ("No views guide", "/blog/why-is-my-tiktok-getting-no-views", None, 4),
+    ("Shadowban guide", "/blog/tiktok-shadowban", None, 4),
+    ("Account analyzer", "/analyze", None, 4),
+    ("How many views is good guide", "/blog/how-many-views-is-good-on-tiktok", None, 4),
+    ("Hooks guide", "/blog/tiktok-hooks-that-stop-the-scroll", None, 4),
+    ("Captions guide", "/blog/tiktok-captions", None, 4),
 ]
+
+# QUICK-WIN pages: close to Google page 1-2 now (Search Console 28 days), so they get TWICE the slots of other pages in the hunter rotation, the
+# DEV poster and the outreach rotation, and are shown first in the daily report. ONE list, imported by hunter.py, poster.py and backlink_batch.py.
+# Director updates weekly from Search Console; last 24 Nov 2026 (impressions, average position: hashtag-strategy 858 / 11.8, no-views 141 / 7.0,
+# shadowban guide 65 / 8.4, /analyze 96 / 17.0, how-many-views 93 / 18.2, hooks 75 / 17.4, captions 68 / 16.1).
+QUICK_WIN_PATHS = (
+    "/blog/tiktok-hashtag-strategy",
+    "/blog/why-is-my-tiktok-getting-no-views",
+    "/blog/tiktok-shadowban",
+    "/analyze",
+    "/blog/how-many-views-is-good-on-tiktok",
+    "/blog/tiktok-hooks-that-stop-the-scroll",
+    "/blog/tiktok-captions",
+)
+QUICK_WIN_WEIGHT = 2        # a quick-win page gets twice the slots (tools and the homepage keep theirs)
+
+
+def is_quick_win(path_or_url):
+    """True for a quick-win page given its path ("/analyze") or full URL; query and trailing slash are ignored."""
+    p = urlparse(str(path_or_url)).path or "/"
+    p = "/" if p.strip("/") == "" else "/" + p.strip("/")
+    return p in QUICK_WIN_PATHS
 DAY_TARGET = 1
 WEEK_TARGET = 7
 
@@ -107,9 +135,15 @@ def build_targets(live_rows, batch_state, dir_state, today=None):
          "Target: %d new LIVE backlink per page per day; %d a week per page, at least 5 followed for the homepage and 4 followed for each other page. "
          "RED = behind that pace. LIVE is counted when the link checker first sees the link on the site (rel read from the page code). "
          "Mails and directory submissions are lead indicators, not links." % (DAY_TARGET, WEEK_TARGET), "",
-         "| page | target/day | new LIVE today (followed / nofollow) | this week (followed / nofollow) vs %d | min followed (week) | mails queued today | directory submissions today | status |" % WEEK_TARGET,
-         "|---|---|---|---|---|---|---|---|"]
-    for label, path, pid, minf in PAGES:
+         "Quick wins first: pages already close to Google page 1-2 (Search Console, Director updates weekly, last 24 Nov 2026) get twice the slots in every robot.", ""]
+    head = ["| page | target/day | new LIVE today (followed / nofollow) | this week (followed / nofollow) vs %d | min followed (week) | mails queued today | directory submissions today | status |" % WEEK_TARGET,
+            "|---|---|---|---|---|---|---|---|"]
+    ordered = [p for p in PAGES if p[1] in QUICK_WIN_PATHS] + [p for p in PAGES if p[1] not in QUICK_WIN_PATHS]
+    for label, path, pid, minf in ordered:
+        if path == "/blog/tiktok-hashtag-strategy":
+            L += ["### Quick wins (page 1-2 now)", ""] + head
+        elif path == "/":
+            L += ["", "### Other targets (homepage and tools)", ""] + head
         t, w = live[path]["today"], live[path]["week"]
         mail_n = mails.get(path, 0)
         dir_n = dirs.get(pid, 0) if pid else "n/a (a guide, not listed)"

@@ -106,6 +106,20 @@ class Rotation(unittest.TestCase):
         self.assertTrue(any(p[2] == "guide" for p in P.PAGES))
 
 
+class QuickWinDefault(unittest.TestCase):
+    def test_without_a_tier_file_quick_wins_come_first_and_tools_stay_in(self):
+        P.PRIORITY_PATH = os.path.join(tempfile.mkdtemp(), "none.json")
+        self.addCleanup(setattr, P, "PRIORITY_PATH", os.path.join(P.ROOT, "data", "push_priority.json"))
+        st, order = {"posts": []}, []
+        for i in range(P.REST_DAYS + 5):
+            day = (__import__("datetime").date(2026, 12, 1) + __import__("datetime").timedelta(days=i)).isoformat()
+            p = REAL_PICK(st, day)
+            order.append(p)
+            st["posts"].append({"slug": p[0], "date": day})
+        self.assertTrue(all(P.tg.is_quick_win(p[1]) for p in order[:7]))              # the 7 quick-win pages first
+        self.assertFalse(any(P.tg.is_quick_win(p[1]) for p in order[7:14]))          # then the tools and the other guides: they stay in
+
+
 class PushPriority(unittest.TestCase):
     TIER1 = ["guide-no-views", "guide-views-going-down", "guide-shadowban", "guide-hashtag-strategy", "shadowban-checker", "guide-captions", "analyze", "guide-hooks", "guide-how-many-views"]
     TIER2 = ["follower-count-checker", "guide-trending-hashtags", "hashtag-generator", "guide-growth-tool"]
@@ -145,7 +159,7 @@ class PushPriority(unittest.TestCase):
         self.assertIn("nope", out.getvalue())
         self.assertEqual(p[0], "money-calculator")
         P.PRIORITY_PATH = os.path.join(tempfile.mkdtemp(), "missing.json")
-        self.assertEqual(REAL_PICK({"posts": []}, "2026-12-01")[0], P.PAGES[0][0])
+        self.assertEqual(REAL_PICK({"posts": []}, "2026-12-01")[0], [q for q in P.PAGES if P.tg.is_quick_win(q[1])][0][0])   # no file: first quick-win page
 
 
 def fake_ai_factory(body, verdict="PASS"):

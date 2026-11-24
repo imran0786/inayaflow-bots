@@ -24,12 +24,23 @@ class HunterBudget(unittest.TestCase):
 
 class Hunter(unittest.TestCase):
     def test_every_page_meets_every_type_over_55_slots(self):
-        self.assertEqual(len(hu.PAGES), 11)                                        # homepage, hashtag guide, 9 tools
+        self.assertEqual(len(hu.PAGES), 17)                                        # homepage, hashtag guide, 9 tools, 6 more quick-win pages
+        self.assertEqual(len(hu.ROTATION), 24)                                     # the 7 quick-win pages are listed twice
         seen = set()
-        for n in range(55):
-            page, typ = hu.PAGES[n % 11], hu.TYPES[(n // 11) % 5]
+        for n in range(24 * 5):
+            page, typ = hu.ROTATION[n % 24], hu.TYPES[(n // 24) % 5]
             seen.add((page[0], typ[0]))
-        self.assertEqual(len(seen), 55)
+        self.assertEqual(len(seen), 17 * 5)                                        # every page still meets every type over 120 slots
+        counts = {}
+        for p in hu.ROTATION:
+            counts[p[0]] = counts.get(p[0], 0) + 1
+        quick = {p[0] for p in hu.PAGES if hu.tg.is_quick_win(p[1])}
+        self.assertEqual(len(quick), 7)
+        for slug in counts:
+            self.assertEqual(counts[slug], 2 if slug in quick else 1)               # quick wins get TWICE the slots; tools and homepage keep theirs
+        for slug in ("homepage", "follower-checker", "money-calculator", "hashtag-generator"):
+            self.assertEqual(counts[slug], 1)
+        self.assertEqual(hu.slot(at(9), 0)[0], hu.ROTATION[hu.slot(at(9), 0)[2] % 24])
         self.assertEqual(len({hu.slot(at(h))[2] for h in range(0, 24, 3)}), 8)      # 8 different slots a day (every 3 hours)
         self.assertEqual(hu.MAX_COST, 0.60)
         self.assertEqual(hu.JOBS_PER_RUN, 2)

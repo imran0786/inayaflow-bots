@@ -17,7 +17,8 @@ import common as c
 
 PAGE_MATCH = {"homepage": "home", "hashtag-strategy": "hashtag-strategy", "follower-checker": "followers", "money-calculator": "money",
               "shadowban-checker": "shadowban", "hashtag-generator": "hashtags", "hashtag-counter": "hashtag-counter",
-              "engagement-rate": "engagement", "best-time": "best-time tool", "coins-to-usd": "coins", "username-generator": "username"}
+              "engagement-rate": "engagement", "best-time": "best-time tool", "coins-to-usd": "coins", "username-generator": "username",
+              "no-views": "no-views", "shadowban-guide": "shadowban-guide", "analyze": "analyze", "how-many-views": "how-many-views", "hooks": "hooks", "captions": "captions"}
 EMAIL = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 BAD_LOCAL = re.compile(r"^(noreply|no-reply|donotreply|do-not-reply|abuse|privacy|dmca|legal|postmaster|webmaster@)", re.I)
 MAIL_TYPES = {"blog_article", "resource_page"}

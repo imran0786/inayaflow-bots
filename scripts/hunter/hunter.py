@@ -20,6 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "reports"))
 import common as c
+import targets as tg   # QUICK_WIN_PATHS: the one shared quick-win list (Director updates weekly from Search Console; last 24 Nov 2026)
 
 BRANCH = "ops-jobs"
 WORK = os.environ.get("HUNTER_WORK", "/tmp/ops_jobs_hunter")
@@ -52,7 +53,22 @@ PAGES = [  # (slug used in the job id and the result's "page" field, URL, what i
      "TikTok coins, gifts and their value in dollars"),
     ("username-generator", "https://inayaflow.ai/tools/tiktok-username-generator", "our free TikTok username generator (20 ideas checked against TikTok's rules)",
      "choosing a TikTok username"),
+    # QUICK WINS (24 Nov 2026): one-liners from each live page's title / H1 / meta description, read with a GET that day
+    ("no-views", "https://inayaflow.ai/blog/why-is-my-tiktok-getting-no-views", "our guide: why a TikTok gets no views (stuck at 0 or a couple of hundred) and how to fix it, checks in order",
+     "why a TikTok video gets no views / views stuck at 0 or 200"),
+    ("shadowban-guide", "https://inayaflow.ai/blog/tiktok-shadowban", "our guide: what TikTok says about shadowbans, how to check your account step by step, and how to appeal",
+     "TikTok shadowbans: what is real, how to check, how to appeal"),
+    ("analyze", "https://inayaflow.ai/analyze", "our free TikTok analytics tool and profile analyzer (type a public @username for typical views, engagement rate and what to fix)",
+     "TikTok analytics tools / analysing a TikTok account"),
+    ("how-many-views", "https://inayaflow.ai/blog/how-many-views-is-good-on-tiktok", "our guide: how many views is good on TikTok, with benchmarks from 213 channels (2026)",
+     "what counts as a good number of views on TikTok / TikTok view benchmarks"),
+    ("hooks", "https://inayaflow.ai/blog/tiktok-hooks-that-stop-the-scroll", "our guide: 7 TikTok hook types with examples and how to test which works",
+     "TikTok video hooks / the first seconds of a TikTok"),
+    ("captions", "https://inayaflow.ai/blog/tiktok-captions", "our guide: how to write TikTok captions (length, hashtags, a simple formula, examples)",
+     "writing TikTok captions / caption length"),
 ]
+# Rotation: every page once, then the quick-win pages again, so a quick-win page gets TWICE the slots (tools and homepage keep theirs).
+ROTATION = list(PAGES) + [p for p in PAGES if tg.is_quick_win(p[1])] * (tg.QUICK_WIN_WEIGHT - 1)
 TYPES = [  # (type value in the result, what to find)
     ("blog_article", "BLOG ARTICLES or posts on EXACTLY the page's topic, published or updated in 2025-2026, by a site that could plausibly link to a free tool or guide. "
                      "Needs an e-mail address PRINTED on that site's own page (article, /contact, /about, /write-for-us). type = blog_article."),
@@ -67,10 +83,10 @@ TYPES = [  # (type value in the result, what to find)
 
 def slot(now=None, k=0):
     """(page, type, slot number): 8 runs a day (every 3 hours) x JOBS_PER_RUN jobs; k = 0..JOBS_PER_RUN-1 is the job inside the run.
-    Slot numbers step by 1 per job, so every page still meets every type over 55 slots."""
+    Slot numbers step by 1 per job; the rotation lists quick-win pages twice (ROTATION), every page still meets every type."""
     now = now or c.now()
     n = (now.timetuple().tm_yday * 8 + now.hour // 3) * JOBS_PER_RUN + k
-    return PAGES[n % len(PAGES)], TYPES[(n // len(PAGES)) % len(TYPES)], n
+    return ROTATION[n % len(ROTATION)], TYPES[(n // len(ROTATION)) % len(TYPES)], n
 
 
 def job_id(now, page, typ):
