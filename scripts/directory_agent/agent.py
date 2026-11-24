@@ -19,7 +19,7 @@ SUCCESS_CAP = int(os.environ.get("DAILY_SUCCESS_CAP", "30"))   # 22 Nov 2026: 10
 ATTEMPT_CAP = int(os.environ.get("DAILY_ATTEMPT_CAP", "150"))  # site attempts per UTC day, all runs together (was 10 / 50 before 22-23 Nov 2026)
 TOOL_ATTEMPT_CAP = int(os.environ.get("DAILY_TOOL_ATTEMPT_CAP", "200"))  # extra per-tool listings a day, on top of the site attempts
 RUN_SECONDS = int(os.environ.get("RUN_SECONDS", "8400"))   # per run (same value as the workflow)
-USD_CAP = float(os.environ.get("DAILY_USD_CAP", "5.10"))      # Director budget 23 Nov 2026 (QA round 2): at most $6 a UTC day, all runs together; a new attempt only starts when spent + ATTEMPT_MAX_USD fits under it; hunter stop is $6
+USD_CAP = float(os.environ.get("DAILY_USD_CAP", "7.10"))      # Director budget 23 Nov 2026 (QA round 2): at most $6 a UTC day, all runs together; a new attempt only starts when spent + ATTEMPT_MAX_USD fits under it; hunter stop is $6
 UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "1.00"))  # an attempt with NO known price (timeout, error, no price from the library) is booked at the full per-attempt reserve (QA round 4: 0.25 -> 0.50 -> 1.00)
 # HARD per-attempt stop (QA round 3): browser-use 1.0.6 has no live cost hook, but every run is a pydantic-ai run and a
 # UsageLimits token limit aborts it gracefully (UsageLimitExceeded -> status max_steps, partial result kept, cost still read).

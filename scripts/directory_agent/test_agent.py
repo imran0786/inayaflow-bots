@@ -69,7 +69,7 @@ class Listings(unittest.TestCase):
 class Budget(unittest.TestCase):
     def test_defaults_match_the_workflow(self):
         self.assertEqual(ag.RUN_SECONDS, 8400)                 # below the 150-minute step timeout
-        self.assertEqual(ag.USD_CAP, 5.10)
+        self.assertEqual(ag.USD_CAP, 7.10)
         self.assertEqual(ag.ATTEMPT_MAX_USD, 1.0)
 
     def test_dollar_cap_counts_priced_and_unpriced_attempts(self):
@@ -366,7 +366,7 @@ class HardAttemptStop(unittest.TestCase):
         w = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "workflows", "directory-agent.yml"), encoding="utf8").read()
         self.assertIn("group: directory-agent", w)
         self.assertIn("cancel-in-progress: false", w)
-        self.assertIn('DAILY_USD_CAP: "5.10"', w)
+        self.assertIn('DAILY_USD_CAP: "7.10"', w)
         self.assertIn('ATTEMPT_MAX_USD: "1.00"', w)
         self.assertIn("agent.preflight_limits()", w)
 

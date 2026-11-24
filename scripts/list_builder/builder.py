@@ -9,7 +9,7 @@ for one category + angle -> code filters spam, de-duplicates by registrable doma
 (GET only, HTTP 200-399 or dropped) -> rows are added with status TODO (the directory agent may try them), TODO outreach (for outreach,
 never form submission) or HOLD paid. Writes the one-line summary "list-builder: +N new (total T; by category ...)" to the state file.
 
-HARD LIMITS: $3.00 a UTC day over ALL runs (env LIST_BUILDER_DAY_USD_CAP; the cost of a call is booked BEFORE it goes out and the state
+HARD LIMITS: $1.00 a UTC day over ALL runs (env LIST_BUILDER_DAY_USD_CAP; the cost of a call is booked BEFORE it goes out and the state
 is saved, so a killed run still has it on record); no call starts unless spent + its reserve fits under the cap.
 Sends nothing, signs up nowhere, fills no form, pays nothing. PUBLIC repo: prints counts, category keys and cost only (never a key, never
 a model answer, never an error body).
@@ -32,7 +32,7 @@ CAND_PATH = os.path.join(DATA, "directories_candidates.json")
 STATE_PATH = os.path.join(DATA, "list_builder_state.json")
 DRY = os.environ.get("DRY_RUN", "true").strip().lower() != "false"
 MODEL = os.environ.get("LIST_BUILDER_MODEL", "claude-sonnet-5-5")
-DAY_CAP = float(os.environ.get("LIST_BUILDER_DAY_USD_CAP", "3.00"))   # HARD cap per UTC day over all runs (Imran's ~$15/day: 24 Nov, hunter 6.00 -> 3.00, list builder 1.50 -> 3.00)
+DAY_CAP = float(os.environ.get("LIST_BUILDER_DAY_USD_CAP", "1.00"))   # HARD cap per UTC day over all runs (Imran's ~$15/day: 24 Nov, hunter 6.00 -> 3.00, list builder 1.50 -> 3.00)
 RESERVE = 0.20          # most one request can cost: <= ~45k tokens in x $2/M + 4000 out x $10/M + 4 searches x $0.01 = ~$0.17
 MAX_TOKENS = 4000
 MAX_SEARCHES = int(os.environ.get("LIST_BUILDER_MAX_SEARCHES", "4"))
