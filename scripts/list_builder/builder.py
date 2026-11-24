@@ -25,7 +25,7 @@ data/directories_candidates.json, data/list_builder_state.json, data/needs_signu
 data/list_builder_compare.md is the side-by-side summary built from both states.
 Every new row carries found_by (sonnet|deepseek), proof (the directory agent's follow_proof verdict FOLLOWED / NOFOLLOW_ONLY / NOINDEX / UNKNOWN, or
 UNCHECKED when the per-run fetch or time limit was used up) and needs_signup. data/needs_signup.md lists rows that need an account (proof FOLLOWED or
-UNKNOWN) so Imran can do the sign-ups at the end (one sheet per provider).
+UNKNOWN or UNCHECKED, up to 120 proof checks per run) so Imran can do the sign-ups at the end (one sheet per provider).
 Sends nothing, signs up nowhere, fills no form, pays nothing. PUBLIC repo: prints counts, category keys and cost only (never a key, never
 a model answer, never an error body).
 """
@@ -85,7 +85,7 @@ DEEPSEEK_BASE = os.environ.get("DEEPSEEK_BASE", "https://api.deepseek.com")
 # (deepseek-flash: peak $0.30 in (cache miss) / $0.006 cache hit / $1.20 out; off-peak is half). Peak prices are used for every call (over-estimate, safe).
 DS_PRICE_IN, DS_PRICE_CACHE, DS_PRICE_OUT = 0.30, 0.006, 1.20
 DS_RESERVE = 0.02       # most one DeepSeek request can cost: ~12k tokens in x $0.30/M + 4000 out x $1.20/M = ~$0.009; 0.02 is a safe booking
-PROOF_MAX_FETCHES = int(os.environ.get("LIST_BUILDER_PROOF_FETCHES", "40"))    # follow_proof checks per run (each makes up to 4 page fetches)
+PROOF_MAX_FETCHES = int(os.environ.get("LIST_BUILDER_PROOF_FETCHES", "120"))    # follow_proof checks per run (each makes up to 4 page fetches)
 PROOF_SECONDS = int(os.environ.get("LIST_BUILDER_PROOF_SECONDS", "480"))       # time limit for all proof checks of one run
 RESERVE = 0.20          # most one request can cost: <= ~45k tokens in x $2/M + 4000 out x $10/M + 4 searches x $0.01 = ~$0.17
 MAX_TOKENS = 4000
@@ -434,7 +434,8 @@ class Meter:
         self.save()
 
     def settle(self, usage):
-        real = self.cost_fn(usage)
+        # an answer WITHOUT a usage block keeps the booked reserve as its cost (never 0: a silent reply must not beat the cap)
+        real = self.cost_fn(usage) if isinstance(usage, dict) and usage else self.reserve
         self.state[self.key][self.today] = round(max(0.0, self.spent - self.reserve + real), 4)
         self.save()
 
@@ -564,15 +565,15 @@ def compare_line(days, extra=None):
 
 
 def write_needs_signup(sites, path=None):
-    """The provider's sign-up sheet: rows that need an account AND whose proof is FOLLOWED or UNKNOWN, newest first. Imran does the sign-ups at the end."""
-    rows = [(i, s) for i, s in enumerate(sites) if s.get("needs_signup") is True and s.get("proof") in ("FOLLOWED", "UNKNOWN")]
+    """The provider's sign-up sheet: rows that need an account AND whose proof is FOLLOWED, UNKNOWN or UNCHECKED (not checked yet), newest first. Imran does the sign-ups at the end."""
+    rows = [(i, s) for i, s in enumerate(sites) if s.get("needs_signup") is True and s.get("proof") in ("FOLLOWED", "UNKNOWN", "UNCHECKED")]
     rows.sort(key=lambda t: (str(t[1].get("added", "")), t[0]), reverse=True)
     out = ["# Sign-ups to do at the end (list builder)", "",
-           "Places that need an account to list or post, with a followed link (FOLLOWED) or not yet known (UNKNOWN). Newest first. Rebuilt by the list builder on every live run.", "",
+           "Places that need an account to list or post, with a followed link (FOLLOWED), not yet known (UNKNOWN) or not checked yet (UNCHECKED). Newest first. Rebuilt by the list builder on every live run.", "",
            "| Site | URL | Category | Found by | Proof | Added |", "|---|---|---|---|---|---|"]
     for _, s in rows[:600]:
         out.append("| %s | %s | %s | %s | %s | %s |" % (str(s.get("name") or s.get("domain"))[:60].replace("|", "/"), s.get("submit_url", ""), s.get("category", ""),
-                                                    s.get("found_by", ""), s.get("proof", ""), s.get("added", "")))
+                                                    s.get("found_by", ""), "UNCHECKED (proof not checked yet)" if s.get("proof") == "UNCHECKED" else s.get("proof", ""), s.get("added", "")))
     out.append("")
     write_text(path or SIGNUP_PATH, "\n".join(out))
     return len(rows)
@@ -666,10 +667,14 @@ def run(post=None, getter=None, today=None, workers=8, provider=None, proof=None
     state = load_state(P["state"])
     own = read_json(P["cand"], None)
     other = read_json(P["other"], None)
-    if ds and not isinstance(own, dict):
-        own = {"generated": "", "sites": []}                           # DeepSeek's own file is created by its first live run
-    if not isinstance(other, dict) and not ds:
+    if ds and not os.path.exists(P["cand"]):
+        own = {"generated": "", "sites": []}                           # DeepSeek's own file is created by its first live run, and ONLY when it does not exist:
+                                                                       # an existing but unreadable file fails closed below, so old rows are never dropped
+    if not ds and not os.path.exists(P["other"]):
         other = {"sites": []}                                          # Sonnet: no DeepSeek file yet = nothing there to dedupe against
+    elif not ds and not (isinstance(other, dict) and isinstance(other.get("sites"), list)):
+        print("%s: the DeepSeek candidates file is unreadable, dedupe runs without it" % tag)   # count-only line, no content
+        other = {"sites": []}
     if not (isinstance(own, dict) and isinstance(own.get("sites"), list) and isinstance(other, dict) and isinstance(other.get("sites"), list)):
         print("%s: a candidates file is missing or unreadable, nothing runs (fail closed)" % tag)
         return {"status": "NO_DATA"}
