@@ -60,8 +60,18 @@ CODE_RE = re.compile(r"(?<!\d)(\d{4,8})(?!\d)")
 # site states (from the agent) where a confirmation would change nothing
 CLOSED = {"PAID", "DEAD", "SOCIAL_LOGIN_ONLY", "BADGE_REQUIRED", "PHONE_REQUIRED", "NO_FORM"}
 FINISHED = CLOSED | {"SUBMITTED", "ALREADY_LISTED", "UNCONFIRMED"}
-HANDLED_OUTCOMES = {"SKIPPED_PAID_OFFER", "SKIPPED_NEWSLETTER", "SITE_CLOSED", "CONFIRMED_LINK_OPENED", "SESSION_ONLY_SITE_FINISHED", "SESSION_ONLY_EXPIRED"}
-HUMAN_OUTCOMES = {"BADGE_ASK", "UNKNOWN_SENDER", "LINK_OFF_DOMAIN", "NO_ACTION_FOUND", "CAPTCHA", "OPEN_FAILED"}
+HANDLED_OUTCOMES = {"SKIPPED_PAID_OFFER", "SKIPPED_NEWSLETTER", "SITE_CLOSED", "CONFIRMED_LINK_OPENED", "SESSION_ONLY_SITE_FINISHED", "SESSION_ONLY_EXPIRED",
+                    "IGNORE_OUR_APP"}
+HUMAN_OUTCOMES = {"BADGE_ASK", "UNKNOWN_SENDER", "LINK_OFF_DOMAIN", "NO_ACTION_FOUND", "CAPTCHA", "OPEN_FAILED", "ACCOUNT_MAIL_DIRECTOR"}
+# 24 Nov 2026: account mail of the big identity providers is never opened by the robot: the Director decides
+DIRECTOR_ONLY = {"github.com", "gitlab.com", "google.com", "googlemail.com", "gmail.com", "openai.com", "accounts.google.com"}
+# Supabase's own mailer: our OWN app's auth mail (inayaflow.ai users), not a platform sign-up
+OUR_APP_SENDERS = {"supabase.io", "supabase.com", "supabase.co"}
+# invisible characters some senders hide inside mail (zero-width space/joiners, BOM, soft hyphen, bidi marks, word joiner)
+INVISIBLE_RE = re.compile("[\u200b-\u200f\u2028-\u202e\u2060-\u206f\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180e\ufe00-\ufe0f\ufeff]")
+# link text that means "this is the button"
+ANCHOR_OK_RE = re.compile(r"confirm|verif|activat|sign.?in|log.?in", re.I)
+ANCHOR_RE = re.compile(r"<a\b[^>]*?\bhref\s*=\s*[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", re.I | re.S)
 
 
 def reg_domain(host):  # same rule as the agent and the old bot
@@ -81,8 +91,13 @@ def load_json(path, default):
         return default
 
 
+def strip_invisible(t):
+    return INVISIBLE_RE.sub("", t or "")
+
+
 def known_domains(root=ROOT, agent_state=None, extra=""):
-    """Registered domains of every directory in our lists, batch files and the agent's state."""
+    """Registered domains of every site we signed up on: directories.json, directories_candidates.json, known_sites.json,
+    own_backlinks.json (source sites), signup_domains.json (sign-ups made by the browser helper / older robots), batch files and the agent's state."""
     out = set()
 
     def add(url):
@@ -93,6 +108,13 @@ def known_domains(root=ROOT, agent_state=None, extra=""):
     data = os.path.join(root, "data")
     for d in load_json(os.path.join(data, "directories.json"), []):
         add(d.get("submit_url", ""))
+    for dom in (load_json(os.path.join(data, "known_sites.json"), {}).get("domains") or {}):
+        add(dom)
+    for b in load_json(os.path.join(data, "own_backlinks.json"), []):
+        add(b.get("source", "") if isinstance(b, dict) else "")
+    sd = load_json(os.path.join(data, "signup_domains.json"), {})
+    for dom in (sd.get("domains", []) if isinstance(sd, dict) else sd):
+        add(dom)
     for c in load_json(os.path.join(data, "directories_candidates.json"), {}).get("sites", []):
         add(c.get("submit_url", ""))
         add(c.get("domain", ""))
@@ -110,6 +132,7 @@ def known_domains(root=ROOT, agent_state=None, extra=""):
         if "." in l and not l.startswith("#"):
             out.add(reg_domain(l))
     out.discard("")
+    out -= DIRECTOR_ONLY | OUR_APP_SENDERS   # these never count as a sign-up site, whatever a list says
     return out
 
 
@@ -124,11 +147,11 @@ def mail_text(msg):
                     pass
     except Exception:
         pass
-    return "\n".join(out)
+    return strip_invisible("\n".join(out))
 
 
 def all_links(text):
-    urls = re.findall(r"https?://[^\s<>\"')\]]+", html.unescape(text or ""))
+    urls = re.findall(r"https?://[^\s<>\"')\]]+", strip_invisible(html.unescape(text or "")))
     seen, out = set(), []
     for u in urls:
         u = u.rstrip(".,;")
@@ -162,12 +185,24 @@ def supabase_site(text, known):
     return ""
 
 
+def anchor_links(text):
+    """https links whose visible button text says confirm / verify / activate / sign in / log in."""
+    out = []
+    for href, label in ANCHOR_RE.findall(strip_invisible(html.unescape(text or ""))):
+        if ANCHOR_OK_RE.search(re.sub(r"<[^>]+>", " ", label)):
+            u = strip_invisible(href).strip().rstrip(".,;")
+            if u.startswith("https://") and u not in out:
+                out.append(u)
+    return out
+
+
 def confirm_links(text, sender_dom):
     """(own, off): confirm-looking https links on the sender's OWN registered domain, and confirm-looking links elsewhere.
     A Supabase Auth verify link counts as own when its redirect_to is on the sender's own domain (19 Nov 2026)."""
     own, off = [], []
-    for u in all_links(text):
-        if LINK_BAD_RE.search(u) or not LINK_OK_RE.search(u):
+    buttons = set(anchor_links(text))
+    for u in all_links(text) + [b for b in anchor_links(text) if b not in all_links(text)]:
+        if LINK_BAD_RE.search(u) or not (LINK_OK_RE.search(u) or u in buttons):
             continue
         p = urlparse(u)
         if (p.scheme == "https" and p.hostname and reg_domain(p.hostname) == sender_dom) or supabase_redirect_domain(u) == sender_dom:
@@ -210,6 +245,13 @@ def decide(subject, sender_dom, text, known, site_status, age_min, routed_verify
     looks_verify = bool(VERIFY_SUBJ_RE.search(subject or ""))
     if not routed_verify and not looks_verify:
         return "IGNORE", None
+    if sender_dom in OUR_APP_SENDERS:
+        # our own app's auth mail: never opened. A link that sends the reader to ANOTHER site means it is some platform's
+        # sign-up mail sent through Supabase Auth: a person looks at it.
+        others = {supabase_redirect_domain(u) for u in all_links(text)} - {"", "inayaflow.ai"}
+        return ("UNKNOWN_SENDER" if others else "IGNORE_OUR_APP"), None
+    if sender_dom in DIRECTOR_ONLY:
+        return "ACCOUNT_MAIL_DIRECTOR", None  # github / gitlab / google / openai account mail: the Director decides
     if sender_dom not in known:
         return ("UNKNOWN_SENDER" if routed_verify else "IGNORE"), None
     if age_min < MIN_AGE_MIN:
@@ -428,6 +470,10 @@ def main():
                     detail = "site status %s: nothing to confirm" % st
                 elif outcome == "BADGE_ASK":
                     detail = "listing waits for their badge / a link back on inayaflow.ai (website change: genie + Director decide)"
+                elif outcome == "IGNORE_OUR_APP":
+                    detail = "our own app"
+                elif outcome == "ACCOUNT_MAIL_DIRECTOR":
+                    detail = "identity-provider account mail (github / gitlab / google / openai): never opened by the robot"
                 elif outcome == "SKIPPED_PAID_OFFER":
                     detail = "paid checkout / discount / featured offer; never paid, not opened"
                 elif outcome == "SKIPPED_NEWSLETTER":

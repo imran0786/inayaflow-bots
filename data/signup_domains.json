@@ -1,0 +1,27 @@
+{
+ "updated": "2026-11-24",
+ "note": "Sites we signed up on (browser helper / older robots). Mail from these domains is OURS: the verify robot may open its confirm link. Never add github, gitlab, google, openai, supabase.",
+ "domains": [
+  "aidirs.best",
+  "agenthunter.io",
+  "opentools.ai",
+  "shipgrowth.dev",
+  "launchpadindia.org",
+  "launchpadindia.co",
+  "findstack.com",
+  "tinystartups.co",
+  "diigo.com",
+  "hackmd.io",
+  "codepen.io",
+  "hackernoon.com",
+  "devsuite.co",
+  "sitepatent.com",
+  "aiagentslisting.com",
+  "tinylaunchpad.com",
+  "directree.io",
+  "earlyhunt.com",
+  "saashub.com",
+  "shipboost.io",
+  "about.me"
+ ]
+}

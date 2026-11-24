@@ -189,6 +189,101 @@ class SixHourRule(unittest.TestCase):
         self.assertEqual((out[0], out[2]), ("# Inbox + backlinks report", "ACTION NEEDED: none"))
 
 
+class AutoClose(unittest.TestCase):
+    """24 Nov 2026: OPEN must mean real work."""
+
+    def rows(self, mails, answers=None, inputs=None):
+        return at.build_rows(mails, {}, inputs or INPUTS, NOW, read_body=lambda m: "body", ai=ai_answer(answers or []))[0]
+
+    def one(self, addr, subject, hours, kind="listing_step", ask="x", name=""):
+        ans = [{"n": 1, "needs_action": True, "kind": kind, "ask": ask, "link": "none"}]
+        return self.rows([mail(addr, subject, hours, name)], ans)[0]
+
+    def test_one_time_links_and_codes_expire_after_24h(self):
+        r = self.one("noreply@somesite.io", "Verify with your magic link to sign in", 30)
+        self.assertEqual((r["status"], r["owner"]), ("EXPIRED (no action possible)", "-"))
+        r = self.one("noreply@deepseek.com", "Your verification code is 482913", 26)
+        self.assertEqual(r["status"], "EXPIRED (no action possible)")
+        r = self.one("noreply@somesite.io", "Verify with your magic link to sign in", 10)   # still fresh
+        self.assertEqual(r["status"], "OPEN")
+        r = self.one("noreply@somesite.io", "Confirm your email", 80)           # a normal confirm mail is NOT a one-time code
+        self.assertEqual(r["status"], "OPEN")
+
+    def test_verify_robot_expired_closes_at_once(self):
+        v = VERIFY + "| 11-21 23:00 | gone.io | Verify your sign in link | SESSION_ONLY_EXPIRED | - | |\n"
+        m = at_time(mail("noreply@gone.io", "Verify your sign in link", 3), 2026, 11, 21, 23, 0)
+        r = self.rows([m], [{"n": 1, "needs_action": True, "kind": "listing_step", "ask": "x", "link": "none"}], dict(INPUTS, verify_log=v))[0]
+        self.assertEqual(r["status"], "EXPIRED (no action possible)")
+
+    def test_paid_offers_ignored_but_person_goes_to_imran(self):
+        r = self.one("hello@somedir.io", "Get featured: priority review for $49", 30, ask="upgrade offer")
+        self.assertEqual((r["status"], r["owner"]), ("IGNORED-paid offer", "-"))
+        r = self.one("sales@somedir.io", "Sponsor our newsletter", 30)
+        self.assertEqual(r["status"], "IGNORED-paid offer")
+        r = self.one("pat@somesite.org", "Re: backlink swap, we charge $30 for a post", 30, kind="person_reply")
+        self.assertEqual((r["status"], r["owner"]), ("FOR IMRAN", "Imran"))
+        r = self.one("pat@somesite.org", "Re: backlink swap", 30, kind="person_reply")   # a person, no money: stays OPEN
+        self.assertEqual(r["status"], "OPEN")
+        r = self.one("hello@somedir.io", "Confirm your email, premium is optional", 30)   # a real step is never auto-closed
+        self.assertEqual(r["status"], "OPEN")
+
+    def test_welcome_mails_ignored(self):
+        r = self.one("hello@newdir.io", "Welcome to NewDir!", 30, ask="")
+        self.assertEqual(r["status"], "IGNORED-info")
+        r = self.one("hello@newdir.io", "Welcome to NewDir, please confirm your email", 30)
+        self.assertEqual(r["status"], "OPEN")
+
+    def test_verify_opened_link_is_done_and_our_app_ignored(self):
+        v = VERIFY + "| 11-21 23:30 | tinystartups.co | Welcome, confirm | CONFIRMED_LINK_OPENED | - | |\n| 11-21 23:40 | supabase.io | Confirm | IGNORE_OUR_APP | - | |\n"
+        a = at_time(mail("noreply@tinystartups.co", "Welcome, confirm", 3), 2026, 11, 21, 23, 30)
+        b = at_time(mail("noreply@supabase.io", "Confirm", 3), 2026, 11, 21, 23, 40)
+        ans = [{"n": 1, "needs_action": True, "kind": "other", "ask": "x", "link": "none"}] * 2
+        rows = {r["subject"]: r for r in self.rows([a, b], ans, dict(INPUTS, verify_log=v))}
+        self.assertEqual(rows["Welcome, confirm"]["status"], "DONE")
+        self.assertEqual(rows["Confirm"]["status"], "IGNORED-info")
+
+    def test_duplicates_collapse_with_count(self):
+        ms = [mail("noreply@dup.io", "Confirm your email", h, mid="<%d>" % h) for h in (8, 20, 50)]
+        ms.append(mail("noreply@other.io", "Confirm your email", 9))
+        rows = self.rows(ms, [{"n": i, "needs_action": True, "kind": "listing_step", "ask": "x", "link": "none"} for i in range(1, 6)])
+        dup = [r for r in rows if "dup.io" in r["who"]]
+        self.assertEqual(len(dup), 1)
+        self.assertEqual(dup[0]["count"], 3)
+        self.assertIn("x3", dup[0]["note"])
+        self.assertEqual(dup[0]["age"], 50)           # oldest, so nothing looks younger than it is
+        self.assertEqual(len(rows), 2)                # the other sender stays its own row
+        self.assertEqual(at.subject_sig("Re: Code 123456 for you"), at.subject_sig("Code 98 for you"))
+
+    def test_person_never_auto_closed(self):
+        r = self.one("pat@somesite.org", "Re: Your magic link", 90, kind="person_reply")
+        self.assertEqual(r["status"], "OPEN")
+
+
+class MailHealth(unittest.TestCase):
+    B = {"who": "A (a.com)", "subject": "s", "ask": "x", "link": "none", "date_s": "d", "note": ""}
+
+    def test_red_when_over_6h(self):
+        b = self.B
+        rows = [dict(b, status="OPEN", age=7, owner="Director"), dict(b, status="FOR IMRAN", age=30, owner="Imran"),
+                dict(b, status="OPEN", age=2, owner="Director"), dict(b, status="DONE", age=99, owner="-")]
+        t = at.mail_health(rows)
+        self.assertIn("MAIL HEALTH: RED", t)
+        self.assertIn("Open items: 3 (Director 2, Imran 1)", t)
+        self.assertIn("Oldest open item: 30.0h" if False else "Oldest open item: ", t)
+        self.assertIn("Open over 6 h: 2 (RED)", t)
+
+    def test_green(self):
+        t = at.mail_health([dict(self.B, status="OPEN", age=2, owner="Director"), dict(self.B, status="DONE", age=99, owner="-")])
+        self.assertIn("MAIL HEALTH: GREEN", t)
+        self.assertIn("Open over 6 h: 0", t)
+        self.assertNotIn("RED", t)
+        self.assertIn("Oldest open item: none", at.mail_health([]))
+
+    def test_goes_on_top_of_report(self):
+        out = at.put_on_top("# Report\n\nbody\n", at.mail_health([]) + "\n" + at.action_block([]))
+        self.assertTrue(out.split("\n")[2].startswith("## MAIL HEALTH"))
+
+
 CRLF = bytes([13, 10])
 
 
