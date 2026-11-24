@@ -263,6 +263,36 @@ class Flow(unittest.TestCase):
         self.assertEqual(res2, "ALREADY_DONE")
         self.assertEqual(len(sent), 3)
 
+    def test_empty_url_still_counts_as_done_no_second_post(self):
+        P.DRY = False
+        sent = []
+        pubs = fake_publishers(sent)
+        orig = pubs["blogger"]
+        pubs["blogger"] = lambda art: dict(orig(art), url="")
+        res, _ = quiet(post_ai=fake_ai([]), publishers=pubs)
+        self.assertEqual(res["blogger"], "PUBLISHED")
+        st = json.load(open(P.STATE_PATH))
+        bp = [p for p in st["posts"] if p["platform"] == "blogger"][0]
+        self.assertTrue(bp["url_missing"])
+        self.assertEqual(len(st["own_backlinks_new"]), 2)
+        os.environ["PLATFORM_FIRST_RUN"] = "false"
+        res2, _ = quiet(post_ai=fake_ai([]), publishers=pubs)
+        self.assertEqual(res2, "ALREADY_DONE")
+        self.assertEqual(len(sent), 3)
+
+    def test_crash_prints_one_safe_line(self):
+        orig = P.run
+        P.run = lambda: (_ for _ in ()).throw(RuntimeError("token=%s" % SECRET))
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                with self.assertRaises(SystemExit):
+                    P.main()
+        finally:
+            P.run = orig
+        self.assertIn("CRASH RuntimeError at", buf.getvalue())
+        self.assertNotIn(SECRET, buf.getvalue())
+
     def test_qa_fail_publishes_nothing_and_saves_drafts(self):
         P.DRY = False
         sent = []
@@ -402,6 +432,23 @@ class Publishers(unittest.TestCase):
 
 
 class Config(unittest.TestCase):
+    def dry_expr(self):
+        t = open(os.path.join(HERE, "..", "..", ".github", "workflows", "platform-poster.yml"), encoding="utf8").read()
+        e = re.search(r"DRY_RUN: \$\{\{ (.+?) \}\}", t).group(1)
+        py = e.replace("&&", " and ").replace("||", " or ").replace("vars.PLATFORM_POSTER_LIVE", "V").replace("github.event_name", "E").replace("github.event.inputs.dry_run", "I")
+        return lambda V, E, I: eval(py, {"V": V, "E": E, "I": I})
+
+    def test_dry_run_expression_truth_table(self):
+        f = self.dry_expr()
+        self.assertEqual(f("", "schedule", ""), "true")              # switch not set: always dry
+        self.assertEqual(f("false", "schedule", ""), "true")
+        self.assertEqual(f("", "workflow_dispatch", "false"), "true")
+        self.assertEqual(f("true", "schedule", ""), "false")         # live + schedule: publish
+        self.assertEqual(f("true", "workflow_dispatch", ""), "true")  # manual default: dry
+        self.assertEqual(f("true", "workflow_dispatch", "true"), "true")
+        self.assertEqual(f("true", "workflow_dispatch", "false"), "false")
+
+
     def test_workflow_switch_cron_and_no_secret_echo(self):
         t = open(os.path.join(HERE, "..", "..", ".github", "workflows", "platform-poster.yml"), encoding="utf8").read()
         self.assertIn('cron: "41 9 * * *"', t)

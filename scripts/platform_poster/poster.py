@@ -371,7 +371,7 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
         return "DRY_LIMIT"
     todo = []
     for pl in PLATFORMS:
-        done = any(e.get("date") == today and e.get("platform") == pl and e.get("url") for e in state["posts"])
+        done = any(e.get("date") == today and e.get("platform") == pl for e in state["posts"])      # any successful publish counts, even with an empty URL
         pend = (state.get("pending") or {}).get(pl)
         if pend and pend.get("date") != today:
             state["pending"].pop(pl)
@@ -504,7 +504,8 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
             results[pl] = "UNKNOWN"
             continue
         state["pending"].pop(pl, None)
-        state["posts"].append({"date": today, "platform": pl, "slug": slug, "title": art["title"], "url": res.get("url") or "", "id": res.get("id"), "target": url, "rel": "unknown (not read yet)"})
+        state["posts"].append({"date": today, "platform": pl, "slug": slug, "title": art["title"], "url": res.get("url") or "", "id": res.get("id"), "target": url, "rel": "unknown (not read yet)"}
+                              | ({} if res.get("url") else {"url_missing": True}))
         state.setdefault("shingles", []).append(sorted(D.shingles(art["body"])))
         state["shingles"] = state["shingles"][-PAST_KEPT:]
         if res.get("url"):
@@ -525,5 +526,16 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
     return results
 
 
+def main():
+    try:
+        run()
+    except Exception as e:                  # one short line, no message text (it could carry a URL or a token): type + where
+        tb = e.__traceback__
+        while tb.tb_next:
+            tb = tb.tb_next
+        print("platform_poster: CRASH %s at %s:%s" % (type(e).__name__, os.path.basename(tb.tb_frame.f_code.co_filename), tb.tb_lineno))
+        sys.exit(1)
+
+
 if __name__ == "__main__":
-    run()
+    main()
