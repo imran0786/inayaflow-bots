@@ -564,6 +564,136 @@ class TwinConfig(unittest.TestCase):
         self.assertEqual(float(re.search(r'LIST_BUILDER_DEEPSEEK_DAY_USD_CAP: "([\d.]+)"', t).group(1)), b.DEEPSEEK_DAY_CAP)
 
 
+class StateMerge(unittest.TestCase):
+    """Code QA 3a: after a push conflict the state is MERGED, never overwritten (no lost spend booking or cursor)."""
+
+    def setUp(self):
+        sys.path.insert(0, HERE)
+        import merge_state as ms
+        self.ms = ms
+
+    def test_merge_keeps_the_larger_spend_cursor_and_union(self):
+        ours = {"cursor": 40, "spent": {"2026-11-24": 2.10}, "spent_deepseek": {"2026-11-24": 0.20}, "rejected": ["a.com", "b.com"],
+                "days": {"2026-11-24": {"added": 100, "runs": 3, "calls": 9, "by_category": {"x": 60, "y": 40}, "summary": "ours",
+                                        "providers": {"claude": {"calls": 9, "cost": 2.1, "added": 100, "dead": 5}}}}, "last_summary": "ours"}
+        theirs = {"cursor": 45, "spent": {"2026-11-24": 1.50, "2026-11-23": 2.0}, "spent_deepseek": {"2026-11-24": 0.60}, "rejected": ["b.com", "c.com"],
+                  "days": {"2026-11-24": {"added": 60, "runs": 4, "calls": 5, "by_category": {"x": 70}, "summary": "theirs",
+                                          "providers": {"claude": {"calls": 5, "cost": 1.5, "added": 60, "dead": 9}, "deepseek": {"calls": 3, "cost": 0.6, "added": 10}}}}}
+        m = self.ms.merge_state(ours, theirs)
+        self.assertEqual(m["cursor"], 45)
+        self.assertEqual(m["spent"], {"2026-11-24": 2.10, "2026-11-23": 2.0})              # no booking is ever lost
+        self.assertEqual(m["spent_deepseek"], {"2026-11-24": 0.60})
+        self.assertEqual(sorted(m["rejected"]), ["a.com", "b.com", "c.com"])
+        d = m["days"]["2026-11-24"]
+        self.assertEqual((d["added"], d["runs"], d["calls"]), (100, 4, 9))
+        self.assertEqual(d["by_category"], {"x": 70, "y": 40})
+        self.assertEqual(d["providers"]["claude"], {"calls": 9, "cost": 2.1, "added": 100, "dead": 9})
+        self.assertEqual(d["providers"]["deepseek"]["cost"], 0.6)
+        self.assertEqual(d["summary"], "ours")                                              # we ran more calls that day
+
+    def test_cli_merges_in_place_and_rebuilds_the_md_files(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        saved = (b.DATA, b.CAND_PATH, b.SIGNUP_PATH, b.COMPARE_PATH)
+        b.DATA, b.CAND_PATH = tmp, os.path.join(tmp, "directories_candidates.json")
+        b.SIGNUP_PATH, b.COMPARE_PATH = os.path.join(tmp, "needs_signup.md"), os.path.join(tmp, "list_builder_compare.md")
+        self.addCleanup(lambda: (setattr(b, "DATA", saved[0]), setattr(b, "CAND_PATH", saved[1]), setattr(b, "SIGNUP_PATH", saved[2]), setattr(b, "COMPARE_PATH", saved[3])))
+        json.dump({"sites": [{"name": "N", "domain": "n.com", "submit_url": "https://n.com/", "needs_signup": True, "proof": "FOLLOWED", "added": TODAY}]}, open(b.CAND_PATH, "w"))
+        o, t = os.path.join(tmp, "o.json"), os.path.join(tmp, "t.json")
+        json.dump({"cursor": 3, "spent": {TODAY: 1.0}, "days": {TODAY: {"calls": 1, "providers": {"claude": {"calls": 1}}}}}, open(o, "w"))
+        json.dump({"cursor": 9, "spent": {TODAY: 0.5}, "days": {}}, open(t, "w"))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(self.ms.main(["x", o, t]), 0)
+        m = json.load(open(t))
+        self.assertEqual((m["cursor"], m["spent"][TODAY]), (9, 1.0))
+        self.assertIn("| N | https://n.com/ |", open(b.SIGNUP_PATH, encoding="utf8").read())
+        self.assertIn(TODAY, open(b.COMPARE_PATH, encoding="utf8").read())
+
+
+class WorkflowParity(unittest.TestCase):
+    """Code QA 4 and 3e: the DeepSeek twin gets EXACTLY the Sonnet job's checkout, env and save step (except provider, key and cap)."""
+    wfdir = os.path.join(ROOT, ".github", "workflows")
+
+    def load(self, f):
+        return open(os.path.join(self.wfdir, f), encoding="utf8").read()
+
+    def build_env(self, t):
+        block = t.split("- name: Build the list", 1)[1].split("run: |", 1)[0].split("env:", 1)[1]
+        return {m.group(1): m.group(2) for m in re.finditer(r"^\s+([A-Z_]+): (.+?)\s*(?:#.*)?$", block, re.M)}
+
+    def test_same_env_checkout_and_save_step(self):
+        s, d = self.load("list-builder.yml"), self.load("list-builder-deepseek.yml")
+        es, ed = self.build_env(s), self.build_env(d)
+        es.pop("ANTHROPIC_API_KEY"), ed.pop("DEEPSEEK_API_KEY")
+        self.assertEqual(es.pop("LIST_BUILDER_DAY_USD_CAP"), '"3.00"')
+        self.assertEqual(ed.pop("LIST_BUILDER_DEEPSEEK_DAY_USD_CAP"), '"1.00"')
+        self.assertEqual(ed.pop("LIST_BUILDER_PROVIDER"), "deepseek")
+        self.assertEqual(es, ed)                                                            # every other variable (DRY_RUN, any KNOWN_FILES) is identical
+        for part in ("- uses: actions/checkout@v4\n        with:\n          ref: main", 'python-version: "3.12"'):
+            self.assertIn(part, s)
+            self.assertIn(part, d)
+        self.assertEqual(s.split("- name: Save candidates and state", 1)[1], d.split("- name: Save candidates and state", 1)[1])   # the save step is byte-identical
+        self.assertEqual(s.split("- name: Unit tests", 1)[1].split("- name: Build", 1)[0], d.split("- name: Unit tests", 1)[1].split("- name: Build", 1)[0])
+
+    def test_save_step_is_safe(self):
+        for f in ("list-builder.yml", "list-builder-deepseek.yml"):
+            t = self.load(f)
+            self.assertNotIn("cp /tmp/ours_state.json", t)                                   # 3a: never copy our state over theirs
+            self.assertIn("scripts/list_builder/merge_state.py /tmp/ours_state.json data/list_builder_state.json", t)
+            self.assertNotIn("git add data/directories_candidates.json", t)                  # 3e: only existing files are added
+            self.assertIn('if [ -f "$f" ]; then git add "$f"; fi', t)
+            self.assertIn("data file unreadable, nothing saved", t)                          # 3b: a damaged file is never committed
+
+
+class Misc(Base):
+    def test_cap_env_parse_error_falls_back_to_the_default(self):
+        os.environ["LB_TEST_CAP"] = "three dollars"
+        self.addCleanup(os.environ.pop, "LB_TEST_CAP", None)
+        self.assertEqual(b._env_float("LB_TEST_CAP", "3.00"), 3.0)
+        os.environ["LB_TEST_CAP"] = ""
+        self.assertEqual(b._env_float("LB_TEST_CAP", "1.00"), 1.0)
+        os.environ["LB_TEST_CAP"] = "2.5"
+        self.assertEqual(b._env_float("LB_TEST_CAP", "1.00"), 2.5)
+
+    def test_writes_are_atomic_temp_then_rename(self):
+        src = open(os.path.join(HERE, "builder.py"), encoding="utf8").read()
+        self.assertEqual(src.count("os.replace(tmp, path)"), 2)                                # write_json and write_text
+        b.write_text(os.path.join(self.dir, "x.md"), "hi")
+        self.assertEqual(os.listdir(self.dir).count("x.md.tmp"), 0)
+
+    def test_proof_loading_and_checking_print_nothing(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            fp = b.load_follow_proof()
+            noisy = lambda u: print("LEAK") or ("UNKNOWN", "")                                 # noqa: E731
+            rows = [{"submit_url": "https://x-example.com/", "final_url": "https://x-example.com/", "proof": "UNCHECKED"}]
+            b.run_proofs(rows, noisy)
+        self.assertEqual(buf.getvalue(), "")
+        self.assertTrue(fp is None or callable(fp))
+        agent_src = open(os.path.join(ROOT, "scripts", "directory_agent", "agent.py"), encoding="utf8").read()
+        self.assertFalse(re.search(r"^print\(", agent_src, re.M))                              # no top-level print in the module we import
+
+    def test_other_robots_ignore_the_new_row_keys_and_merge_keeps_them(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "reports"))
+        import merge_candidates as mc
+        ours = {"generated": "2026-11-24", "sites": [{"domain": "d.com", "name": "D", "submit_url": "https://d.com/", "checked": "2026-11-24", "status": "TODO",
+                                                      "found_by": "deepseek", "proof": "FOLLOWED", "needs_signup": True}]}
+        theirs = {"generated": "2026-11-23", "sites": [{"domain": "d.com", "name": "D", "submit_url": "https://d.com/", "checked": "2026-11-24", "status": "TODO",
+                                                        "found_by": "sonnet", "proof": "UNCHECKED", "needs_signup": False},
+                                                       {"domain": "e.com", "name": "E", "submit_url": "https://e.com/", "checked": "2026-11-20", "status": "TODO"}]}
+        m = mc.merge(ours, theirs)
+        rows = {s["domain"]: s for s in m["sites"]}
+        self.assertEqual(len(m["sites"]), 2)                                                   # one row per domain, nothing lost
+        self.assertEqual(rows["d.com"]["found_by"], "deepseek")                                # same date, same status: OUR row wins, extra keys travel with the row
+        self.assertEqual(rows["d.com"]["proof"], "FOLLOWED")
+        self.assertNotIn("found_by", rows["e.com"])                                            # old rows without the keys stay valid
+        for fn in ("scripts/directory_agent/agent.py", "scripts/reports/backlink_batch.py", "scripts/reports/hunter_ingest.py", "scripts/link_checker/check.py", "scripts/directory_verify/verify.py"):
+            t = open(os.path.join(ROOT, fn), encoding="utf8").read()
+            self.assertNotIn("found_by", t)                                                    # they never read or require the new keys
+            self.assertNotIn("needs_signup", t)
+
+
 class KnownSites(unittest.TestCase):
     def test_known_sites_domains_are_deduped(self):
         keys = b.known_keys({"sites": []})

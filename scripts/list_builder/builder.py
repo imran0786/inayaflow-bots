@@ -45,14 +45,22 @@ CAND_PATH = os.path.join(DATA, "directories_candidates.json")
 STATE_PATH = os.path.join(DATA, "list_builder_state.json")
 SIGNUP_PATH = os.path.join(DATA, "needs_signup.md")
 COMPARE_PATH = os.path.join(DATA, "list_builder_compare.md")
+def _env_float(name, default):
+    """Float from the environment; an empty or garbled value falls back to the default (code QA 1a)."""
+    try:
+        return float(os.environ.get(name, "") or default)
+    except ValueError:
+        return float(default)
+
+
 PROVIDER = os.environ.get("LIST_BUILDER_PROVIDER", "claude").strip().lower()
 if PROVIDER not in ("claude", "deepseek"):
     PROVIDER = "claude"
 FOUND_BY = {"claude": "sonnet", "deepseek": "deepseek"}
 DRY = os.environ.get("DRY_RUN", "true").strip().lower() != "false"
 MODEL = os.environ.get("LIST_BUILDER_MODEL", "claude-sonnet-5-5")
-DAY_CAP = float(os.environ.get("LIST_BUILDER_DAY_USD_CAP", "3.00"))   # HARD cap per UTC day over all Sonnet runs (24 Nov: 1.00 -> 3.00, Imran "raise it to $3 a day"; listed robots now $16.98 a day)
-DEEPSEEK_DAY_CAP = float(os.environ.get("LIST_BUILDER_DEEPSEEK_DAY_USD_CAP", "1.00"))   # SEPARATE cap of the DeepSeek twin; not part of the $16.98 of the listed robots
+DAY_CAP = _env_float("LIST_BUILDER_DAY_USD_CAP", "3.00")   # HARD cap per UTC day over all Sonnet runs (24 Nov: 1.00 -> 3.00, Imran "raise it to $3 a day"; listed robots now $16.98 a day)
+DEEPSEEK_DAY_CAP = _env_float("LIST_BUILDER_DEEPSEEK_DAY_USD_CAP", "1.00")   # SEPARATE cap of the DeepSeek twin; not part of the $16.98 of the listed robots
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-flash")
 DEEPSEEK_BASE = os.environ.get("DEEPSEEK_BASE", "https://api.deepseek.com")
 # DeepSeek price per million tokens, READ 24 Nov 2026 from the official page https://api-docs.deepseek.com/quick_start/pricing
@@ -313,6 +321,15 @@ def read_json(path, default):
         return default
 
 
+def write_text(path, text):
+    """Atomic like write_json: temp file in the same folder, then rename (a killed run never leaves a half-written file)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf8") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
 def write_json(path, data, **kw):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
@@ -485,6 +502,17 @@ def check_url(url, getter):
 def load_follow_proof():
     """The directory agent's follow_proof (scripts/directory_agent/agent.py, merged 24 Nov), REUSED, not copied. None when it cannot be loaded."""
     try:
+        import io
+        import contextlib
+        sink = io.StringIO()
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):     # nothing the module prints can reach the public log
+            return _load_follow_proof()
+    except Exception:
+        return None
+
+
+def _load_follow_proof():
+    try:
         spec = importlib.util.spec_from_file_location("directory_agent_for_proof", os.path.join(ROOT, "scripts", "directory_agent", "agent.py"))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -528,8 +556,7 @@ def write_needs_signup(sites):
         out.append("| %s | %s | %s | %s | %s | %s |" % (str(s.get("name") or s.get("domain"))[:60].replace("|", "/"), s.get("submit_url", ""), s.get("category", ""),
                                                     s.get("found_by", ""), s.get("proof", ""), s.get("added", "")))
     out.append("")
-    with open(SIGNUP_PATH, "w", encoding="utf8") as f:
-        f.write("\n".join(out))
+    write_text(SIGNUP_PATH, "\n".join(out))
     return len(rows)
 
 
@@ -553,8 +580,7 @@ def write_compare(days):
         pr = days[d].get("providers") or {}
         if pr:
             rows.append("| %s | %s | %s |" % (d, _cell(pr.get("claude")), _cell(pr.get("deepseek"))))
-    with open(COMPARE_PATH, "w", encoding="utf8") as f:
-        f.write("\n".join(COMPARE_HEAD + rows) + "\n")
+    write_text(COMPARE_PATH, "\n".join(COMPARE_HEAD + rows) + "\n")
 
 
 def run_proofs(rows, proof, workers=8):
@@ -571,8 +597,12 @@ def run_proofs(rows, proof, workers=8):
             return proof(r.get("final_url") or r["submit_url"])[0]
         except Exception:
             return "UNKNOWN"
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
-        verdicts = list(ex.map(one, todo))
+    import io
+    import contextlib
+    sink = io.StringIO()
+    with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):           # follow_proof output (if any) is swallowed: public log
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+            verdicts = list(ex.map(one, todo))
     n = 0
     for r, v in zip(todo, verdicts):
         if v in ("FOLLOWED", "NOFOLLOW_ONLY", "NOINDEX", "UNKNOWN"):

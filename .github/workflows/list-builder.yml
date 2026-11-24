@@ -8,7 +8,7 @@ name: List builder (new candidate places a day)
 # is in data/list_builder_state.json (now "list-builder: sonnet +N new (F followed, $x) | deepseek +M new ..."; the twin is list-builder-deepseek.yml, same code,
 # separate $1 cap, shares this concurrency group). Also writes data/needs_signup.md and data/list_builder_compare.md. Signs up nowhere, sends nothing, fills no form.
 # SPEND: hard cap $3.00 a UTC day over all runs (LIST_BUILDER_DAY_USD_CAP; 24 Nov: Imran "raise it to $3 a day", +$2). $16.98 a day is the hard cap of the LISTED robots together
-# (directory agent 7.10, hunter 3.00, list builder 3.00, batch 1.00, report 0.48, replier 0.45, router 0.45, DEV poster 0.60; see README).
+# (directory agent 7.10, hunter 3.00, list builder 3.00, platform poster 0.90, batch 1.00, report 0.48, replier 0.45, router 0.45, DEV poster 0.60 = 16.98; see README).
 # Scheduled runs are live; a manual run defaults to dry_run=true (candidates are not written, the spend is still booked).
 on:
   schedule:
@@ -54,7 +54,8 @@ jobs:
         run: |
           git config user.name "inayaflow-bot"
           git config user.email "contact@inayaflow.ai"
-          git add data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md
+          for f in data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md; do if [ -f "$f" ]; then git add "$f"; fi; done
+          python3 -c "import json; [json.load(open(f, encoding='utf8')) for f in ('data/directories_candidates.json', 'data/list_builder_state.json')]" || { echo "data file unreadable, nothing saved"; exit 1; }
           if git diff --cached --quiet; then echo "no change"; exit 0; fi
           git commit -q -m "data: list builder (new candidate places, state)"
           for i in 1 2 3; do
@@ -62,16 +63,12 @@ jobs:
             # conflict (the backlink batch also writes the candidates file): keep our rows AND theirs (union by domain), our state file
             git show HEAD:data/directories_candidates.json > /tmp/ours.json
             git show HEAD:data/list_builder_state.json > /tmp/ours_state.json
-            git show HEAD:data/needs_signup.md > /tmp/ours_signup.md 2>/dev/null || true
-            git show HEAD:data/list_builder_compare.md > /tmp/ours_compare.md 2>/dev/null || true
             git fetch -q origin main
             git reset -q --hard origin/main
             python3 scripts/reports/merge_candidates.py /tmp/ours.json data/directories_candidates.json
-            cp /tmp/ours_state.json data/list_builder_state.json
-            [ -s /tmp/ours_signup.md ] && cp /tmp/ours_signup.md data/needs_signup.md
-            [ -s /tmp/ours_compare.md ] && cp /tmp/ours_compare.md data/list_builder_compare.md
-            true
-            git add data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md
+            # MERGE the state (max spend per day, max cursor, union of rejected; rebuilds the two .md files), never copy ours over theirs
+            python3 scripts/list_builder/merge_state.py /tmp/ours_state.json data/list_builder_state.json
+            for f in data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md; do if [ -f "$f" ]; then git add "$f"; fi; done
             git diff --cached --quiet && { echo "nothing left to save"; exit 0; }
             git commit -q -m "data: list builder (merged)"
           done

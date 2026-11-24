@@ -115,6 +115,17 @@ class QuickWins(unittest.TestCase):
         for q in tg.QUICK_WIN_PATHS:
             self.assertIn("https://inayaflow.ai" + q, bb.TARGET_PAGES)                # outreach keeps all of them as target pages
 
+    def test_every_page_without_a_listing_id_works_everywhere(self):
+        none_pages = [p for p in tg.PAGES if p[2] is None]
+        self.assertEqual(len(none_pages), 7)                                           # the 7 guides / analyzer have no listing id
+        ds = {"a": {"name": "A", "status": "SUBMITTED", "date": "2026-11-25", "products": {}}}
+        md = tg.build_targets([["x", "LIVE", "followed", "", "2026-11-25", "", p[1]] for p in none_pages], {"outreach": {}}, ds, TODAY)
+        for p in none_pages:
+            row = [l for l in md.split(chr(10)) if l.startswith("| " + p[0])][0]
+            self.assertIn("n/a (a guide, not listed)", row)
+            self.assertIn("| 1 / 0 |", row)
+        self.assertEqual(tg.directory_today(ds, "2026-11-25"), {"homepage": 1})
+
     def test_report_shows_quick_wins_first(self):
         md = tg.build_targets([], {}, {}, TODAY)
         i, j = md.index("### Quick wins (page 1-2 now)"), md.index("### Other targets")

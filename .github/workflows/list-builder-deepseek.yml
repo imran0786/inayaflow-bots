@@ -52,7 +52,8 @@ jobs:
         run: |
           git config user.name "inayaflow-bot"
           git config user.email "contact@inayaflow.ai"
-          git add data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md
+          for f in data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md; do if [ -f "$f" ]; then git add "$f"; fi; done
+          python3 -c "import json; [json.load(open(f, encoding='utf8')) for f in ('data/directories_candidates.json', 'data/list_builder_state.json')]" || { echo "data file unreadable, nothing saved"; exit 1; }
           if git diff --cached --quiet; then echo "no change"; exit 0; fi
           git commit -q -m "data: list builder (new candidate places, state)"
           for i in 1 2 3; do
@@ -60,16 +61,12 @@ jobs:
             # conflict (the backlink batch also writes the candidates file): keep our rows AND theirs (union by domain), our state file
             git show HEAD:data/directories_candidates.json > /tmp/ours.json
             git show HEAD:data/list_builder_state.json > /tmp/ours_state.json
-            git show HEAD:data/needs_signup.md > /tmp/ours_signup.md 2>/dev/null || true
-            git show HEAD:data/list_builder_compare.md > /tmp/ours_compare.md 2>/dev/null || true
             git fetch -q origin main
             git reset -q --hard origin/main
             python3 scripts/reports/merge_candidates.py /tmp/ours.json data/directories_candidates.json
-            cp /tmp/ours_state.json data/list_builder_state.json
-            [ -s /tmp/ours_signup.md ] && cp /tmp/ours_signup.md data/needs_signup.md
-            [ -s /tmp/ours_compare.md ] && cp /tmp/ours_compare.md data/list_builder_compare.md
-            true
-            git add data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md
+            # MERGE the state (max spend per day, max cursor, union of rejected; rebuilds the two .md files), never copy ours over theirs
+            python3 scripts/list_builder/merge_state.py /tmp/ours_state.json data/list_builder_state.json
+            for f in data/directories_candidates.json data/list_builder_state.json data/needs_signup.md data/list_builder_compare.md; do if [ -f "$f" ]; then git add "$f"; fi; done
             git diff --cached --quiet && { echo "nothing left to save"; exit 0; }
             git commit -q -m "data: list builder (merged)"
           done
