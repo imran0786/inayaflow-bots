@@ -25,6 +25,7 @@ on:
       - "Heartbeat (keeps the robots running)"
       - "Daily funnel numbers (read-only, counts only)"
       - "Link checker (are our directory listings live, and do they link to us)"
+      - "Platform poster (one article a day each on WordPress.com, Blogger, Notion)"
   schedule:
     - cron: "*/20 * * * *"
   workflow_dispatch:

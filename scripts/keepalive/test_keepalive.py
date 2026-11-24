@@ -151,6 +151,9 @@ class WorstCase(unittest.TestCase):
             import poster as pp
             dev_cap = pp.DAY_CAP
             self.assertLessEqual(dev_cap, 0.60)
+        wfp = open(os.path.join(ROOT, ".github", "workflows", "platform-poster.yml"), encoding="utf8").read()
+        platform_cap = float(re.search(r'PLATFORM_DAY_USD_CAP: "([\d.]+)"', wfp).group(1))   # the cap the platform poster really runs with (workflow env)
+        self.assertLessEqual(platform_cap, 0.90)
         PER_CALL_HAIKU = 0.003                                   # 15k tokens in x $0.10/M + 3000 out x $0.50/M (scripts/reports/common.py prices)
         table = {
             "directory agent": ag.USD_CAP,
@@ -160,6 +163,7 @@ class WorstCase(unittest.TestCase):
             "email replier": rp.AI_CALLS_PER_DAY * PER_CALL_HAIKU,
             "mail router": rt.AI_CALLS_PER_DAY * PER_CALL_HAIKU,
             "DEV poster (daily cap in poster.py when that file exists)": dev_cap,
+            "platform poster (PLATFORM_DAY_USD_CAP in platform-poster.yml)": platform_cap,
         }
         total = sum(table.values())
         self.assertLessEqual(total, 15.0, table)

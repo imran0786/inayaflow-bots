@@ -1,0 +1,124 @@
+name: Platform poster (one article a day each on WordPress.com, Blogger, Notion)
+
+# 24 Nov 2026. Publishes ONE short, unique article a day to EACH of WordPress.com (inayaflow.wordpress.com), Blogger (inayaflow.blogspot.com) and
+# Notion (child page of the public page; published at breezy-split-a72.notion.site), each with one plain link to a rotating inayaflow.ai page.
+# Writer: Claude Sonnet 5.5 + web search (reuses scripts/dev_poster). QA: Haiku + offline checks. HARD daily cap PLATFORM_DAY_USD_CAP over ALL runs
+# (checked before each model call, kept in the state); at most 2 dry runs a day; one article per platform per day.
+# Any FAIL = nothing is published for that platform, the draft goes to the PRIVATE repo (imran0786/genie, branch ops-platform-poster).
+# SWITCH: NOTHING is published (scheduled OR manual run, dry_run input or not) unless the repository variable PLATFORM_POSTER_LIVE is "true"; the poster
+# checks the switch itself as well. Manual runs default to dry_run=true. No run at all unless the private state was restored (fail closed).
+# SPEND: the cap below is part of the $14.98 a day of the LISTED robots (README, test_keepalive WorstCase reads this value). Public log = platform, page slug, status words, cost only.
+on:
+  schedule:
+    - cron: "41 9 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = write and check the articles, publish nothing"
+        default: "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-poster
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests (a failure stops the run)
+        run: python3 -W ignore scripts/platform_poster/test_poster.py
+
+      - name: Restore state from the private repo
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          mkdir -p ops
+          U="https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git"
+          if res=$(bash scripts/dev_poster/state_branch.sh "$U" /tmp/logs ops-platform-poster); then rc=0; else rc=$?; fi
+          echo "state branch check: $res"
+          if [ "$rc" = "0" ]; then
+            if python3 -c "import json,sys; d=json.load(open('/tmp/logs/ops/platform_poster_state.json')); sys.exit(0 if isinstance(d, dict) and isinstance(d.get('posts', []), list) else 1)" 2>/dev/null; then
+              cp /tmp/logs/ops/platform_poster_state.json ops/
+              cp /tmp/logs/ops/platform_poster_log.md ops/ 2>/dev/null || true
+              echo "PLATFORM_STATE_OK=true" >> "$GITHUB_ENV"
+              echo "state restored"
+            else
+              echo "state branch exists but the state file is missing or unreadable: no run"
+            fi
+          elif [ "$rc" = "10" ]; then
+            echo "PLATFORM_STATE_OK=true" >> "$GITHUB_ENV"
+            echo "PLATFORM_FIRST_RUN=true" >> "$GITHUB_ENV"
+            echo "no state branch yet (first run)"
+          else
+            echo "private repo unreachable: no run"
+          fi
+
+      - name: Write, check and (when live) publish
+        timeout-minutes: 38
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          WPCOM_CLIENT_ID: ${{ secrets.WPCOM_CLIENT_ID }}
+          WPCOM_CLIENT_SECRET: ${{ secrets.WPCOM_CLIENT_SECRET }}
+          WPCOM_APP_PASSWORD: ${{ secrets.WPCOM_APP_PASSWORD }}
+          WPCOM_USERNAME: ${{ vars.WPCOM_USERNAME }}
+          BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
+          BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
+          BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          PLATFORM_POSTER_LIVE: ${{ vars.PLATFORM_POSTER_LIVE }}
+          DRY_RUN: ${{ vars.PLATFORM_POSTER_LIVE == 'true' && ((github.event_name == 'schedule' && 'false') || github.event.inputs.dry_run || 'true') || 'true' }}
+          PLATFORM_DAY_USD_CAP: "0.02"   # the headroom left under $14.98 today; the Director raises it (max 0.90) after freeing budget elsewhere, and updates the README line
+        run: |
+          for v in WPCOM_APP_PASSWORD WPCOM_CLIENT_SECRET BLOGGER_CLIENT_SECRET BLOGGER_REFRESH_TOKEN NOTION_TOKEN ANTHROPIC_API_KEY; do
+            [ -n "${!v}" ] && echo "::add-mask::${!v}"
+          done
+          python3 scripts/platform_poster/poster.py 2>/dev/null
+
+      - name: Save state, log and drafts to the private repo (never here)
+        if: always()
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          set -e
+          rm -rf /tmp/push
+          U="https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git"
+          if res=$(bash scripts/dev_poster/state_branch.sh "$U" /tmp/push ops-platform-poster); then rc=0; else rc=$?; fi
+          echo "state branch check: $res"
+          if [ "$rc" = "0" ]; then
+            :
+          elif [ "$rc" = "10" ]; then
+            cd /tmp/push && git checkout -q --orphan ops-platform-poster && git rm -rq --cached . >/dev/null 2>&1 || true
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
+          else
+            echo "private repo unreachable or the state branch cannot be checked out: NOT saving"
+            exit 1
+          fi
+          mkdir -p /tmp/push/ops
+          for f in platform_poster_state.json platform_poster_log.md; do
+            [ -f "ops/$f" ] && cp "ops/$f" "/tmp/push/ops/$f" || true
+          done
+          [ -d ops/platform_drafts ] && mkdir -p /tmp/push/ops/platform_drafts && cp ops/platform_drafts/* /tmp/push/ops/platform_drafts/ || true
+          cd /tmp/push
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add ops
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -q -m "ops: platform poster state and log"
+          ok=0
+          for i in 1 2 3 4; do
+            if git push -q origin ops-platform-poster; then ok=1; break; fi
+            git pull -q --rebase origin ops-platform-poster || git rebase --abort || true
+            sleep 3
+          done
+          [ "$ok" = "1" ] || { echo "push failed after 4 tries: the day's spend was NOT saved"; exit 1; }
+          echo "state saved"
