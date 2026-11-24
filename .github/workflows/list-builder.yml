@@ -1,0 +1,71 @@
+name: List builder (new candidate places a day)
+
+# 24 Nov 2026. Imran: "We should have at least 2,000, 3,000, going up to 5,000 list of platforms, directories, tools, guides, blog forms, anything,
+# everything ... I want to know how much list has increased today."
+# Once a day: Claude Sonnet + web search lists ~150-200 NEW places over 12 rotating categories; code dedupes by registrable domain against every list
+# we hold, opens each URL (GET only, HTTP 200-399), drops spam, marks paid-only as HOLD paid, and adds the rest to data/directories_candidates.json
+# (status TODO for directory-type places, TODO outreach for outreach-type places). The day's summary line "list-builder: +N new (total T; by category ...)"
+# is in data/list_builder_state.json. Signs up nowhere, sends nothing, fills no form.
+# SPEND: hard cap $1.50 a UTC day over all runs (LIST_BUILDER_DAY_USD_CAP). $14.98 a day is the hard cap of the LISTED robots together
+# (directory agent 6.00, hunter 4.50, list builder 1.50, batch 1.00, report 0.48, replier 0.45, router 0.45, DEV poster 0.60; see README).
+# Scheduled runs are live; a manual run defaults to dry_run=true (candidates are not written, the spend is still booked).
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = look and check, write no candidates"
+        default: "true"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: list-builder
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests (a failure stops the run)
+        run: python3 -W ignore scripts/list_builder/test_builder.py
+      - name: Build the list
+        timeout-minutes: 30
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || (github.event_name == 'schedule' && 'false') || 'true' }}
+          LIST_BUILDER_DAY_USD_CAP: "1.50"   # 24 Nov: funded by lowering the hunter from 6.00 to 4.50 (sum stays $14.98)
+        run: |
+          echo "::add-mask::$ANTHROPIC_API_KEY"
+          python3 scripts/list_builder/builder.py 2>/dev/null
+      - name: Save candidates and state (this repo, data files only)
+        if: always()
+        run: |
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          git add data/directories_candidates.json data/list_builder_state.json
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -q -m "data: list builder (new candidate places, state)"
+          for i in 1 2 3; do
+            if git push -q origin HEAD:main; then echo "saved"; exit 0; fi
+            # conflict (the backlink batch also writes the candidates file): keep our rows AND theirs (union by domain), our state file
+            git show HEAD:data/directories_candidates.json > /tmp/ours.json
+            git show HEAD:data/list_builder_state.json > /tmp/ours_state.json
+            git fetch -q origin main
+            git reset -q --hard origin/main
+            python3 scripts/reports/merge_candidates.py /tmp/ours.json data/directories_candidates.json
+            cp /tmp/ours_state.json data/list_builder_state.json
+            git add data/directories_candidates.json data/list_builder_state.json
+            git diff --cached --quiet && { echo "nothing left to save"; exit 0; }
+            git commit -q -m "data: list builder (merged)"
+          done
+          echo "push failed"; exit 1
