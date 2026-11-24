@@ -2057,7 +2057,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -2094,7 +2094,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -2149,7 +2149,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -2438,7 +2438,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -2547,7 +2547,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -2602,7 +2602,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -2621,7 +2621,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -2640,7 +2640,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -2677,7 +2677,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -2840,7 +2840,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3111,7 +3111,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3148,7 +3148,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3167,7 +3167,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3276,7 +3276,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3331,7 +3331,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PHONE_REQUIRED 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3368,7 +3368,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3405,7 +3405,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3424,7 +3424,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3497,7 +3497,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3516,7 +3516,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3535,7 +3535,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3644,7 +3644,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3807,7 +3807,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED BADGE_REQUIRED 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3844,7 +3844,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3881,7 +3881,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3900,7 +3900,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3919,7 +3919,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3956,7 +3956,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -3993,7 +3993,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -4102,7 +4102,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -4121,7 +4121,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -4158,7 +4158,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED BADGE_REQUIRED 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -4231,7 +4231,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "checked": "2026-11-23"
   },
   {
@@ -5149,7 +5149,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "AI tools directory; submissions via GitHub pull request; no stated listing fee.",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "followed_sample": "15 followed / 0 not",
    "needs": [
     "account"
@@ -6467,7 +6467,7 @@
    "followed": "nofollow",
    "checked": "2026-11-23",
    "judge_reason": "Software directory with AI and marketing categories; listing cost not stated, sign-up required.",
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "followed_sample": "0 followed / 4 not",
    "needs": [
     "account"
@@ -6586,7 +6586,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Startup List accepts tech startups; requires WA/OR/ID/BC headquarters; free listing not stated.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "followed_sample": "92 followed / 0 not",
    "needs": []
   },
@@ -7420,7 +7420,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Submissions paused; only email notification offered. Review queue implies free path, skip-queue paid.",
-   "status": "TRIED OTHER 2026-11-21",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "9 followed / 0 not",
    "needs": [
     "account"
@@ -7493,7 +7493,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Basic Launch is free forever with no credit card; paid upgrades are optional. Accepts startup tools.",
-   "status": "TRIED EMAIL_CODE_NOT_RECEIVED 2026-11-21",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "4 followed / 0 not",
    "needs": [
     "account"
@@ -9285,7 +9285,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Curated design gallery with a Submit link, but submit page and pricing weren't found.",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -10398,7 +10398,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free listing queued up to three months with no-follow link; $49 for immediate do-follow.",
-   "status": "TRIED OTHER 2026-11-21",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "29 followed / 1 not",
    "needs": [
     "account"
@@ -10423,7 +10423,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Has a Startup Directory menu link, but no submit or pricing page found.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "followed_sample": "1 followed / 0 not",
    "needs": []
   },
@@ -10743,7 +10743,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "Free editor-review listing exists; paid faster option; submission requires an offered deal.",
-   "status": "TRIED OTHER 2026-11-21",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -10967,7 +10967,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Curated lifetime-deals directory with AI and content tools, but no submit or pricing page text found.",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -13030,7 +13030,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "SaaS comparison site; has a 'Request a Review' option, but no listing fee or submit page found.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "followed_sample": "4 followed / 4 not",
    "needs": []
   },
@@ -13375,7 +13375,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Lists tools with a Submit Project option; no free or paid listing terms shown.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "followed_sample": "3 followed / 0 not",
    "needs": [
     "account"
@@ -14199,7 +14199,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Product Hunt-style launch directory for indie makers; no submit or pricing page found.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -15750,7 +15750,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "B2B SaaS/AI marketplace with seller accounts; no free listing option is stated.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -15919,7 +15919,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Curated design-resource directory with Submit link; listing cost not stated; Sign Up appears.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-24",
    "followed_sample": "59 followed / 0 not",
    "needs": [
     "account"
@@ -16489,7 +16489,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free $0 gallery submission exists; SaaS Tool category fits; paid tiers optional, ~15-day delay.",
-   "status": "TRIED OTHER 2026-11-21",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "57 followed / 33 not",
    "needs": []
   },
@@ -16767,7 +16767,7 @@
    "followed": "mixed",
    "checked": "2026-11-20",
    "judge_reason": "Free forever submission for SaaS and software tools; requires a free account to submit.",
-   "status": "TRIED EMAIL_CODE_NOT_RECEIVED 2026-11-21",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "followed_sample": "24 followed / 45 not",
    "needs": [
     "account"
@@ -18313,7 +18313,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "AI agent directory with a submit form; no stated free listing terms or pricing page.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -18361,7 +18361,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "AI tools directory; submit needs sign-in; free listing not stated, paid bids shown",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "7 followed / 9 not",
    "needs": [
     "account"
@@ -22402,7 +22402,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Company ranking database with Add Company form; no free listing stated, no pricing shown.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "followed_sample": "11 followed / 0 not",
    "needs": [
     "account"
@@ -24611,7 +24611,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "Tech startup directory with SaaS and marketing categories; the page shows no free listing terms, only advertising.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "followed_sample": "3 followed / 3 not",
    "needs": [
     "account"
@@ -24971,7 +24971,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "Software directory with AI, marketing, and video categories; submit requires login, free listing not stated.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "6 followed / 24 not",
    "needs": [
     "account"
@@ -25197,7 +25197,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Showcase of Bolt-built projects; submissions require Bolt-built apps; no fee stated.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-24",
    "followed_sample": "9 followed / 0 not",
    "needs": []
   },
@@ -25371,7 +25371,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "AI tools directory with launches and categories; no free-listing terms found, submit page missing.",
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -26382,7 +26382,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Free launch tier with 25 weekly slots; sign-in required; accepts SaaS, AI, and dev tools.",
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-24",
    "followed_sample": "12 followed / 0 not",
    "needs": [
     "account"
@@ -26428,7 +26428,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Launch directory; paid 14-day upgrade implies free basic listing; no submit page found.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "423 followed / 0 not",
    "needs": []
   },
@@ -26560,7 +26560,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Lists AI software and takes submissions; no listing price or free option stated.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -26671,7 +26671,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Business SaaS review directory with categories; no submit or pricing page found, so listing terms are unknown.",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -26900,7 +26900,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-23",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "needs": []
   },
   {
@@ -26921,7 +26921,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-23",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "needs": []
   },
   {
@@ -26942,7 +26942,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-23",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "needs": []
   },
   {
@@ -26984,7 +26984,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-23",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "needs": []
   },
   {
@@ -27518,7 +27518,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Free queue launch for indie makers; AI, developer and design tools listed in English.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "2 followed / 0 not",
    "needs": [
     "account"
@@ -27769,7 +27769,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "Submit page says free submission, no manual review; accepts AI and creator tools.",
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-24",
    "followed_sample": "3 followed / 11 not",
    "needs": []
   },
@@ -28514,7 +28514,7 @@
    "followed": "nofollow",
    "checked": "2026-11-23",
    "judge_reason": "Hand-curated SaaS directory; submit page states listing review is free, no strings.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "0 followed / 1 not",
    "needs": []
   },
@@ -28750,7 +28750,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Indie hacker startup directory advertising a free product launchpad; no submit page found to confirm requirements.",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -28868,7 +28868,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "Free $0 basic listing exists; paid tiers and optional badge only add dofollow.",
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-24",
    "followed_sample": "12 followed / 24 not",
    "needs": []
   },
@@ -28891,7 +28891,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Free submission form with dofollow link; paid launch packages optional, sign-in appears required.",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-24",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -28941,7 +28941,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "Niche MCP/AI directory; $39 paid listing skips review, implying a free reviewed queue.",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "followed_sample": "6 followed / 16 not",
    "needs": []
   },
@@ -29556,7 +29556,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED PHONE_REQUIRED 2026-11-18",
    "type": "directory"
   },
   {
@@ -29676,7 +29676,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED(old bot) BLOCKED:paid plan 2026-11-18",
    "type": "directory"
   },
   {
