@@ -498,16 +498,33 @@ def qa_json(raw):
     return None
 
 
+def qa_lenient(raw):
+    """Last resort for a QA reply that is not clean JSON (cut off at the token limit, or prose). FAIL WINS: the word FAIL anywhere in the reply
+    (a quoted "verdict":"FAIL" or a bare FAIL) makes it FAIL, even when a PASS appears first. PASS only when it is the sole verdict
+    (a quoted "verdict":"PASS" or a reply that starts with PASS). Anything else -> None (the article then fails, as before)."""
+    raw = raw or ""
+    tail = raw.split('"reasons"', 1)[1] if '"reasons"' in raw else ""
+    rs = [x[:160] for x in re.findall(r'"([^"]{6,})"', tail)]
+    if re.search(r"(?i)\bFAIL\b", raw):
+        return {"verdict": "FAIL", "reasons": rs or [raw.strip()[:160] or "QA reply was cut off"]}
+    if re.search(r'"verdict"\s*:\s*"PASS"', raw, re.I) or re.match(r"(?i)\s*PASS\b", raw):
+        return {"verdict": "PASS", "reasons": []}
+    return None
+
+
 def qa_gate(art, target_url, source_texts, page_text, meter, post=None):
     srcs = "\n\n".join("SOURCE %s:\n%s" % (u, (t or "")[:3500]) for u, t in source_texts.items())
     user = "TARGET PAGE %s (our own page):\n%s\n\n%s\n\nARTICLE TITLE: %s\n\n%s" % (target_url, page_text[:2500], srcs, art["title"], art["body"])
     j = None
+    raw = ""
     for _try in (1, 2):                              # an unreadable QA reply gets ONE more ask before it fails
         data = anthropic(QA_MODEL, QA_SYSTEM, user[:60000], meter, post=post, max_tokens=700)
         raw = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
         j = qa_json(raw)
         if j and j.get("verdict") in ("PASS", "FAIL"):
             break
+    if not (j and j.get("verdict") in ("PASS", "FAIL")):
+        j = qa_lenient(raw) or j
     if not j or j.get("verdict") not in ("PASS", "FAIL"):
         return False, ["QA answer not understood"]
     return j["verdict"] == "PASS", [str(r)[:160] for r in (j.get("reasons") or [])][:5]

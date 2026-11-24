@@ -664,5 +664,139 @@ class AnchorMix(unittest.TestCase):
         self.assertEqual(D.anchor_type(D.anchor_count(st, "homepage"), "homepage"), "brand")
 
 
+# ---------- repair of overlap / first person (24 Nov) ----------
+COPY = "\n\nFree TikTok tool page with plain explanations of how the checker works and what it needs."
+FIRST = "\n\nI think we should always check our hashtags before posting anything."
+
+
+def ai_with_repair(calls, extra, repair_text, qa_raw=None):
+    """Writer always returns a body carrying `extra`; the Haiku repair call answers with repair_text for sentence 1; QA passes (or answers qa_raw)."""
+    base = fake_ai(calls, bodyfn=lambda pl, tgt: body_for(pl, tgt, extra=extra))
+
+    def post(url, b, h):
+        if b["model"] == D.QA_MODEL and "copy editor" in b["system"]:
+            calls.append("repair")
+            uniq = " " + filler("rr" + chr(97 + len(calls)), 12) + "."          # each platform's repair differs, so the articles do not overlap each other
+            return {"content": [{"type": "text", "text": json.dumps({"1": repair_text[4:] if repair_text.startswith("RAW:") else repair_text.split(" ")[0] + uniq})}], "usage": {"input_tokens": 300, "output_tokens": 40}}
+        if b["model"] == D.QA_MODEL and qa_raw is not None:
+            calls.append(b["model"])
+            return {"content": [{"type": "text", "text": qa_raw}], "usage": {"input_tokens": 4000, "output_tokens": 50}}
+        return base(url, b, h)
+    return post
+
+
+class Repair(unittest.TestCase):
+    def setUp(self):
+        for f in (P.STATE_PATH, P.LOG_PATH):
+            if os.path.exists(f):
+                os.remove(f)
+        P.DRY = False
+        P.DAY_CAP = 0.90
+        os.environ["PLATFORM_STATE_OK"] = "true"
+        os.environ["PLATFORM_FIRST_RUN"] = "true"
+        os.environ["PLATFORM_POSTER_LIVE"] = "true"
+
+    def test_unit_gate_flags_the_copy(self):
+        a = art(body=body_for("wordpress", T, extra=COPY))
+        pr = probs(a, T)
+        self.assertTrue(repairable(pr) if (repairable := P.repairable) else False)
+        self.assertTrue(any("overlap with our site" in x for x in pr))
+
+    def test_repairable_only_for_copy_and_first_person(self):
+        self.assertTrue(P.repairable(["10-word overlap with our site: 'x'", "first person singular (use 'we')"]))
+        self.assertFalse(P.repairable(["10-word overlap with our site: 'x'", "number '5%' not found in the fetched sources"]))
+        self.assertFalse(P.repairable([]))
+
+    def test_sentence_spans_skip_headings(self):
+        b = "## Head one. Not a sentence\n\nOne here. Two here!\n- item one. item two"
+        got = [b[x:y] for x, y in P.sentence_spans(b)]
+        self.assertEqual(got, ["One here.", "Two here!", "- item one.", "item two"])
+
+    def test_overlap_is_repaired_and_published(self):
+        calls, sent = [], []
+        res, out = quiet(post_ai=ai_with_repair(calls, COPY, "Our checker page explains in simple terms how it reads a profile."), publishers=fake_publishers(sent))
+        self.assertEqual(res["wordpress"], "PUBLISHED")
+        self.assertIn("repair wordpress problems 1 -> 0", out)
+        self.assertEqual(calls.count("repair"), 3)                    # one repair per platform, no second writer call
+        self.assertEqual(calls.count(D.WRITER), 3)
+        self.assertEqual(len(sent), 3)
+
+    def test_first_person_is_repaired(self):
+        calls, sent = [], []
+        res, out = quiet(post_ai=ai_with_repair(calls, FIRST, "We think everyone should check their hashtags before posting anything."), publishers=fake_publishers(sent))
+        self.assertEqual(set(res.values()), {"PUBLISHED"})
+        self.assertIn("problems 1 -> 0", out)
+
+    def test_repair_changes_only_the_bad_sentence(self):
+        meter = D.Meter(cap=0.9)
+        a = art(body=body_for("wordpress", T, extra=COPY))
+        fixed = P.repair_article(a, SITE_TEXT * 2, [], meter, post=ai_with_repair([], COPY, "Our checker page explains in simple terms how it reads a profile."))
+        self.assertIsNotNone(fixed)
+        self.assertEqual(fixed["body"].replace(re.search(r"Our rr[^\n]*", fixed["body"]).group(0), COPY.strip()), a["body"])
+        self.assertEqual(fixed["title"], a["title"])
+
+    def test_still_failing_after_one_repair_is_failed_as_before(self):
+        calls, sent = [], []
+        res, out = quiet(post_ai=ai_with_repair(calls, COPY, "RAW:Free TikTok tool page with plain explanations of how the checker works and what it needs."), publishers=fake_publishers(sent))
+        self.assertEqual(set(res.values()), {"FAIL"})
+        self.assertEqual(sent, [])
+        self.assertEqual(calls.count("repair"), 3)                    # ONE repair per platform, not one per writer attempt
+        log = open(P.LOG_PATH, encoding="utf8").read()
+        self.assertIn("overlap with our site", log)
+        self.assertTrue([d for d in os.listdir(P.DRAFT_DIR) if d.endswith("_FAILED.md")])
+
+    def test_repair_that_breaks_the_link_is_not_used(self):
+        calls, sent = [], []
+        bad = "Read [more here](https://elsewhere.example.com/x) about it."          # a stray external link: the gate must reject the repaired article
+        res, _ = quiet(post_ai=ai_with_repair(calls, COPY, "RAW:" + bad), publishers=fake_publishers(sent))
+        self.assertEqual(set(res.values()), {"FAIL"})
+        self.assertEqual(sent, [])
+
+    def test_repair_not_tried_for_other_problems(self):
+        calls = []
+        res, _ = quiet(post_ai=ai_with_repair(calls, "\n\nWe say delve into it.", "x"), publishers=fake_publishers([]))
+        self.assertEqual(set(res.values()), {"FAIL"})
+        self.assertEqual(calls.count("repair"), 0)
+
+    def test_truncated_qa_reply_is_read_leniently(self):
+        calls, sent = [], []
+        raw = '{"verdict":"PASS","reasons":["all numbers match the lin'          # cut off at the token limit
+        res, _ = quiet(post_ai=ai_with_repair(calls, "", "x", qa_raw=raw), publishers=fake_publishers(sent))
+        self.assertEqual(set(res.values()), {"PUBLISHED"})
+
+    def test_cap_error_inside_repair_stops_cleanly_and_publishes_nothing(self):
+        orig = P.repair_article
+
+        def boom(*a, **k):
+            raise D.CapReached("daily cost cap")
+        P.repair_article = boom
+        try:
+            sent, calls = [], []
+            res, out = quiet(post_ai=ai_with_repair(calls, COPY, "x"), publishers=fake_publishers(sent))
+        finally:
+            P.repair_article = orig
+        self.assertEqual(sent, [])
+        self.assertEqual(set(res.values()), {"FAIL"})
+        self.assertEqual(calls.count(D.WRITER), 3)                     # no second writer try after the cap hit
+        self.assertIn("cost cap reached during repair", open(P.LOG_PATH, encoding="utf8").read())
+
+    def test_repair_is_skipped_when_it_cannot_be_afforded(self):
+        P.DAY_CAP = 0.50                      # room for the writer + QA only, not for the extra repair + QA
+        calls, sent = [], []
+        res, _ = quiet(post_ai=ai_with_repair(calls, COPY, "x"), publishers=fake_publishers(sent))
+        self.assertEqual(res["wordpress"], "FAIL")                     # the first platform could not afford a repair, so it is FAILED, not repaired
+        self.assertLessEqual(calls.count("repair"), 2)                 # not for the first platform (it would starve the later ones)
+        self.assertLessEqual(json.load(open(P.STATE_PATH))["spent"][D.utc_today()], 0.50 + 1e-9)
+
+    def test_qa_lenient_rules(self):
+        self.assertEqual(D.qa_lenient('{"verdict": "FAIL", "reasons": ["the number is wrong here"')["verdict"], "FAIL")
+        self.assertEqual(D.qa_lenient("PASS. Everything matches.")["verdict"], "PASS")
+        self.assertEqual(D.qa_lenient("PASS, but one claim could FAIL")["verdict"], "FAIL")      # FAIL wins
+        self.assertEqual(D.qa_lenient('{"verdict":"PASS","reasons":[]} {"verdict":"FAIL","reasons":["a number is invented"')["verdict"], "FAIL")
+        self.assertEqual(D.qa_lenient('{"verdict":"FAIL","reasons":["x is wrong"]} then {"verdict":"PASS"')["verdict"], "FAIL")
+        self.assertIsNone(D.qa_lenient("looks fine to me"))
+        self.assertIsNone(D.qa_lenient(""))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
