@@ -174,8 +174,8 @@ class WorstCase(unittest.TestCase):
         self.assertIn('DAILY_COST_CAP: "15.00"', jr)
         self.assertEqual(ir.REPORT_AI_PER_DAY, 160)
         self.assertEqual(ag.USD_CAP, 5.10)
-        self.assertEqual(hu.DAILY_CAP, 4.5)
-        self.assertEqual(lb.DAY_CAP, 1.5)
+        self.assertEqual(hu.DAILY_CAP, 3.0)
+        self.assertEqual(lb.DAY_CAP, 3.0)
         self.assertEqual(bb.AI_USD_PER_DAY, 1.0)
         self.assertLessEqual(rp.AI_CALLS_PER_DAY * PER_CALL_HAIKU, 0.45 + 1e-9)
 

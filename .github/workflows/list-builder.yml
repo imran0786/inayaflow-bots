@@ -2,16 +2,17 @@ name: List builder (new candidate places a day)
 
 # 24 Nov 2026. Imran: "We should have at least 2,000, 3,000, going up to 5,000 list of platforms, directories, tools, guides, blog forms, anything,
 # everything ... I want to know how much list has increased today."
-# Once a day: Claude Sonnet + web search lists ~150-200 NEW places over 12 rotating categories; code dedupes by registrable domain against every list
+# Twice a day (04:23 and 16:23 UTC): Claude Sonnet + web search lists ~450 NEW places over 12 rotating categories; code dedupes by registrable domain against every list
 # we hold, opens each URL (GET only, HTTP 200-399), drops spam, marks paid-only as HOLD paid, and adds the rest to data/directories_candidates.json
 # (status TODO for directory-type places, TODO outreach for outreach-type places). The day's summary line "list-builder: +N new (total T; by category ...)"
 # is in data/list_builder_state.json. Signs up nowhere, sends nothing, fills no form.
-# SPEND: hard cap $1.50 a UTC day over all runs (LIST_BUILDER_DAY_USD_CAP). $14.98 a day is the hard cap of the LISTED robots together
-# (directory agent 6.00, hunter 4.50, list builder 1.50, batch 1.00, report 0.48, replier 0.45, router 0.45, DEV poster 0.60; see README).
+# SPEND: hard cap $3.00 a UTC day over all runs (LIST_BUILDER_DAY_USD_CAP). $14.98 a day is the hard cap of the LISTED robots together
+# (directory agent 6.00, hunter 3.00, list builder 3.00, batch 1.00, report 0.48, replier 0.45, router 0.45, DEV poster 0.60; see README).
 # Scheduled runs are live; a manual run defaults to dry_run=true (candidates are not written, the spend is still booked).
 on:
   schedule:
     - cron: "23 4 * * *"
+    - cron: "23 16 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -43,7 +44,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           DRY_RUN: ${{ github.event.inputs.dry_run || (github.event_name == 'schedule' && 'false') || 'true' }}
-          LIST_BUILDER_DAY_USD_CAP: "1.50"   # 24 Nov: funded by lowering the hunter from 6.00 to 4.50 (sum stays $14.98)
+          LIST_BUILDER_DAY_USD_CAP: "3.00"   # 24 Nov: funded by lowering the hunter from 6.00 to 3.00 (in two steps) (sum stays $14.98)
         run: |
           echo "::add-mask::$ANTHROPIC_API_KEY"
           python3 scripts/list_builder/builder.py 2>/dev/null

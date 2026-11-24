@@ -243,10 +243,10 @@ class Cap(Base):
         self.assertGreaterEqual(self.state()["spent"][TODAY], b.RESERVE)                  # a failed request keeps its reserve booked
 
     def test_cap_from_env_default_and_worst_case(self):
-        self.assertEqual(b.DAY_CAP, 1.50)
+        self.assertEqual(b.DAY_CAP, 3.00)
         self.assertLessEqual(b.MAX_CALLS_PER_RUN * 3 * b.RESERVE + 0, 99)                 # (pause_turn continuations are metered too)
-        m = b.Meter({"spent": {TODAY: 1.40}}, TODAY)
-        self.assertFalse(m.room_for_call())                                               # 1.40 + 0.20 > 1.50
+        m = b.Meter({"spent": {TODAY: 2.90}}, TODAY)
+        self.assertFalse(m.room_for_call())                                               # 2.90 + 0.20 > 3.00
         with self.assertRaises(b.CapReached):
             m.book()
 
@@ -327,9 +327,10 @@ class Config(unittest.TestCase):
     def test_workflow(self):
         t = open(self.wf, encoding="utf8").read()
         self.assertIn('cron: "23 4 * * *"', t)
+        self.assertIn('cron: "23 16 * * *"', t)
         self.assertIn("workflow_dispatch", t)
         self.assertIn("dry_run:", t)
-        self.assertIn('LIST_BUILDER_DAY_USD_CAP: "1.50"', t)
+        self.assertIn('LIST_BUILDER_DAY_USD_CAP: "3.00"', t)
         self.assertIn("group: list-builder", t)
         self.assertIn("cancel-in-progress: false", t)
         self.assertIn("contents: write", t)
