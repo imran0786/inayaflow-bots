@@ -211,6 +211,36 @@ def check_site(site):
     return {"status": "PENDING", "rel": "", "url": ""}
 
 
+def norm_path(url_or_path):
+    path = urllib.parse.urlparse(url_or_path).path or "/"
+    return "/" if path.strip("/") == "" else "/" + path.strip("/")
+
+
+def check_own(entry):
+    """Our own posts (Blogger, WordPress.com, GitBook ...) that link to one of our pages (data/own_backlinks.json).
+    entry: {"source": post URL, "target": our path}. The link to the TARGET page is what counts (rel read from the page code).
+    Returns dict(status, rel, url, page) like check_site."""
+    url, target = entry["source"], norm_path(entry["target"])
+    st, body, blocked = get(url)
+    if st != 200 or blocked:
+        return {"status": "BLOCKED_CHECK" if blocked else "UNREACHABLE", "rel": "", "url": "", "page": ""}
+    _rel, links = analyse(body)
+    rels = [r for h, r in links if is_ours(h) and norm_path(h) == target]
+    if rels:
+        return {"status": "LIVE", "rel": rel_of(rels), "url": url, "page": target}
+    return {"status": "PENDING", "rel": "", "url": "", "page": ""}
+
+
+def load_own():
+    """Entries from data/own_backlinks.json (public file: our own posts, no secrets)."""
+    out, seen = [], set()
+    for e in load_json(os.path.join(ROOT, "data", "own_backlinks.json"), []):
+        if isinstance(e, dict) and str(e.get("source", "")).startswith("https://") and e.get("target") and e["source"] not in seen:
+            seen.add(e["source"])
+            out.append(e)
+    return out
+
+
 # ---------- inputs ----------
 def load_json(p, d):
     try:
@@ -312,9 +342,10 @@ def main():
     prev = load_prev()
     rows, new = [], []
     cnt = {"checked": 0, "followed": 0, "nofollow": 0, "pending": 0, "gone": 0, "blocked": 0}
-    for s in sites:
-        d = s["domain"]
-        r = check_site(s)
+    work = [(s["domain"], (lambda s=s: check_site(s))) for s in sites]
+    work += [(o["source"], (lambda o=o: check_own(o))) for o in load_own()]
+    for d, run in work:
+        r = run()
         cnt["checked"] += 1
         p = prev.get(d, {})
         was_live = p.get("status") == "LIVE"

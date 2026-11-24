@@ -3,7 +3,7 @@
 Why: the browser-use directory agent reads confirmation mail only while it is on a site. Mail that arrives after its
 session (or that it used without telling anyone) stayed "NOT HANDLED" in the mail router's audit and nobody acted.
 
-What it does, every run (GitHub Actions only), for mail of the last 72 h in INBOX + Junk that is older than 20 min
+What it does, every run (GitHub Actions only), for mail of the last 14 days (VERIFY_HOURS) in INBOX + Junk that is older than 20 min
 and not yet flagged IFDirHandled / IFDirSeen:
   - the SENDER's domain must be a directory we know (lists in data/ + the agent's state). Anything else: not touched, listed for a human.
   - newsletter double opt-in mail: never opened (not needed for a listing), flagged handled.
@@ -23,7 +23,8 @@ from urllib.parse import urlparse
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 HOST = os.environ.get("IMAP_HOST", "mail.privateemail.com")
 USER = os.environ.get("CONTACT_EMAIL", "contact@inayaflow.ai")
-HOURS = int(os.environ.get("VERIFY_HOURS", "72"))
+HOURS = int(os.environ.get("VERIFY_HOURS", "336"))   # 14 days (24 Nov 2026: was 72 h, so mail older than 3 days was never looked at)
+MAX_UIDS = int(os.environ.get("VERIFY_MAX_UIDS", "1500"))
 MIN_AGE_MIN = int(os.environ.get("VERIFY_MIN_AGE_MIN", "20"))   # younger mail may belong to a running agent session
 SESSION_TTL_MIN = int(os.environ.get("VERIFY_SESSION_TTL_MIN", "30"))  # codes / magic links older than this are dead
 MAX_OPEN = int(os.environ.get("VERIFY_MAX_OPEN", "8"))
@@ -42,6 +43,9 @@ KW_ROUTE_VERIFY, KW_ROUTE_PREFIX = "IFRoute_DIRECTORY_VERIFY", "IFRoute_"
 
 VERIFY_SUBJ_RE = re.compile(r"confirm|verif|activat|magic.?link|sign.?in|log.?in|one.?time|\bcode\b|\botp\b|complete your", re.I)
 NEWSLETTER_RE = re.compile(r"subscription|subscrib|newsletter|digest|weekly", re.I)
+# double opt-in wording in the body of a mail whose subject is generic ("Confirm your email"): a newsletter, not our listing
+NEWSLETTER_BODY_RE = re.compile(r"confirm (your )?(newsletter )?subscription|subscribe to (our|the|my) (weekly |daily )?newsletter|"
+                                r"confirm (that )?you want to (receive|subscribe)|double opt|to start receiving (our|the) (weekly |daily )?(newsletter|digest)", re.I)
 CONFIRM_RE = re.compile(r"confirm|verif|activat|validat", re.I)
 MAGIC_RE = re.compile(r"magic|sign.?in|log.?in|one.?time|\botp\b|passcode|\bcode\b", re.I)
 LINK_OK_RE = re.compile(r"confirm|verif|activat|validat|token|magic|auth|callback|sign-?in|login|otp|code=", re.I)
@@ -215,6 +219,8 @@ def decide(subject, sender_dom, text, known, site_status, age_min, routed_verify
     if site_status in CLOSED:
         return "SITE_CLOSED", None
     body = plain(text)
+    if NEWSLETTER_BODY_RE.search(body[:800]):
+        return "SKIPPED_NEWSLETTER", None
     own, off = confirm_links(text, sender_dom)
     magic = bool(MAGIC_RE.search(subject or "")) and not CONFIRM_RE.search(subject or "")
     code = find_code((subject or "") + " " + body)
@@ -358,7 +364,7 @@ def main():
             except Exception:
                 continue
             typ, data = imap.uid("SEARCH", None, "SINCE", since.strftime("%d-%b-%Y"), "UNKEYWORD", KW_DONE, "UNKEYWORD", KW_SEEN)
-            uids = (data[0] or b"").split()[-400:]
+            uids = (data[0] or b"").split()[-MAX_UIDS:]
             try:   # Supabase Auth mails that were set aside before the 19 Nov rule: look again (only an open link changes anything)
                 t2, d2s = imap.uid("SEARCH", None, "SINCE", since.strftime("%d-%b-%Y"), "KEYWORD", KW_SEEN, "UNKEYWORD", KW_DONE, "FROM", SUPABASE_SENDER)
                 recheck = set((d2s[0] or b"").split()) if t2 == "OK" else set()
