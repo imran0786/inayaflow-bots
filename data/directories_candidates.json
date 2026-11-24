@@ -32550,7 +32550,7 @@
    "free_check": "free",
    "quality": "DR 31",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32620,7 +32620,7 @@
    "free_check": "free",
    "quality": "DR 91",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32676,7 +32676,7 @@
    "free_check": "free",
    "quality": "DR 85",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32774,7 +32774,7 @@
    "free_check": "free",
    "quality": "DR 81",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32788,7 +32788,7 @@
    "free_check": "free",
    "quality": "DR 80",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "their_notes": "link reported: dofollow (only with their badge)"
   },
   {
@@ -32928,7 +32928,7 @@
    "free_check": "free",
    "quality": "DR 75",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "their_notes": "link reported: dofollow (only with their badge)"
   },
   {
@@ -32984,7 +32984,7 @@
    "free_check": "unknown",
    "quality": "DR 74",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "their_notes": "link reported: nofollow"
   },
   {
@@ -33012,7 +33012,7 @@
    "free_check": "freemium",
    "quality": "DR 71",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "their_notes": "link reported: unknown"
   },
   {
@@ -33040,7 +33040,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED BADGE_REQUIRED 2026-11-24",
    "their_notes": ""
   },
   {
@@ -33096,7 +33096,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED BADGE_REQUIRED 2026-11-24",
    "their_notes": ""
   },
   {
@@ -38682,7 +38682,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "type": "launch_site"
   },
   {
@@ -38730,7 +38730,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-24",
    "type": "directory"
   },
   {
@@ -38826,7 +38826,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "type": "directory"
   },
   {
@@ -38898,7 +38898,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-24",
    "type": "directory"
   },
   {
@@ -38922,7 +38922,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-24",
    "type": "directory"
   },
   {
@@ -39066,7 +39066,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-24",
    "type": "launch_site"
   },
   {
@@ -39090,7 +39090,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-24",
    "type": "directory"
   },
   {
@@ -39114,7 +39114,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-24",
    "type": "launch_site"
   },
   {
@@ -39138,7 +39138,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-24",
    "type": "launch_site"
   },
   {
@@ -39522,7 +39522,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED BADGE_REQUIRED 2026-11-24",
    "type": "directory"
   },
   {
@@ -39546,7 +39546,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED BADGE_REQUIRED 2026-11-24",
    "type": "directory"
   },
   {
@@ -39570,7 +39570,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-24",
    "type": "directory"
   },
   {
@@ -40146,7 +40146,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-24",
    "type": "directory"
   },
   {
