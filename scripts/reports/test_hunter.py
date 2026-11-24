@@ -16,6 +16,12 @@ def at(h, d=23):
     return dt.datetime(2026, 11, d, h, 17, tzinfo=dt.timezone.utc)
 
 
+class HunterBudget(unittest.TestCase):
+    def test_workflow_env_matches_the_code(self):
+        w = open(os.path.join(HERE, "..", "..", ".github", "workflows", "hunter.yml"), encoding="utf8").read()
+        self.assertIn('HUNTER_DAILY_CAP: "4.5"', w)
+
+
 class Hunter(unittest.TestCase):
     def test_every_page_meets_every_type_over_55_slots(self):
         self.assertEqual(len(hu.PAGES), 11)                                        # homepage, hashtag guide, 9 tools
@@ -33,18 +39,18 @@ class Hunter(unittest.TestCase):
         self.assertEqual(hu.slot(at(9), 1)[2], hu.slot(at(9), 0)[2] + 1)
         self.assertEqual(hu.slot(at(12), 0)[2], hu.slot(at(9), 1)[2] + 1)
 
-    def test_daily_stop_keeps_worst_case_at_6_dollars(self):
+    def test_daily_stop_keeps_worst_case_at_4_50_dollars(self):
         import tempfile
-        self.assertEqual(hu.DAILY_CAP, 6.0)
+        self.assertEqual(hu.DAILY_CAP, 4.5)
         now = at(21)
         with tempfile.TemporaryDirectory() as w:
             os.makedirs(os.path.join(w, "jobs", "done"))
-            for i in range(10):                                   # 10 jobs today = $6.00 of caps
+            for i in range(7):                                    # 7 jobs today = $4.20 of caps (an 8th would pass $4.50)
                 open(os.path.join(w, "jobs", "done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)), "w").close()
             open(os.path.join(w, "jobs", "done", "2026-11-22-0900-hunter-old-x.md"), "w").close()    # yesterday does not count
-            self.assertEqual(hu.queued_today(w, now), 10)
-        # at most 6.00 / 0.60 = 10 jobs a day can ever be queued; the runner enforces the $0.60 per job (max_cost in the brief)
-        self.assertEqual(int(round(hu.DAILY_CAP / hu.MAX_COST)), 10)
+            self.assertEqual(hu.queued_today(w, now), 7)
+        # at most floor(4.50 / 0.60) = 7 jobs a day can ever be queued; the runner enforces the $0.60 per job (max_cost in the brief)
+        self.assertEqual(int((hu.DAILY_CAP + 1e-9) // hu.MAX_COST), 7)
         # a hunter job still pending from yesterday counts against today; a done one from yesterday does not
         with tempfile.TemporaryDirectory() as w:
             for d in ("pending", "done"):
@@ -69,17 +75,17 @@ class Hunter(unittest.TestCase):
         return len(os.listdir(os.path.join(w, "jobs", "pending")))
 
     def test_main_11_done_plus_2_picks_queues_one_more_only_if_it_fits(self):
-        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(8)]
-        self.assertEqual(self.run_main(done), 2)                  # 8 + 2 = 10 jobs = $6.00: both fit (the QA double-count case)
-        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(9)]
-        self.assertEqual(self.run_main(done), 1)                  # 9 + 1 = 10 fits, the 11th is refused
-        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(10)]
-        self.assertEqual(self.run_main(done), 0)                  # 10 already: nothing
+        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(5)]
+        self.assertEqual(self.run_main(done), 2)                  # 5 + 2 = 7 jobs = $4.20: both fit (the QA double-count case)
+        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(6)]
+        self.assertEqual(self.run_main(done), 1)                  # 6 + 1 = 7 fits, the 8th is refused
+        done = [("done", "2026-11-23-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(7)]
+        self.assertEqual(self.run_main(done), 0)                  # 7 already: nothing
 
     def test_main_old_pending_jobs_count_against_today(self):
-        old = [("pending", "2026-11-22-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(5)]
-        done = [("done", "2026-11-23-%02d00-hunter-q%d-x.md" % (i, i)) for i in range(4)]
-        self.assertEqual(self.run_main(old + done), 5 + 1)        # 5 carried over + 4 done = 9: one more fits (10), the second does not
+        old = [("pending", "2026-11-22-%02d00-hunter-p%d-x.md" % (i, i)) for i in range(3)]
+        done = [("done", "2026-11-23-%02d00-hunter-q%d-x.md" % (i, i)) for i in range(3)]
+        self.assertEqual(self.run_main(old + done), 3 + 1)        # 3 carried over + 3 done = 6: one more fits (7), the second does not
 
     def test_job_queued_yesterday_that_ran_today_counts_today(self):
         import tempfile

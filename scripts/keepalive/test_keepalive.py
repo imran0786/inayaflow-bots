@@ -142,9 +142,9 @@ class WorstCase(unittest.TestCase):
 
     def test_sum_of_the_hard_caps(self):
         base = os.path.join(ROOT, "scripts")
-        for sub in ("directory_agent", "hunter", "reports", "email_replier", "mail_router"):
+        for sub in ("directory_agent", "hunter", "reports", "email_replier", "mail_router", "list_builder"):
             sys.path.insert(0, os.path.join(base, sub))
-        import agent as ag, hunter as hu, backlink_batch as bb, replier as rp, router as rt, inbox_report as ir
+        import agent as ag, hunter as hu, builder as lb, backlink_batch as bb, replier as rp, router as rt, inbox_report as ir
         dev_cap = 0.60                                           # same value as the poster's DAY_CAP; read from the poster itself where that file exists
         if os.path.exists(os.path.join(base, "dev_poster", "poster.py")):
             sys.path.insert(0, os.path.join(base, "dev_poster"))
@@ -155,6 +155,7 @@ class WorstCase(unittest.TestCase):
         table = {
             "directory agent": ag.USD_CAP,
             "hunter (runner enforces $0.60 a job)": hu.DAILY_CAP,
+            "list builder": lb.DAY_CAP,
             "backlink batch": bb.AI_USD_PER_DAY,
             "ops report (daily counter, 160 calls)": ir.REPORT_AI_PER_DAY * PER_CALL_HAIKU,
             "email replier": rp.AI_CALLS_PER_DAY * PER_CALL_HAIKU,
@@ -169,7 +170,8 @@ class WorstCase(unittest.TestCase):
         self.assertIn('DAILY_COST_CAP: "15.00"', jr)
         self.assertEqual(ir.REPORT_AI_PER_DAY, 160)
         self.assertEqual(ag.USD_CAP, 6.0)
-        self.assertEqual(hu.DAILY_CAP, 6.0)
+        self.assertEqual(hu.DAILY_CAP, 4.5)
+        self.assertEqual(lb.DAY_CAP, 1.5)
         self.assertEqual(bb.AI_USD_PER_DAY, 1.0)
         self.assertLessEqual(rp.AI_CALLS_PER_DAY * PER_CALL_HAIKU, 0.45 + 1e-9)
 

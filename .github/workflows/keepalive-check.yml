@@ -20,6 +20,7 @@ on:
       - "Inbox digest (contact@, read-only)"
       - "Backlink batch (list builder + outreach, every hour)"
       - "Prospect hunter (24/7 research job every 3 hours)"
+      - "List builder (new candidate places a day)"
       - "Directory agent (browser-use, daily engine)"
       - "Inbox + backlinks report (every 3 h, read-only)"
       - "Heartbeat (keeps the robots running)"
