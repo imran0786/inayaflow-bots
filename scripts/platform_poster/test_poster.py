@@ -92,11 +92,46 @@ class Gate(unittest.TestCase):
         self.assertTrue(any("words" in x for x in probs(art(body=body_for("wordpress", T, words=60)), T)))
 
     def test_overlap_with_site_other_platform_and_past(self):
-        run7 = "one two three four five six seven eight"
+        run7 = "one two three four five six seven eight nine ten"
         a = art(body=body_for("wordpress", T, extra=" " + run7))
         self.assertTrue(any("our site" in x for x in probs(a, T, site_corpus="x " + run7 + " y")))
         self.assertTrue(any("today's blogger" in x for x in probs(a, T, others=[("blogger", "q " + run7 + " q")])))
         self.assertTrue(any("earlier" in x for x in probs(a, T, past_shingles=D.shingles(a["body"]))))
+
+    def test_site_overlap_needs_ten_words_but_other_platform_stays_seven(self):
+        run8 = "one two three four five six seven eight"
+        run10 = run8 + " nine ten"
+        a8 = art(body=body_for("wordpress", T, extra=" " + run8))
+        self.assertFalse(any("our site" in x for x in probs(a8, T, site_corpus="x " + run8 + " y")))
+        a10 = art(body=body_for("wordpress", T, extra=" " + run10))
+        self.assertTrue(any("10-word overlap with our site" in x for x in probs(a10, T, site_corpus="x " + run10 + " y")))
+        self.assertTrue(any("today's blogger" in x for x in probs(a8, T, others=[("blogger", "q " + run8 + " q")])))
+
+    def test_quoted_first_person_is_ignored_unquoted_still_fails(self):
+        q = ' Readers ask "How much will TikTok pay me for my views?" and the answer varies.'
+        self.assertFalse(any("first person" in x for x in probs(art(body=body_for("wordpress", T, extra=q)), T)))
+        q2 = ' Readers ask “How much will TikTok pay me?” and the answer varies.'
+        self.assertFalse(any("first person" in x for x in probs(art(body=body_for("wordpress", T, extra=q2)), T)))
+        self.assertTrue(any("first person" in x for x in probs(art(body=body_for("wordpress", T, extra=' "Quoted." I think so.')), T)))
+
+    def test_qa_reply_with_fence_or_prose_is_understood_and_garbage_retried_once(self):
+        ok = '{"verdict":"PASS","reasons":[]}'
+        self.assertEqual(D.qa_json("Here you go:\n```json\n" + ok + "\n```\nDone")["verdict"], "PASS")
+        self.assertEqual(D.qa_json('note {not json} then ' + ok)["verdict"], "PASS")
+        self.assertIsNone(D.qa_json("no json at all"))
+        replies = ["sorry, cannot say", "```json\n" + ok + "\n```"]
+        n = []
+
+        def post(url, b, h):
+            n.append(1)
+            return {"content": [{"type": "text", "text": replies[len(n) - 1] if len(n) <= 2 else "x"}], "usage": {"input_tokens": 10, "output_tokens": 5}}
+        meter = D.Meter(cap=5.0)
+        r = D.qa_gate(art(), T, {}, "page", meter, post=post)
+        self.assertEqual(r, (True, []))
+        self.assertEqual(len(n), 2)
+        n.clear(); replies[:] = ["bad", "worse"]
+        self.assertEqual(D.qa_gate(art(), T, {}, "page", meter, post=post), (False, ["QA answer not understood"]))
+        self.assertEqual(len(n), 2)
 
     def test_link_at_end_refused(self):
         b = "## H\n\n%s\n\n%s\n\n%s\n\nLast: [page](%s)" % (filler("wordpress", 100), filler("wordpressa", 100), filler("wordpressb", 100), T)

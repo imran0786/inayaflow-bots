@@ -20,6 +20,7 @@ D = importlib.util.module_from_spec(_spec)      # the DEV poster (same file name
 _spec.loader.exec_module(D)
 
 OPS = os.environ.get("PLATFORM_OPS_DIR", os.path.join(ROOT, "ops"))
+SITE_OVERLAP_WORDS = 10      # off-site articles may restate our site's plain facts; only a 10-word run counts as a copy
 STATE_PATH = os.path.join(OPS, "platform_poster_state.json")
 LOG_PATH = os.path.join(OPS, "platform_poster_log.md")
 DRAFT_DIR = os.path.join(OPS, "platform_drafts")
@@ -129,7 +130,8 @@ def check_post(art, target_url, platform, page_full, source_texts, site_corpus="
         p.append("banned phrase: %s" % hit[0])
     if re.search(r"(?<![\w/.])@[A-Za-z0-9_.]{2,}", body):
         p.append("contains an @handle")
-    if re.search(r"\b(I|I'm|I've|I'll|I'd|my|me|mine|myself)\b", body):
+    unquoted = re.sub(r'"[^"\n]*"|\u201c[^\u201d\n]*\u201d', " ", body)   # a quoted reader question is not us speaking
+    if re.search(r"\b(I|I'm|I've|I'll|I'd|my|me|mine|myself)\b", unquoted):
         p.append("first person singular (use 'we')")
     corpus = " ".join(list(source_texts.values()) + [page_full])
     nums = {D.norm_num(m) for m in re.findall(r"\d[\d,\.]*\d|\d", corpus)}
@@ -145,9 +147,9 @@ def check_post(art, target_url, platform, page_full, source_texts, site_corpus="
             elif n not in nums:
                 p.append("number '%s' not found in the fetched sources" % m.group(0).strip()[:30])
     plain = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", body)
-    ov = D.seven_word_overlap(plain, site_corpus or page_full)
+    ov = D.seven_word_overlap(plain, site_corpus or page_full, SITE_OVERLAP_WORDS)
     if ov:
-        p.append("7-word overlap with our site: '%s'" % ov)
+        p.append("%d-word overlap with our site: '%s'" % (SITE_OVERLAP_WORDS, ov))
     for name, other in others:
         ov = D.seven_word_overlap(plain, other)
         if ov:
