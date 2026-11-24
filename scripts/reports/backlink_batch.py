@@ -378,7 +378,7 @@ def best_match(p, counts):
 
 
 def next_by_rotation(remaining, counts):
-    """The next prospect: the one whose matching page of ours has had the fewest mails today; the 5 target pages come before other pages;
+    """The next prospect: the one whose matching page of ours has had the fewest mails today; the target pages (TARGET_PAGES) come before other pages;
     list order breaks ties. Topic match is untouched: the page is always the one the prospect's own match names."""
     def key(ip):
         i, p = ip

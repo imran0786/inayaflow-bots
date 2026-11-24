@@ -1,5 +1,5 @@
 """Offline tests for the list-builder robot (24 Nov 2026). No network, no secrets."""
-import contextlib, io, json, os, re, shutil, sys, tempfile, unittest
+import contextlib, io, json, os, re, shutil, sys, tempfile, time, unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..")
@@ -745,6 +745,124 @@ class Misc(Base):
             t = open(os.path.join(ROOT, fn), encoding="utf8").read()
             self.assertNotIn("found_by", t)                                                    # they never read or require the new keys
             self.assertNotIn("needs_signup", t)
+
+
+class QA3Notes(Base):
+    """Code QA round 3 notes (24 Nov 2026)."""
+
+    def test_deepseek_starts_empty_only_when_its_file_does_not_exist(self):
+        self.assertFalse(os.path.exists(b.DS_CAND_PATH))
+        self.go(FakeDeepSeek([good(1, url="https://first-example.com/")]), provider="deepseek")
+        self.assertEqual([s["domain"] for s in self.ds_cands()], ["first-example.com"])          # missing file: created by the run
+
+    def test_deepseek_fails_closed_on_a_corrupt_file_and_does_not_touch_it(self):
+        open(b.DS_CAND_PATH, "w").write("{ this is not json")
+        ds = FakeDeepSeek([good(1)])
+        r, out = self.go(ds, provider="deepseek")
+        self.assertEqual(r["status"], "NO_DATA")
+        self.assertIn("fail closed", out)
+        self.assertEqual(ds.bodies, [])                                                          # no call, no spend
+        self.assertEqual(open(b.DS_CAND_PATH).read(), "{ this is not json")                      # old rows never overwritten
+        json.dump({"generated": "x"}, open(b.DS_CAND_PATH, "w"))                                 # valid JSON but no "sites" list: also fail closed
+        self.assertEqual(self.go(FakeDeepSeek([good(1)]), provider="deepseek")[0]["status"], "NO_DATA")
+
+    def test_sonnet_with_a_corrupt_deepseek_file_goes_on_and_warns(self):
+        open(b.DS_CAND_PATH, "w").write("not json")
+        r, out = self.go(lambda *a: answer([good(5, url="https://sonnetok-example.com/")]))
+        self.assertEqual(r["status"], "DONE")
+        self.assertIn("the DeepSeek candidates file is unreadable", out)
+        self.assertNotIn("not json", out)                                                        # count-only line, never the content
+        self.assertEqual(open(b.DS_CAND_PATH).read(), "not json")                                # not touched
+
+    def test_missing_usage_keeps_the_reserve_as_the_cost(self):
+        for prov, reserve in (("claude", b.RESERVE), ("deepseek", b.DS_RESERVE)):
+            for usage in (None, {}):
+                st = {"spent": {}}
+                m = b.Meter(st, TODAY, provider=prov)
+                m.book()
+                m.settle(usage)
+                self.assertAlmostEqual(m.spent, reserve, places=4, msg=(prov, usage))
+            st = {"spent": {}}
+            m = b.Meter(st, TODAY, provider=prov)
+            m.book()
+            m.settle({"input_tokens": 10, "output_tokens": 10, "prompt_tokens": 10, "completion_tokens": 10})
+            self.assertLess(m.spent, reserve)                                                    # a real usage block still replaces the reserve
+        # end to end: an answer with no usage block
+        self.go(lambda *a: {"content": [{"type": "text", "text": "LIST DONE\nCOUNT 0"}], "stop_reason": "end_turn"})
+        self.assertGreaterEqual(self.state()["spent"][TODAY], b.RESERVE)
+        self.go(lambda *a: {"choices": [{"message": {"content": "LIST DONE\nCOUNT 0"}}]}, provider="deepseek")
+        self.assertGreaterEqual(self.ds_state()["spent"][TODAY], b.DS_RESERVE)
+
+    def test_proof_coverage_default_and_unchecked_rows_on_the_signup_sheet(self):
+        self.assertEqual(b.PROOF_MAX_FETCHES, 120)
+        sites = [{"name": "Un", "domain": "u.com", "submit_url": "https://u.com/", "category": "x", "found_by": "sonnet", "proof": "UNCHECKED", "needs_signup": True, "added": TODAY},
+                 {"name": "No", "domain": "n.com", "submit_url": "https://n.com/", "category": "x", "found_by": "sonnet", "proof": "NOFOLLOW_ONLY", "needs_signup": True, "added": TODAY}]
+        b.write_needs_signup(sites)
+        t = open(b.SIGNUP_PATH, encoding="utf8").read()
+        self.assertIn("| Un | https://u.com/ | x | sonnet | UNCHECKED (proof not checked yet) |", t)
+        self.assertNotIn("| No |", t)
+
+    def test_most_rows_get_a_verdict_with_the_new_default(self):
+        counter = iter(range(2000, 3000))
+        calls = []
+        self.go(lambda *a: answer([good(next(counter)) for _ in range(8)]), proof=lambda u: calls.append(u) or ("UNKNOWN", ""))
+        rows = [s for s in self.cands() if s.get("added") == TODAY]
+        self.assertGreater(len(rows), 50)
+        self.assertEqual(len(calls), len(rows))                                                  # under 120 rows: every one is checked
+        self.assertEqual({s["proof"] for s in rows}, {"UNKNOWN"})
+
+    def test_agent_module_loads_without_browser_use_so_proof_checks_run(self):
+        import subprocess
+        code = ("import sys; sys.modules['browser_use'] = None; sys.modules['pydantic'] = None; sys.path.insert(0, %r); import builder\n"
+                "fp = builder.load_follow_proof(); assert callable(fp), 'follow_proof not loaded'\n"
+                "import os; fn = fp.__code__.co_filename; assert fn.endswith(os.path.join('directory_agent', 'agent.py')) and fp.__name__ == 'follow_proof', fn\n"
+                "v = fp('http://127.0.0.1:9/')[0]; assert v in ('FOLLOWED','NOFOLLOW_ONLY','NOINDEX','UNKNOWN'), v\n"
+                "print('LOADED')") % HERE
+        p = subprocess.run([sys.executable, "-W", "ignore", "-c", code], capture_output=True, text=True, timeout=120)
+        self.assertEqual(p.returncode, 0, p.stderr[-500:])
+        self.assertEqual(p.stdout.strip(), "LOADED")                                             # nothing else printed
+
+    def test_usage_dict_without_the_expected_token_keys_keeps_the_reserve(self):
+        for prov, reserve, partial in (("claude", b.RESERVE, {"input_tokens": 10}), ("claude", b.RESERVE, {"x": 1}), ("claude", b.RESERVE, {"output_tokens": 10}),
+                                       ("deepseek", b.DS_RESERVE, {"prompt_tokens": 10}), ("deepseek", b.DS_RESERVE, {"x": 1}),
+                                       ("deepseek", b.DS_RESERVE, {"input_tokens": 10, "output_tokens": 10})):                  # the other provider's keys do not count
+            m = b.Meter({"spent": {}}, TODAY, provider=prov)
+            m.book()
+            m.settle(partial)
+            self.assertAlmostEqual(m.spent, reserve, places=4, msg=(prov, partial))
+
+    def test_proof_deadline_is_passed_to_follow_proof_and_a_mid_row_stop_leaves_unchecked(self):
+        seen = []
+
+        def proof(u, deadline=None):
+            seen.append(deadline)
+            return ("UNKNOWN", "time limit reached") if len(seen) == 2 else ("FOLLOWED", "ev")
+        rows = [{"submit_url": "https://p%d-example.com/" % i, "final_url": "https://p%d-example.com/" % i, "proof": "UNCHECKED"} for i in range(3)]
+        b.run_proofs(rows, proof, workers=1)
+        self.assertTrue(all(isinstance(d, float) and d > time.time() for d in seen))                   # one run deadline, in the future
+        self.assertEqual([r["proof"] for r in rows], ["FOLLOWED", "UNCHECKED", "FOLLOWED"])            # the row stopped mid-way stays UNCHECKED
+        old = b.PROOF_SECONDS
+        b.PROOF_SECONDS = -1                                                                             # deadline already passed: nothing is fetched at all
+        self.addCleanup(setattr, b, "PROOF_SECONDS", old)
+        seen.clear()
+        rows2 = [{"submit_url": "https://q-example.com/", "final_url": "https://q-example.com/", "proof": "UNCHECKED"}]
+        b.run_proofs(rows2, proof, workers=1)
+        self.assertEqual((seen, rows2[0]["proof"]), ([], "UNCHECKED"))
+
+    def test_workflow_timeouts_leave_room_for_480_s_of_proofs(self):
+        self.assertEqual(b.PROOF_SECONDS, 480)
+        for f in ("list-builder.yml", "list-builder-deepseek.yml"):
+            t = open(os.path.join(ROOT, ".github", "workflows", f), encoding="utf8").read()
+            job = int(re.search(r"^    timeout-minutes: ([0-9]+)", t, re.M).group(1))
+            step = int(re.search(r"^        timeout-minutes: ([0-9]+)", t, re.M).group(1))
+            self.assertGreaterEqual(step, 45, f)                                                         # 8 min proofs + up to 12 AI calls
+            self.assertGreaterEqual(job, step + 10, f)                                                   # unit tests, checkout and the save step fit around it
+
+    def test_stale_target_page_comments_are_fixed(self):
+        wf = open(os.path.join(ROOT, ".github", "workflows", "backlink-batch.yml"), encoding="utf8").read()
+        self.assertNotIn("rotates over 5 target pages", wf)
+        self.assertIn("17 target pages", wf)
+        self.assertNotIn("the 5 target pages", open(os.path.join(ROOT, "scripts", "reports", "backlink_batch.py"), encoding="utf8").read())
 
 
 class KnownSites(unittest.TestCase):

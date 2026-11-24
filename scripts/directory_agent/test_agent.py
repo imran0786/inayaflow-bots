@@ -541,6 +541,24 @@ class FollowProof(unittest.TestCase):
         self.assertEqual(ag.follow_proof("https://dir.example/submit")[0], "NOFOLLOW_ONLY")
         self.assertEqual(len(fetched), 4)   # homepage + 3 listings
 
+    def test_deadline_is_checked_before_every_fetch_and_each_fetch_has_a_10_s_timeout(self):
+        import time as _t
+        self.assertLessEqual(ag.PROOF_TIMEOUT, 10)
+        pages = {"https://dir.example/": (self.HOME, {}), "https://dir.example/tool/a": ('<a href="https://o.com">o</a>', {}), "https://dir.example/tool/b": ("<a>x</a>", {})}
+        fetched = self._site(pages)
+        self.assertEqual(ag.follow_proof("https://dir.example/submit", deadline=_t.time() - 1), ("UNKNOWN", ag.TIME_LIMIT_EVIDENCE))
+        self.assertEqual(fetched, [])                                                      # deadline already passed: not even the homepage is fetched
+        inner = ag._http_get
+
+        def slow(url):
+            _t.sleep(0.25)                                                                 # the homepage takes longer than the time left
+            return inner(url)
+        ag._http_get = slow
+        self.assertEqual(ag.follow_proof("https://dir.example/submit", deadline=_t.time() + 0.1), ("UNKNOWN", ag.TIME_LIMIT_EVIDENCE))
+        self.assertEqual(len(fetched), 1)                                                  # stopped MID-ROW: homepage fetched, no listing page
+        ag._http_get = inner
+        self.assertEqual(ag.follow_proof("https://dir.example/submit", deadline=_t.time() + 60)[0], "FOLLOWED")   # a far deadline changes nothing
+
     def test_cache_reuse_and_expiry(self):
         st = {ag.PROOF_KEY: {"dir.example": {"verdict": "NOINDEX", "date": "2026-10-30", "evidence": "x"}}}
         self.assertEqual(ag.cached_proof(st, "dir.example", self.T0)["verdict"], "NOINDEX")   # 25 days old
