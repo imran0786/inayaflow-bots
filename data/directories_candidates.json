@@ -32186,7 +32186,7 @@
    "free_check": "free",
    "quality": "DR 87",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-19",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32228,7 +32228,7 @@
    "free_check": "free",
    "quality": "DR 74",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-19",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32256,7 +32256,7 @@
    "free_check": "free",
    "quality": "DR 71",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) BLOCKED:badge or backlink required on ou 2026-11-18",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32284,7 +32284,7 @@
    "free_check": "free",
    "quality": "DR 67",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-19",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32340,7 +32340,7 @@
    "free_check": "free",
    "quality": "DR 57",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-19",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32382,7 +32382,7 @@
    "free_check": "free",
    "quality": "DR 53",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) BLOCKED:payment required 2026-11-18",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32396,7 +32396,7 @@
    "free_check": "free",
    "quality": "DR 48",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-19",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32494,7 +32494,7 @@
    "free_check": "free",
    "quality": "DR 34",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-18",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32760,7 +32760,7 @@
    "free_check": "freemium",
    "quality": "DR 81",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-18",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32942,7 +32942,7 @@
    "free_check": "free",
    "quality": "DR 74",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) BLOCKED:paid plan 2026-11-18",
    "their_notes": "link reported: unknown"
   },
   {
@@ -33068,7 +33068,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) SUBMITTED 2026-11-18",
    "their_notes": ""
   },
   {
@@ -33082,7 +33082,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-20",
    "their_notes": ""
   },
   {
@@ -33110,7 +33110,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33138,7 +33138,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) BLOCKED:no submit form found (url /, 0 f 2026-11-18",
    "their_notes": ""
   },
   {
@@ -33152,7 +33152,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) ERROR:Error Page.goto: net::ERR_NAME_NOT 2026-11-18",
    "their_notes": ""
   },
   {
@@ -33166,7 +33166,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) BLOCKED:no submit form found (url /, 0 f 2026-11-18",
    "their_notes": ""
   },
   {
@@ -33194,7 +33194,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33208,7 +33208,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33222,7 +33222,7 @@
    "free_check": "free",
    "quality": "",
    "usable": false,
-   "status": "HOLD dead or unreachable",
+   "status": "TRIED DEAD 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33264,7 +33264,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33278,7 +33278,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33306,7 +33306,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) BLOCKED:no submit form found (url /, 0 f 2026-11-18",
    "their_notes": ""
   },
   {
@@ -33334,7 +33334,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33362,7 +33362,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": false,
-   "status": "HOLD dead or unreachable",
+   "status": "TRIED DEAD 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33390,7 +33390,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33488,7 +33488,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33544,7 +33544,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PHONE_REQUIRED 2026-11-18",
    "their_notes": ""
   },
   {
@@ -33684,7 +33684,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33782,7 +33782,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33866,7 +33866,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-19",
    "their_notes": ""
   },
   {
@@ -33880,7 +33880,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-19",
    "their_notes": ""
   },
   {
@@ -34356,7 +34356,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-19",
    "their_notes": ""
   },
   {
@@ -35000,7 +35000,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-22",
    "their_notes": ""
   },
   {
@@ -35070,7 +35070,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": false,
-   "status": "HOLD dead or unreachable",
+   "status": "TRIED DEAD 2026-11-19",
    "their_notes": ""
   },
   {
@@ -35280,7 +35280,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-23",
    "their_notes": ""
   },
   {
@@ -35462,7 +35462,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED EMAIL_CODE_NOT_RECEIVED 2026-11-22",
    "their_notes": ""
   },
   {
@@ -35476,7 +35476,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED BADGE_REQUIRED 2026-11-19",
    "their_notes": ""
   },
   {
@@ -36484,7 +36484,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-19",
    "their_notes": ""
   },
   {
@@ -36932,7 +36932,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-24",
    "their_notes": ""
   },
   {
@@ -37310,7 +37310,7 @@
    "free_check": "free",
    "quality": "DR 32",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) SUBMITTED 2026-11-18",
    "their_notes": ""
   },
   {
@@ -37324,7 +37324,7 @@
    "free_check": "free",
    "quality": "DR 25",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) SUBMITTED 2026-11-18",
    "their_notes": ""
   },
   {
@@ -37338,7 +37338,7 @@
    "free_check": "free",
    "quality": "DR 23",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-19",
    "their_notes": ""
   },
   {
@@ -37352,7 +37352,7 @@
    "free_check": "free",
    "quality": "DR 11",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) BLOCKED:payment required 2026-11-18",
    "their_notes": ""
   },
   {
@@ -37394,7 +37394,7 @@
    "free_check": "free",
    "quality": "DR 33",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-22",
    "their_notes": ""
   },
   {
@@ -37436,7 +37436,7 @@
    "free_check": "free",
    "quality": "DR 72",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-22",
    "their_notes": ""
   },
   {
@@ -37478,7 +37478,7 @@
    "free_check": "unknown",
    "quality": "DR 53",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-19",
    "their_notes": ""
   },
   {
@@ -38346,7 +38346,7 @@
    "free_check": "freemium",
    "quality": "DR 15",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED(old bot) BLOCKED:payment required 2026-11-18",
    "their_notes": ""
   }
  ]
