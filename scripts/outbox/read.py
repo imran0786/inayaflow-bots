@@ -30,10 +30,11 @@ def body_text(msg):
             plain = t
         elif p.get_content_subtype() == "html" and html_part is None:
             html_part = t
-    if plain:
+    if plain and (html_part is None or "http" in plain):
         return plain
     if html_part:
         t = re.sub(r"(?is)<(script|style).*?</\1>", "", html_part)
+        t = re.sub(r"""(?is)<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</a>""", r"\2 [\1]", t)   # 24 Nov: keep link targets (confirm links)
         t = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</tr>|</li>", "\n", t)
         t = re.sub(r"<[^>]+>", "", t)
         return re.sub(r"\n{3,}", "\n\n", html.unescape(t)).strip()
