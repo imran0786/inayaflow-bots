@@ -43,6 +43,7 @@ ROBOTS = [
     ("heartbeat.yml", 180, {}),
     ("funnel-daily.yml", 1440, {}),
     ("link-checker.yml", 1440, {}),
+    ("platform-poster.yml", 1440, {"dry_run": "false"}),   # publishes only when the repo variable PLATFORM_POSTER_LIVE is "true", so dry_run=false is safe
 ]
 
 
