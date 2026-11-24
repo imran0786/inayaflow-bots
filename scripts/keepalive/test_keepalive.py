@@ -138,7 +138,7 @@ class Main(unittest.TestCase):
 
 
 class WorstCase(unittest.TestCase):
-    """The hard daily caps of every robot that spends model money add up to <= $15 (Imran 22 Nov: "Spend 14, maybe $15 a day")."""
+    """The hard daily caps of every robot that spends model money add up to $16.98 (Imran 22 Nov: "Spend 14, maybe $15 a day"; 24 Nov: list builder +$2 -> 16.98, approved)."""
 
     def test_sum_of_the_hard_caps(self):
         base = os.path.join(ROOT, "scripts")
@@ -167,7 +167,8 @@ class WorstCase(unittest.TestCase):
             "platform poster (PLATFORM_DAY_USD_CAP in platform-poster.yml)": platform_cap,
         }
         total = sum(table.values())
-        self.assertLessEqual(total, 15.0, table)
+        self.assertLessEqual(total, 17.0, table)
+        self.assertAlmostEqual(total, 16.98, places=2)
         # NOT in the sum, on purpose: the job runner's other jobs (Director-submitted QA, research and code helper jobs) are not robots; they sit under
         # the runner's OWN $15/day cap (job-runner.yml DAILY_COST_CAP), which is separate. The hunter jobs also run through that runner.
         jr = open(os.path.join(ROOT, ".github", "workflows", "job-runner.yml"), encoding="utf8").read()
@@ -175,7 +176,8 @@ class WorstCase(unittest.TestCase):
         self.assertEqual(ir.REPORT_AI_PER_DAY, 160)
         self.assertEqual(ag.USD_CAP, 7.10)
         self.assertEqual(hu.DAILY_CAP, 3.0)
-        self.assertEqual(lb.DAY_CAP, 1.0)
+        self.assertEqual(lb.DAY_CAP, 3.0)
+        self.assertEqual(lb.DEEPSEEK_DAY_CAP, 1.0)      # the DeepSeek twin has its OWN cap and is NOT in the sum above
         self.assertEqual(bb.AI_USD_PER_DAY, 1.0)
         self.assertLessEqual(rp.AI_CALLS_PER_DAY * PER_CALL_HAIKU, 0.45 + 1e-9)
 
@@ -210,15 +212,16 @@ class Config(unittest.TestCase):
         "keepalive-check.yml": "this check itself",
         "keepalive.yml": "monthly commit that keeps the schedules enabled; nothing to catch up",
         "app-scan.yml": "manual / long scan, not a timed robot",
+        "list-builder-deepseek.yml": "the DeepSeek twin of the list builder, optional (runs only when the DEEPSEEK_API_KEY secret exists); a missed run is simply missed",
         "dev-poster.yml": "publishes to dev.to only when its own repository switch DEV_POSTER_LIVE is true; a keep-alive dispatch would run it dry (default dry_run) or bypass the switch, so a missed day is simply missed",
     }
 
     def test_readme_and_workflows_say_what_the_14_98_covers(self):
         r = open(os.path.join(ROOT, "README.md"), encoding="utf8").read()
-        self.assertIn("$14.98 a day is the hard cap of THESE robots only", r)
+        self.assertIn("$16.98 a day is the hard cap of THESE robots only", r)
         self.assertIn("separate $15/day cap", r)
-        self.assertIn("separate from, and not part of, the $14.98", open(os.path.join(self.wf, "job-runner.yml"), encoding="utf8").read())
-        self.assertIn("$14.98 a day is the hard cap of the LISTED robots", open(os.path.join(self.wf, "directory-agent.yml"), encoding="utf8").read())
+        self.assertIn("separate from, and not part of, the $16.98", open(os.path.join(self.wf, "job-runner.yml"), encoding="utf8").read())
+        self.assertIn("$16.98 a day is the hard cap of the LISTED robots", open(os.path.join(self.wf, "directory-agent.yml"), encoding="utf8").read())
 
     def test_ops_report_has_no_write_permission(self):
         t = open(os.path.join(self.wf, "ops-report.yml"), encoding="utf8").read()

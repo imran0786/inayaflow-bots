@@ -17,7 +17,8 @@ import common as c
 
 PAGE_MATCH = {"homepage": "home", "hashtag-strategy": "hashtag-strategy", "follower-checker": "followers", "money-calculator": "money",
               "shadowban-checker": "shadowban", "hashtag-generator": "hashtags", "hashtag-counter": "hashtag-counter",
-              "engagement-rate": "engagement", "best-time": "best-time tool", "coins-to-usd": "coins", "username-generator": "username"}
+              "engagement-rate": "engagement", "best-time": "best-time tool", "coins-to-usd": "coins", "username-generator": "username",
+              "no-views": "no-views", "shadowban-guide": "shadowban-guide", "analyze": "analyze", "how-many-views": "how-many-views", "hooks": "hooks", "captions": "captions"}
 EMAIL = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 BAD_LOCAL = re.compile(r"^(noreply|no-reply|donotreply|do-not-reply|abuse|privacy|dmca|legal|postmaster|webmaster@)", re.I)
 MAIL_TYPES = {"blog_article", "resource_page"}
@@ -91,12 +92,12 @@ def directory_row(d, job_id, today):
             "judge_reason": "hunter says %s: %s" % (rel, clean(d.get("rel_evidence", ""), 120)), "status": "UNCHECKED hunter"}
 
 
-def ingest(done_files, state, prospects, cands, exclude_domains, outbox_idx, in_outbox, today):
+def ingest(done_files, state, prospects, cands, exclude_domains, outbox_idx, in_outbox, today, other_cands=None):
     """Process every NEW hunter result. Mutates `state["hunter_seen"]`, `prospects` (list) and `cands` (dict with "sites").
     Returns counts only."""
     seen = set(state.get("hunter_seen", []))
-    known_dirs = {c.reg_domain(s.get("domain", "")) for s in cands.get("sites", [])} | \
-                 {_host(s.get("submit_url", "")) for s in cands.get("sites", [])}
+    both = list(cands.get("sites", [])) + list((other_cands or {}).get("sites", []))      # other_cands = the DeepSeek list-builder file (dedupe across both)
+    known_dirs = {c.reg_domain(s.get("domain", "")) for s in both} | {_host(s.get("submit_url", "")) for s in both}
     have_sites = {c.reg_domain(str(p.get("site", ""))) for p in prospects} | {_host(p.get("page", "")) for p in prospects}
     have_sites |= set(state.get("outreach", {}).keys())
     n_next = max([int(p.get("n", 0) or 0) for p in prospects] + [0]) + 1

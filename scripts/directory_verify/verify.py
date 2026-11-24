@@ -118,7 +118,7 @@ def known_domains(root=ROOT, agent_state=None, extra=""):
     sd = load_json(os.path.join(data, "signup_domains.json"), {})
     for dom in (sd.get("domains", []) if isinstance(sd, dict) else sd):
         add(dom)
-    for c in load_json(os.path.join(data, "directories_candidates.json"), {}).get("sites", []):
+    for c in [r for fn in ("directories_candidates.json", "directories_candidates_deepseek.json") for r in load_json(os.path.join(data, fn), {}).get("sites", [])]:
         add(c.get("submit_url", ""))
         add(c.get("domain", ""))
     try:

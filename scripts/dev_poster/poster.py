@@ -24,6 +24,7 @@ import datetime, json, os, re, sys, time, urllib.parse, urllib.request, urllib.e
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "scripts", "reports"))
 import common as c  # noqa: E402  (http_get, html_text, json_obj)
+import targets as tg  # noqa: E402  (QUICK_WIN_PATHS: the one shared quick-win list; Director updates weekly from Search Console, last 24 Nov 2026)
 
 OPS = os.environ.get("DEV_OPS_DIR", os.path.join(ROOT, "ops"))
 STATE_PATH = os.path.join(OPS, "dev_poster_state.json")
@@ -141,6 +142,8 @@ def pick_page(state, today, pages=PAGES):
     last = {e["slug"]: e["date"] for e in state.get("posts", []) if e.get("slug") and e.get("date")}
     ok = []
     prio = load_priority(pages)
+    if not prio:     # no Director tier file: the quick-win pages (shared list in targets.py) are tier 1, everything else tier 2 (tools stay in, they just come after)
+        prio = {p[0]: 0 for p in pages if tg.is_quick_win(p[1])}
     for p in pages:
         used = last.get(p[0])
         if used and (d0 - datetime.date.fromisoformat(used)).days < REST_DAYS:

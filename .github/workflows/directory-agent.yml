@@ -6,7 +6,7 @@ name: Directory agent (browser-use, daily engine)
 # Daily: runs every 3 hours (23 Nov 2026); caps are per UTC DAY, shared by all runs: 30 confirmed successes, 150 site attempts, 200 tool attempts; each run stops itself after 8400 s (140 min) and a 150-minute step timeout sits above that.
 # Per-tool listings (data/listings.json): after a site's main listing, each free tool is submitted as its OWN product (up to 200 tool attempts a day). Never retries a finished site (see agent.py eligible()).
 # Primary model Haiku 5.5, Sonnet 5.5 as fallback when Haiku ends OTHER/ERROR/TIMEOUT.
-# SPEND: this robot's hard cap is $7.10 a UTC day. $14.98 a day is the hard cap of the LISTED robots together (directory 7.10, hunter 3.00, list builder 1.00, platform poster 0.90, batch 1.00, report 0.48,
+# SPEND: this robot's hard cap is $7.10 a UTC day. $16.98 a day is the hard cap of the LISTED robots together (directory 7.10, hunter 3.00, list builder 3.00, platform poster 0.90, batch 1.00, report 0.48,
 # replier 0.45, router 0.45, DEV poster 0.60); the job runner's other helper jobs have their own separate $15/day cap on top (see README).
 on:
   schedule:

@@ -142,7 +142,8 @@ class Order(unittest.TestCase):
         def outbox_fails(queued):
             events.append("outbox")
             raise RuntimeError("push failed")
-        real = (bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY)
+        real = (bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY, bb.DS_CANDS)
+        bb.DS_CANDS = os.path.join(TMP, "no_such_deepseek_cands.json")     # never the real data file
         cands = os.path.join(TMP, "cands.json")
         json.dump({"sites": []}, open(cands, "w"))
         bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY = fake_outreach, fake_push, outbox_fails, (lambda d, k: []), cands, False
@@ -171,7 +172,7 @@ class Order(unittest.TestCase):
             self.assertEqual([e.split(":")[0] for e in events], ["save", "outbox", "save"])
             self.assertEqual(saved_states, ["queued", "sent"])
         finally:
-            bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY = real
+            bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY, bb.DS_CANDS = real
 
 
 class Caps(unittest.TestCase):
@@ -265,13 +266,14 @@ class Safety(unittest.TestCase):
         def push_fails(msg, branch=c.REPORT_BRANCH, work=None):
             events.append("save")
             raise RuntimeError("push failed")
-        real = (bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY)
+        real = (bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY, bb.DS_CANDS)
+        bb.DS_CANDS = os.path.join(TMP, "no_such_deepseek_cands.json")     # never the real data file
         bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY = fake_outreach, push_fails, (lambda q: events.append("outbox") or 1), (lambda d, k: []), cands, False
         try:
             with self.assertRaises(SystemExit):
                 bb.main()
         finally:
-            bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY = real
+            bb.run_outreach, bb.c.commit_push, bb.write_outbox, bb.list_builder, bb.CANDS, bb.c.DRY, bb.DS_CANDS = real
         self.assertNotIn("outbox", events)        # the outbox file is written only AFTER the state push worked
         # and if a file exists anyway (written by anyone), every run dedupes by file name, address and domain before queueing
         idx = bb.outbox_index({"outbox/pending/%s.json" % self.Q["id"]: json.dumps({"to": ["ed@fresh.com"]})})
@@ -285,7 +287,8 @@ class Safety(unittest.TestCase):
             c.USAGE["calls"] += 7
             c.USAGE["in"] += 1_000_000
             raise ValueError("crash")
-        real = (bb.c.commit_push, bb.list_builder, bb.CANDS, bb.c.DRY, dict(c.USAGE))
+        real = (bb.c.commit_push, bb.list_builder, bb.CANDS, bb.c.DRY, dict(c.USAGE), bb.DS_CANDS)
+        bb.DS_CANDS = os.path.join(TMP, "no_such_deepseek_cands.json")
         bb.c.commit_push, bb.list_builder, bb.CANDS, bb.c.DRY = (lambda msg, branch=c.REPORT_BRANCH, work=None: saved.append(msg) or True), boom, cands, False
         c.USAGE.update({"calls": 0, "in": 0, "out": 0})
         try:
@@ -297,6 +300,7 @@ class Safety(unittest.TestCase):
         finally:
             bb.c.commit_push, bb.list_builder, bb.CANDS, bb.c.DRY = real[:4]
             c.USAGE.update(real[4])
+            bb.DS_CANDS = real[5]
             c.USD_LIMIT = None
             c.MAX_AI_CALLS = 25
 
@@ -319,8 +323,25 @@ class Safety(unittest.TestCase):
         self.assertEqual(bb.guard("Subject", "We hope it helps me." + end, "It covers a thing."), "not company voice (I / me / my)")
 
 
+class DeepSeekFile(unittest.TestCase):
+    """24 Nov 2026: the DeepSeek list builder keeps its own candidates file; TRIED flags go back into each row's own file."""
+
+    def test_flags_go_back_to_the_rows_own_file(self):
+        mine = {"sites": [{"name": "Sonnet Dir", "domain": "s.example", "submit_url": "https://s.example/a", "status": "TODO"}]}
+        theirs = {"sites": [{"name": "Deep Dir", "domain": "d.example", "submit_url": "https://d.example/a", "status": "TODO", "found_by": "deepseek", "proof": "FOLLOWED"}]}
+        ag_state = {"s.example": {"status": "SUBMITTED", "date": "2026-11-24"}, "d.example": {"status": "SUBMITTED", "date": "2026-11-24"}}
+        flags, ds_changed, ds = bb.sync_all(mine, theirs, ag_state)
+        self.assertEqual((flags, ds_changed), (2, 1))
+        self.assertTrue(mine["sites"][0]["status"].startswith("TRIED SUBMITTED"))
+        self.assertTrue(ds["sites"][0]["status"].startswith("TRIED SUBMITTED"))
+        self.assertEqual(ds["sites"][0]["found_by"], "deepseek")                                # the rows keep found_by / proof
+        self.assertEqual(len(mine["sites"]), 1)                                                   # no row crossed into the other file
+        self.assertEqual(bb.sync_all(mine, None, ag_state), (0, 0, {"sites": []}))                # no DeepSeek file yet = nothing to flag
+
+
 if __name__ == "__main__":
     try:
         unittest.main()
     finally:
         shutil.rmtree(TMP, ignore_errors=True)
+

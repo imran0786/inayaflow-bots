@@ -1,0 +1,73 @@
+name: List builder DeepSeek twin (same duty, side-by-side test)
+
+# 24 Nov 2026. Imran: "take one helper as well from DeepSeek and tell it to do the same duty, give him all the same information that our own helper has,
+# and let's see who do the job better." Runs scripts/list_builder/builder.py with LIST_BUILDER_PROVIDER=deepseek: SAME categories, prompt text, spam filter,
+# de-duplication against every list we hold, live-URL check and output file as list-builder.yml. DeepSeek has NO web search: it names places it knows and the
+# code's live-URL check keeps only real ones. SEPARATE money cap LIST_BUILDER_DEEPSEEK_DAY_USD_CAP $1.00 a UTC day (NOT part of the $16.98 a day of the LISTED robots).
+# Offset ~30 min from list-builder.yml (04:53 and 16:53 UTC) and the SAME concurrency group: the two write the same files and never run in parallel.
+# SEPARATE SHEETS (Imran 24 Nov): it writes ONLY data/directories_candidates_deepseek.json, data/list_builder_state_deepseek.json, data/needs_signup_deepseek.md, data/list_builder_report_deepseek.md (+ the shared side-by-side data/list_builder_compare.md); it still READS Sonnet's candidates file so nothing is repeated.
+# Needs the secret DEEPSEEK_API_KEY (Imran adds it); without it the job prints "list-builder-deepseek: no key, skipped" and exits 0.
+on:
+  schedule:
+    - cron: "53 4 * * *"
+    - cron: "53 16 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = look and check, write no candidates"
+        default: "true"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: list-builder
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests (a failure stops the run)
+        run: python3 -W ignore scripts/list_builder/test_builder.py
+      - name: Build the list (DeepSeek)
+        timeout-minutes: 30
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LIST_BUILDER_PROVIDER: deepseek
+          DRY_RUN: ${{ github.event.inputs.dry_run || (github.event_name == 'schedule' && 'false') || 'true' }}
+          LIST_BUILDER_DEEPSEEK_DAY_USD_CAP: "1.00"   # separate from the $16.98 listed-robots total
+        run: |
+          if [ -z "$DEEPSEEK_API_KEY" ]; then echo "list-builder-deepseek: no key, skipped"; exit 0; fi
+          echo "::add-mask::$DEEPSEEK_API_KEY"
+          python3 scripts/list_builder/builder.py 2>/dev/null
+      - name: Save candidates and state (this repo, data files only)
+        if: always()
+        run: |
+          git config user.name "inayaflow-bot"
+          git config user.email "contact@inayaflow.ai"
+          for f in data/directories_candidates_deepseek.json data/list_builder_state_deepseek.json data/needs_signup_deepseek.md data/list_builder_report_deepseek.md data/list_builder_compare.md; do if [ -f "$f" ]; then git add "$f"; fi; done
+          for f in data/directories_candidates_deepseek.json data/list_builder_state_deepseek.json; do if [ -f "$f" ] && ! python3 -c "import json,sys; json.load(open(sys.argv[1], encoding='utf8'))" "$f"; then echo "data file unreadable, nothing saved"; exit 1; fi; done
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git commit -q -m "data: list builder (deepseek, new candidate places, state)"
+          for i in 1 2 3; do
+            if git push -q origin HEAD:main; then echo "saved"; exit 0; fi
+            # conflict (the backlink batch also writes the candidates files): keep our rows AND theirs (union by domain); this provider's own state is merged, never copied over
+            git show HEAD:data/directories_candidates_deepseek.json > /tmp/ours.json
+            git show HEAD:data/list_builder_state_deepseek.json > /tmp/ours_state.json
+            git fetch -q origin main
+            git reset -q --hard origin/main
+            if [ -f data/directories_candidates_deepseek.json ]; then python3 scripts/reports/merge_candidates.py /tmp/ours.json data/directories_candidates_deepseek.json; else cp /tmp/ours.json data/directories_candidates_deepseek.json; fi
+            if [ -f data/list_builder_state_deepseek.json ]; then python3 scripts/list_builder/merge_state.py /tmp/ours_state.json data/list_builder_state_deepseek.json; else cp /tmp/ours_state.json data/list_builder_state_deepseek.json; fi
+            for f in data/directories_candidates_deepseek.json data/list_builder_state_deepseek.json data/needs_signup_deepseek.md data/list_builder_report_deepseek.md data/list_builder_compare.md; do if [ -f "$f" ]; then git add "$f"; fi; done
+            git diff --cached --quiet && { echo "nothing left to save"; exit 0; }
+            git commit -q -m "data: list builder (deepseek, merged)"
+          done
+          echo "push failed"; exit 1

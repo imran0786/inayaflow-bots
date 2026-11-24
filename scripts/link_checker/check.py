@@ -263,7 +263,7 @@ def name_domains():
     for r in load_json(os.path.join(data, "directories.json"), []):
         if r.get("submit_url"):
             m[nkey(r["name"])] = reg_domain(urllib.parse.urlparse(r["submit_url"]).hostname or "")
-    for r in load_json(os.path.join(data, "directories_candidates.json"), {}).get("sites", []):
+    for r in [x for fn in ("directories_candidates.json", "directories_candidates_deepseek.json") for x in load_json(os.path.join(data, fn), {}).get("sites", [])]:
         dom = r.get("domain") or reg_domain(urllib.parse.urlparse(r.get("submit_url", "")).hostname or "")
         if dom:
             m[nkey(r["name"])] = reg_domain(dom)

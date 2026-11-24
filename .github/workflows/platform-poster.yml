@@ -7,7 +7,7 @@ name: Platform poster (one article a day each on WordPress.com, Blogger, Notion)
 # Any FAIL = nothing is published for that platform, the draft goes to the PRIVATE repo (imran0786/genie, branch ops-platform-poster).
 # SWITCH: NOTHING is published (scheduled OR manual run, dry_run input or not) unless the repository variable PLATFORM_POSTER_LIVE is "true"; the poster
 # checks the switch itself as well. Manual runs default to dry_run=true. No run at all unless the private state was restored (fail closed).
-# SPEND: the cap below is part of the $14.98 a day of the LISTED robots (README, test_keepalive WorstCase reads this value). Public log = platform, page slug, status words, cost only.
+# SPEND: the cap below is part of the $16.98 a day of the LISTED robots (README, test_keepalive WorstCase reads this value). Public log = platform, page slug, status words, cost only.
 on:
   schedule:
     - cron: "41 9 * * *"
