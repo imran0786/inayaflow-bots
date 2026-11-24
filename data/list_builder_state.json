@@ -1,26 +1,29 @@
 {
- "cursor": 9,
+ "cursor": 20,
  "spent": {
-  "2026-11-24": 1.3319
+  "2026-11-24": 2.9261
  },
  "days": {
   "2026-11-24": {
-   "added": 115,
+   "added": 195,
    "by_category": {
-    "ai_saas_directories": 21,
-    "launch_sites": 8,
-    "tool_roundups": 19,
-    "github_awesome_lists": 23,
-    "saas_review_platforms": 9,
-    "guest_post_pages": 13,
-    "resource_pages": 9,
-    "communities_profiles": 9,
-    "podcasts_creators": 4
+    "ai_saas_directories": 30,
+    "launch_sites": 15,
+    "tool_roundups": 23,
+    "github_awesome_lists": 32,
+    "saas_review_platforms": 15,
+    "guest_post_pages": 22,
+    "resource_pages": 16,
+    "communities_profiles": 19,
+    "podcasts_creators": 4,
+    "journalist_platforms": 5,
+    "edu_library_guides": 7,
+    "startup_directories_by_country": 7
    },
-   "runs": 1,
-   "calls": 9,
-   "summary": "list-builder: +115 new (total 1435; by category github_awesome_lists 23, ai_saas_directories 21, tool_roundups 19, guest_post_pages 13, communities_profiles 9, resource_pages 9, saas_review_platforms 9, launch_sites 8, podcasts_creators 4)",
-   "total": 1435
+   "runs": 2,
+   "calls": 20,
+   "summary": "list-builder: +195 new (total 1956; by category github_awesome_lists 32, ai_saas_directories 30, tool_roundups 23, guest_post_pages 22, communities_profiles 19, resource_pages 16, launch_sites 15, saas_review_platforms 15, edu_library_guides 7, startup_directories_by_country 7, journalist_platforms 5, podcasts_creators 4)",
+   "total": 1956
   }
  },
  "rejected": [
@@ -36,7 +39,34 @@
   "heidicohen.com",
   "snhu.edu",
   "foolishauthor.substack.com",
-  "socialmediaexaminer.com"
+  "socialmediaexaminer.com",
+  "rolli.ai",
+  "miamioh.edu",
+  "humboldt.edu",
+  "denison.edu",
+  "northwestern.edu",
+  "toolsdirectoryonline.com",
+  "aidirectorynow.com",
+  "ailistingtool.com",
+  "nextlaunch.io",
+  "go-publicly.com",
+  "get100users.app",
+  "thecmo.com",
+  "discoverly.tech",
+  "sasanova.com",
+  "getapp.co.uk",
+  "fangwallet.com",
+  "digitalzpro.com",
+  "hunchads.com",
+  "contentcreatortools.co",
+  "creatoreconomytools.com",
+  "creatorbase.xyz",
+  "creatorlibrary.substack.com",
+  "creatorconnected.com",
+  "smartforumbuilder.com",
+  "autodesk.com",
+  "angleout.io",
+  "github.com/hyraze/ai-collective-tools"
  ],
- "last_summary": "list-builder: +115 new (total 1435; by category github_awesome_lists 23, ai_saas_directories 21, tool_roundups 19, guest_post_pages 13, communities_profiles 9, resource_pages 9, saas_review_platforms 9, launch_sites 8, podcasts_creators 4)"
+ "last_summary": "list-builder: +195 new (total 1956; by category github_awesome_lists 32, ai_saas_directories 30, tool_roundups 23, guest_post_pages 22, communities_profiles 19, resource_pages 16, launch_sites 15, saas_review_platforms 15, edu_library_guides 7, startup_directories_by_country 7, journalist_platforms 5, podcasts_creators 4)"
 }
