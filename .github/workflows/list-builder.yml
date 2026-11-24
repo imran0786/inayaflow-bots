@@ -7,7 +7,7 @@ name: List builder (new candidate places a day)
 # (status TODO for directory-type places, TODO outreach for outreach-type places). The day's summary line "list-builder: +N new (total T; by category ...)"
 # is in data/list_builder_state.json. Signs up nowhere, sends nothing, fills no form.
 # SPEND: hard cap $3.00 a UTC day over all runs (LIST_BUILDER_DAY_USD_CAP). $14.98 a day is the hard cap of the LISTED robots together
-# (directory agent 6.00, hunter 3.00, list builder 3.00, batch 1.00, report 0.48, replier 0.45, router 0.45, DEV poster 0.60; see README).
+# (directory agent 5.10, hunter 3.00, list builder 3.00, batch 1.00, report 0.48, replier 0.45, router 0.45, DEV poster 0.60; see README).
 # Scheduled runs are live; a manual run defaults to dry_run=true (candidates are not written, the spend is still booked).
 on:
   schedule:
