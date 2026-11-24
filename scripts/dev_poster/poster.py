@@ -499,20 +499,16 @@ def qa_json(raw):
 
 
 def qa_lenient(raw):
-    """Last resort for a QA reply that is not clean JSON (cut off at the token limit, or prose): a quoted "verdict" value is enough.
-    A bare PASS is accepted only when the reply says no FAIL anywhere. Anything else -> None (the article then fails, as before)."""
+    """Last resort for a QA reply that is not clean JSON (cut off at the token limit, or prose). FAIL WINS: the word FAIL anywhere in the reply
+    (a quoted "verdict":"FAIL" or a bare FAIL) makes it FAIL, even when a PASS appears first. PASS only when it is the sole verdict
+    (a quoted "verdict":"PASS" or a reply that starts with PASS). Anything else -> None (the article then fails, as before)."""
     raw = raw or ""
-    m = re.search(r'"verdict"\s*:\s*"(PASS|FAIL)"', raw, re.I)
-    if m:
-        v = m.group(1).upper()
-        tail = raw.split('"reasons"', 1)[1] if '"reasons"' in raw else ""
-        rs = [x[:160] for x in re.findall(r'"([^"]{6,})"', tail)]
-        return {"verdict": v, "reasons": rs or (["QA reply was cut off"] if v == "FAIL" else [])}
-    t = raw.strip()
-    if re.match(r"(?i)PASS\b", t) and not re.search(r"(?i)\bFAIL", t):
+    tail = raw.split('"reasons"', 1)[1] if '"reasons"' in raw else ""
+    rs = [x[:160] for x in re.findall(r'"([^"]{6,})"', tail)]
+    if re.search(r"(?i)\bFAIL\b", raw):
+        return {"verdict": "FAIL", "reasons": rs or [raw.strip()[:160] or "QA reply was cut off"]}
+    if re.search(r'"verdict"\s*:\s*"PASS"', raw, re.I) or re.match(r"(?i)\s*PASS\b", raw):
         return {"verdict": "PASS", "reasons": []}
-    if re.match(r"(?i)FAIL\b", t):
-        return {"verdict": "FAIL", "reasons": [t[:160]]}
     return None
 
 

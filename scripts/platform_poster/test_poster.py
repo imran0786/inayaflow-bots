@@ -764,10 +764,36 @@ class Repair(unittest.TestCase):
         res, _ = quiet(post_ai=ai_with_repair(calls, "", "x", qa_raw=raw), publishers=fake_publishers(sent))
         self.assertEqual(set(res.values()), {"PUBLISHED"})
 
+    def test_cap_error_inside_repair_stops_cleanly_and_publishes_nothing(self):
+        orig = P.repair_article
+
+        def boom(*a, **k):
+            raise D.CapReached("daily cost cap")
+        P.repair_article = boom
+        try:
+            sent, calls = [], []
+            res, out = quiet(post_ai=ai_with_repair(calls, COPY, "x"), publishers=fake_publishers(sent))
+        finally:
+            P.repair_article = orig
+        self.assertEqual(sent, [])
+        self.assertEqual(set(res.values()), {"FAIL"})
+        self.assertEqual(calls.count(D.WRITER), 3)                     # no second writer try after the cap hit
+        self.assertIn("cost cap reached during repair", open(P.LOG_PATH, encoding="utf8").read())
+
+    def test_repair_is_skipped_when_it_cannot_be_afforded(self):
+        P.DAY_CAP = 0.50                      # room for the writer + QA only, not for the extra repair + QA
+        calls, sent = [], []
+        res, _ = quiet(post_ai=ai_with_repair(calls, COPY, "x"), publishers=fake_publishers(sent))
+        self.assertEqual(res["wordpress"], "FAIL")                     # the first platform could not afford a repair, so it is FAILED, not repaired
+        self.assertLessEqual(calls.count("repair"), 2)                 # not for the first platform (it would starve the later ones)
+        self.assertLessEqual(json.load(open(P.STATE_PATH))["spent"][D.utc_today()], 0.50 + 1e-9)
+
     def test_qa_lenient_rules(self):
         self.assertEqual(D.qa_lenient('{"verdict": "FAIL", "reasons": ["the number is wrong here"')["verdict"], "FAIL")
         self.assertEqual(D.qa_lenient("PASS. Everything matches.")["verdict"], "PASS")
-        self.assertIsNone(D.qa_lenient("PASS, but one claim could FAIL"))
+        self.assertEqual(D.qa_lenient("PASS, but one claim could FAIL")["verdict"], "FAIL")      # FAIL wins
+        self.assertEqual(D.qa_lenient('{"verdict":"PASS","reasons":[]} {"verdict":"FAIL","reasons":["a number is invented"')["verdict"], "FAIL")
+        self.assertEqual(D.qa_lenient('{"verdict":"FAIL","reasons":["x is wrong"]} then {"verdict":"PASS"')["verdict"], "FAIL")
         self.assertIsNone(D.qa_lenient("looks fine to me"))
         self.assertIsNone(D.qa_lenient(""))
 

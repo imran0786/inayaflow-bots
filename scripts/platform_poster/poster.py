@@ -565,7 +565,8 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
                 pr.append("a cited source page is unreadable")
             return pr, st
         for attempt in (1, 2):
-            if attempt == 2 and meter.cost + (left_after + 1) * (D.WRITER_RESERVE + D.QA_RESERVE) > meter.cap + 1e-9:
+            repair_room = 0.0 if repaired_once else D.QA_RESERVE      # the one possible repair call is reserved too, so it can never push the run over the cap
+            if attempt == 2 and meter.cost + repair_room + (left_after + 1) * (D.WRITER_RESERVE + D.QA_RESERVE) > meter.cap + 1e-9:
                 break
             extra = "" if attempt == 1 else "\n\nYOUR LAST DRAFT FAILED THESE CHECKS, fix them: " + "; ".join(problems)
             fetched = {}
@@ -580,11 +581,16 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
             problems, source_texts = evaluate(art)
             if problems and repairable(problems) and not repaired_once:
                 repaired_once = True                  # ONE sentence-level repair per platform per day; the whole article is then checked again from scratch
-                try:
-                    fixed = repair_article(art, site_corpus, todays, meter, post=post_ai)
-                except Exception as e:
-                    fixed = None
-                    print("platform_poster: repair skipped (%s)" % type(e).__name__)
+                fixed = None
+                # the repair must leave room for the QA gate after it and for the platforms still to come
+                if meter.cost + 2 * D.QA_RESERVE + left_after * (D.WRITER_RESERVE + D.QA_RESERVE) <= meter.cap + 1e-9:
+                    try:
+                        fixed = repair_article(art, site_corpus, todays, meter, post=post_ai)
+                    except D.CapReached:
+                        problems = problems + ["daily cost cap reached during repair"]
+                        break                          # same as the writer's cap path: stop spending, this draft is FAILED
+                    except Exception as e:
+                        print("platform_poster: repair skipped (%s)" % type(e).__name__)
                 if fixed:
                     p2, st2 = evaluate(fixed)
                     print("platform_poster: repair %s problems %d -> %d" % (pl, len(problems), len(p2)))
