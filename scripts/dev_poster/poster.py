@@ -120,7 +120,7 @@ def pick_page(state, today, pages=PAGES):
 ANCHOR_CYCLE = ["brand", "plain", "address", "partial", "brand", "address", "plain", "partial", "brand", "exact"]     # 3 brand, 2 address, 2 plain, 2 partial, 1 exact; no type twice in a row
 HOME_CYCLE = ["brand", "address"]                                                                                      # homepage: brand or address only
 ANCHOR_KEYWORDS = {
-    "follower-count-checker": "TikTok follower count checker", "money-calculator": "TikTok money calculator",
+    "follower-count-checker": "TikTok followers count", "money-calculator": "TikTok money calculator",
     "shadowban-checker": "TikTok shadowban checker", "hashtag-generator": "TikTok hashtag generator",
     "hashtag-counter": "TikTok hashtag counter", "coins-to-usd": "TikTok coins to USD",
     "engagement-rate-calculator": "TikTok engagement rate calculator", "best-time-to-post": "best time to post on TikTok",
@@ -304,8 +304,8 @@ def check_article(art, target_url, page_text, source_texts, first_person_ok=Fals
     at = [i for i, x in enumerate(paras) if target_url in x]
     if at and (at[0] == 0 or at[-1] == len(paras) - 1):
         p.append("our link is in the first or the last paragraph (reads as an ad)")
-    if len(re.findall(r"inayaflow", re.sub(r"\]\(https?://[^)\s]+\)", "]", body), re.I)) > 2:
-        p.append("the InayaFlow name appears more than 2 times")
+    if len(re.findall(r"inayaflow", re.sub(r"\]\(https?://[^)\s]+\)", "]", body), re.I)) > 3:
+        p.append("the InayaFlow name appears more than 3 times")
     if past_shingles:
         mine = shingles(body)
         shared = len(mine & set(past_shingles))

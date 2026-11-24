@@ -712,7 +712,7 @@ class CodeChecks(unittest.TestCase):
         self.assertFalse(any("first or the last paragraph" in x for x in probs(art())))
 
     def test_inayaflow_name_more_than_twice_is_refused(self):
-        b = good_body().replace("pick them with care.", "pick them with care. InayaFlow says so. InayaFlow again.")
+        b = good_body().replace("pick them with care.", "pick them with care. InayaFlow says so. InayaFlow again. InayaFlow once more.")
         self.assertTrue(any("InayaFlow name" in x for x in probs(art(body=b))))
         two = good_body().replace("pick them with care.", "pick them with care. InayaFlow says so.")
         self.assertFalse(any("InayaFlow name" in x for x in probs(art(body=two))))
