@@ -4,6 +4,24 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| Handelsregister | https://www.handelsregister.de/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-25 |
+| 11880 | https://www.11880.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-25 |
+| Gelbe Seiten | https://www.gelbeseiten.de/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-25 |
+| Das Oertliche | https://www.dasoertliche.de/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-25 |
+| University of Texas Libraries Guides | https://guides.lib.utexas.edu/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-25 |
+| Prowly | https://prowly.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| HBR IdeaCast | https://hbr.org/podcasts/ideacast | podcasts_creators | deepseek | UNKNOWN | 2026-11-25 |
+| itch.io | https://itch.io/ | communities_profiles | deepseek | UNKNOWN | 2026-11-25 |
+| Blender Artists | https://blenderartists.org/ | communities_profiles | deepseek | UNKNOWN | 2026-11-25 |
+| DEV.to Listings | https://dev.to/listings | communities_profiles | deepseek | UNKNOWN | 2026-11-25 |
+| CodeNewbie | https://www.codenewbie.org/ | communities_profiles | deepseek | UNKNOWN | 2026-11-25 |
+| PyPI | https://pypi.org/ | communities_profiles | deepseek | UNKNOWN | 2026-11-25 |
+| DEV Community | https://dev.to/new | communities_profiles | deepseek | UNKNOWN | 2026-11-25 |
+| Gravatar | https://gravatar.com/ | communities_profiles | deepseek | UNKNOWN | 2026-11-25 |
+| GitLab | https://gitlab.com/ | communities_profiles | deepseek | UNKNOWN | 2026-11-25 |
+| GitHub | https://github.com/ | communities_profiles | deepseek | FOLLOWED | 2026-11-25 |
+| Replit | https://replit.com/ | communities_profiles | deepseek | UNKNOWN | 2026-11-25 |
+| Wix Blog | https://www.wix.com/blog | tool_roundups | deepseek | UNKNOWN | 2026-11-25 |
 | ProductNation/iSPIRT | https://www.ispirt.in/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-25 |
 | Khan Academy | https://www.khanacademy.org/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-25 |
 | Startup Basecamp | https://startupbasecamp.org/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-25 |

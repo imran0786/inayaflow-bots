@@ -1,8 +1,8 @@
 {
- "cursor": 60,
+ "cursor": 72,
  "spent": {
   "2026-11-24": 0.0586,
-  "2026-11-25": 0.1249
+  "2026-11-25": 0.1457
  },
  "days": {
   "2026-11-24": {
@@ -31,42 +31,42 @@
    "total": 1956
   },
   "2026-11-25": {
-   "added": 153,
+   "added": 208,
    "by_category": {
-    "startup_directories_by_country": 21,
+    "startup_directories_by_country": 34,
     "ai_saas_directories": 4,
     "launch_sites": 4,
-    "tool_roundups": 9,
+    "tool_roundups": 10,
     "github_awesome_lists": 18,
     "saas_review_platforms": 10,
-    "guest_post_pages": 18,
+    "guest_post_pages": 19,
     "resource_pages": 10,
-    "communities_profiles": 4,
-    "podcasts_creators": 28,
-    "journalist_platforms": 10,
-    "edu_library_guides": 17
+    "communities_profiles": 15,
+    "podcasts_creators": 36,
+    "journalist_platforms": 12,
+    "edu_library_guides": 36
    },
-   "runs": 4,
-   "calls": 48,
+   "runs": 5,
+   "calls": 60,
    "providers": {
     "deepseek": {
-     "calls": 48,
-     "cost": 0.1249,
-     "proposed": 1001,
-     "spam": 24,
-     "dup": 596,
-     "dead": 145,
-     "added": 153,
-     "followed": 35,
+     "calls": 60,
+     "cost": 0.1457,
+     "proposed": 1307,
+     "spam": 36,
+     "dup": 809,
+     "dead": 171,
+     "added": 208,
+     "followed": 37,
      "nofollow": 0,
-     "noindex": 2,
-     "unknown": 116,
-     "needs_signup": 79
+     "noindex": 3,
+     "unknown": 168,
+     "needs_signup": 97
     }
    },
-   "category_summary": "list-builder: +153 new (total 2281; by category podcasts_creators 28, startup_directories_by_country 21, github_awesome_lists 18, guest_post_pages 18, edu_library_guides 17, journalist_platforms 10, resource_pages 10, saas_review_platforms 10, tool_roundups 9, ai_saas_directories 4, communities_profiles 4, launch_sites 4)",
-   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +153 new (35 followed, $0.12)",
-   "total": 2281
+   "category_summary": "list-builder: +208 new (total 2336; by category edu_library_guides 36, podcasts_creators 36, startup_directories_by_country 34, guest_post_pages 19, github_awesome_lists 18, communities_profiles 15, journalist_platforms 12, resource_pages 10, saas_review_platforms 10, tool_roundups 10, ai_saas_directories 4, launch_sites 4)",
+   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +208 new (37 followed, $0.15)",
+   "total": 2336
   }
  },
  "rejected": [
@@ -232,7 +232,46 @@
   "10000startups.com",
   "indianstartups.in",
   "techstory.in",
-  "bizindia.net"
+  "bizindia.net",
+  "appoftheday.com",
+  "github.com/knrd1/awesome-no-code-tools",
+  "github.com/koksmat-com/awesome-nocode-lowcode",
+  "github.com/julianschoenbaechler/awesome-social-media-tools",
+  "github.com/kvogt/awesome-creator-economy",
+  "github.com/denisoster/awesome-startup-resources",
+  "github.com/janyork/awesome-llm-apps",
+  "capterra.co.uk",
+  "sideprojecttools.com",
+  "tools.directory",
+  "stackexchange.com",
+  "npmjs.com",
+  "polycount.com",
+  "indiedb.com",
+  "storybrand.com",
+  "goal-digger.com",
+  "rayedwards.com",
+  "targetinternet.com",
+  "martechpodcast.com",
+  "fizzle.co",
+  "theproductivelife.com",
+  "emilyshow.com",
+  "creatoreconomyreport.substack.com",
+  "profnetconnect.com",
+  "expertclick.com",
+  "duke.edu",
+  "umich.edu",
+  "nyu.edu",
+  "upenn.edu",
+  "tamu.edu",
+  "syracuse.edu",
+  "emerson.edu",
+  "torontomu.ca",
+  "berlinstartupmap.de",
+  "startup-germany.com",
+  "omgitt.com",
+  "firmenverzeichnis.de",
+  "meinestadt.de",
+  "cylex.de"
  ],
- "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +153 new (35 followed, $0.12)"
+ "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +208 new (37 followed, $0.15)"
 }
