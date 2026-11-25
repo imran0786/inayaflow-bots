@@ -184,7 +184,7 @@ FIRST_PERSON_RE = re.compile(r"\b(I|I'm|I've|I'll|I'd|my|me|mine|myself)\b")
 QUOTE_RE = re.compile(r'"[^"\n]*"|“[^”\n]*”')
 MAX_REPAIR_SENTENCES = 12
 REPAIR_ROUNDS = 2          # sentence-level rewrites (overlap / I-me-my) per platform per day
-QA_REPAIR_ROUNDS = 1       # rewrites of sentences the fact-check named as unsupported
+QA_REPAIR_ROUNDS = 2       # rewrites of sentences the fact-check named as unsupported
 
 
 def repairable(problems):
@@ -284,28 +284,46 @@ FACTS_SYSTEM = ("You make short notes for a writer from the text of a web page. 
                 "State only what the page says (what the tool or guide is for, what it needs, what it shows, limits and numbers exactly as printed). "
                 "Use YOUR OWN words: never reuse a run of 4 or more consecutive words from the page, and never copy its headings or list items. "
                 "Add nothing the page does not say. Plain text, nothing before or after the bullets.")
-FACT_GRAM = 5
+FACT_GRAM = 7              # a bullet may share short phrases with the page (the article gate is 10 words); only a 7-word run is a copy
+MIN_FACTS = 3
 
 
-def fact_bullets(raw, page_full):
-    """Valid bullets from the model reply: '- ' lines of 3+ words that share no 5-word run with the page itself."""
+def fact_bullets(raw, page_full, rejected=None):
+    """Valid bullets from the model reply: list lines of 3+ words that share no 7-word run with the page itself. Rejected bullets are appended to `rejected`."""
     out = []
     for l in (raw or "").split("\n"):
         m = re.match(r"\s*(?:[-*\u2022]|\d+[.)])\s+(.+)", l)
         if not m:
             continue
-        t = m.group(1).strip()
-        if len(_toks(t)) >= 3 and not overlap_grams(t, page_full, FACT_GRAM):
+        t = re.sub(r"\*\*|__", "", m.group(1)).strip()
+        if len(_toks(t)) < 3:
+            continue
+        if overlap_grams(t, page_full, FACT_GRAM):
+            if rejected is not None:
+                rejected.append(t)
+        else:
             out.append(t)
     return out[:10]
 
 
 def distill_facts(page_full, meter, post=None):
-    """-> bullet text for the writer, or '' when it could not be made (the caller then falls back to the raw page text)."""
-    data = D.anthropic(D.QA_MODEL, FACTS_SYSTEM, "PAGE TEXT:\n" + page_full[:6000], meter, post=post, max_tokens=500)
-    raw = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-    b = fact_bullets(raw, page_full)
-    return "\n".join("- " + x for x in b) if len(b) >= 4 else ""
+    """-> bullet text for the writer, or '' when it could not be made (the caller then falls back to a SHORT slice of the page text).
+    One retry when too few bullets survive the copy filter: the rejected bullets are named so the model words them differently."""
+    user = "PAGE TEXT:\n" + page_full[:6000]
+    good = []
+    for rnd in (1, 2):
+        data = D.anthropic(D.QA_MODEL, FACTS_SYSTEM, user, meter, post=post, max_tokens=600)
+        raw = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+        rejected = []
+        for b in fact_bullets(raw, page_full, rejected):
+            if b not in good:
+                good.append(b)
+        print("platform_poster: facts round %d kept %d dropped %d" % (rnd, len(good), len(rejected)))
+        if len(good) >= MIN_FACTS or not rejected:
+            break
+        user = ("PAGE TEXT:\n" + page_full[:6000] + "\n\nThese earlier bullets were too close to the page. Write 6 to 10 NEW bullets about the same things with completely different "
+                "wording and sentence shapes:\n" + "\n".join("- " + x for x in rejected[:8]))
+    return "\n".join("- " + x for x in good[:10]) if len(good) >= MIN_FACTS else ""
 
 
 # ---------- fact-check (25 Nov): verdict FIRST, tolerant parse, strict retry, never 'not understood' on the first try ----------
@@ -327,7 +345,7 @@ VERDICT_RE = re.compile(r"VERDICT\W{0,6}(PASS|FAIL)", re.I)
 def parse_qa(raw):
     """-> (verdict 'PASS'|'FAIL'|None, [reasons]). FAIL wins: the word FAIL anywhere in the reply, or a FAIL verdict anywhere, makes it FAIL."""
     raw = raw or ""
-    reasons = [m.strip()[:300] for m in re.findall(r"(?im)^\W*REASON\W*[:\-]\s*(.+)$", raw)]
+    reasons = [re.sub(r"\s+", " ", m).strip()[:600] for m in re.findall(r"(?ims)^\W*REASON\W*[:\-]\s*(.+?)(?=^\W*(?:REASON|VERDICT)\b|\Z)", raw)]
     j = D.qa_json(raw)
     jv = j.get("verdict") if isinstance(j, dict) else None
     if isinstance(j, dict) and not reasons:
@@ -336,7 +354,7 @@ def parse_qa(raw):
     if "FAIL" in verdicts or re.search(r"\bFAIL\b", raw):
         if not reasons:
             reasons = (D.qa_lenient(raw) or {}).get("reasons") or ["QA said FAIL without a reason"]
-        return "FAIL", reasons[:5]
+        return "FAIL", reasons[:6]
     if "PASS" in verdicts or re.match(r"(?i)\s*PASS\b", raw):
         return "PASS", []
     return None, []
@@ -366,7 +384,7 @@ def qa_repair_article(art, reasons, meter, post=None):
               "For each, give a replacement that drops the unsupported claim and says something general and true that needs no source, or an empty string to delete the sentence. "
               "Never add numbers, names, statistics or claims about what our tool does. Keep every Markdown link [text](url) that sits in a sentence you keep or replace EXACTLY as it is. "
               'Answer ONLY a JSON object like {"4":"new sentence","9":""} with at most 6 entries.')
-    data = D.anthropic(D.QA_MODEL, system, "FACT-CHECKER REASONS:\n- " + "\n- ".join(reasons[:5]) + "\n\nSENTENCES:\n" + numbered[:12000], meter, post=post, max_tokens=700)
+    data = D.anthropic(D.QA_MODEL, system, "FACT-CHECKER REASONS:\n- " + "\n- ".join(reasons[:6]) + "\n\nSENTENCES:\n" + numbered[:12000], meter, post=post, max_tokens=700)
     j = D.qa_json("".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"))
     if not isinstance(j, dict) or not j or len(j) > 6:
         return None
@@ -387,6 +405,18 @@ def qa_repair_article(art, reasons, meter, post=None):
     return dict(art, body=new) if new != body else None
 
 
+# ---------- reviser (25 Nov r2): attempt 2 fixes the draft it already has, without web tools (a second research run cost up to $0.38) ----------
+def revise_system(platform):
+    return writer_system(platform) + "\nYou are now REVISING your own earlier draft. Do NOT search or fetch anything. Keep the same sources and links, change only what the failed checks name, and answer in the same OUTPUT FORMAT with the full article."
+
+
+def run_reviser(platform, user, art, problems, meter, post=None):
+    draft = "TITLE: %s\nSOURCES: %s\n===BODY===\n%s" % (art["title"], " | ".join(art.get("sources") or []) or "none", art["body"])
+    msg = user + "\n\nYOUR DRAFT:\n" + draft + "\n\nIT FAILED THESE CHECKS, fix them (quoted phrases must not appear again; remove or neutralise any unsupported claim): " + "; ".join(problems)
+    data = D.anthropic(D.WRITER, revise_system(platform), msg, meter, post=post, max_tokens=D.WRITER_MAX_TOKENS)
+    return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+
+
 # ---------- writer ----------
 def writer_system(platform):
     s = SPECS[platform]
@@ -398,6 +428,7 @@ RULES (all checked by code afterwards; a break means nothing is published):
 - Facts about our own page and tool may come ONLY from the FACTS list in the user message (short notes in other words). Do not add features, limits, outputs or numbers of our tool that are not in it; for anything else about the tool stay general or say nothing. Never write that the tool "tells", "shows" or "recommends" something unless a FACT says so.
 - Exactly ONE link to the target InayaFlow page, as [LINK TEXT](URL), placed where it truly helps (not in the first or last paragraph); the type of LINK TEXT is set per article in the user message and checked by code. Never write the web address inayaflow.ai as plain text outside that link (as the link text itself it is allowed when the type says so).
 - Say everything in your own words: never copy 10 or more words in a row from any InayaFlow page (code rejects a shared 10-word run; avoid stock lists like 'followers, following, total likes and video count': give your own example instead). Write as 'we' for InayaFlow; never 'I', 'me' or 'my'.
+- Write plain how-to advice. No comparisons or performance claims ("X beats Y", "works better", "more reach") unless a source you opened says so and you link it. Never name a mode, plan, tier, limit or quantity of our tool unless a FACT states it exactly (no "a handful of", no invented product names). When unsure, leave the sentence out.
 - No @usernames, no other creators' names, no hype, no "sign up now". Be honest: our tools are free helpers, not magic.
 - Banned: delve, game-changer, landscape, tapestry, dive into, unlock, elevate, supercharge, revolutionize, seamlessly, cutting-edge, in conclusion, it's important to note, ever-evolving, look no further, to the next level, harness, embark, realm of, testament, leverage, must-have.
 - Title: 80 characters or fewer, no clickbait.
@@ -666,7 +697,7 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
             print("platform_poster: %s using the raw page text (no clean facts)" % pl)
         user = ("TARGET PAGE: %s\nIT IS: %s (%s)\nTOPIC AREA: %s\nFACTS ABOUT OUR PAGE (the only things you may say about it or its tool; use your own wording):\n%s\n\n"
                 "ARTICLES WE ALREADY PUBLISHED ON OUR OWN BLOGS (do not repeat these angles):\n%s\n\n%s\n\nWrite today's %s article now.") % (
-            url, what, kind, topic, facts or page_text, "\n".join("- " + t for t in past_titles[-25:]) or "(none yet)", D.anchor_prompt(anchor), pl.capitalize())
+            url, what, kind, topic, facts or page_text[:2500], "\n".join("- " + t for t in past_titles[-25:]) or "(none yet)", D.anchor_prompt(anchor), pl.capitalize())
         if not dry:
             state.setdefault("attempts", {})[today + pl] = state.get("attempts", {}).get(today + pl, 0) + 1
         save()
@@ -691,9 +722,14 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
             if attempt == 2 and meter.cost + repair_room + (left_after + 1) * (D.WRITER_RESERVE + D.QA_RESERVE) > meter.cap + 1e-9:
                 break
             extra = "" if attempt == 1 else "\n\nYOUR LAST DRAFT FAILED THESE CHECKS, fix them (the quoted phrases must not appear again): " + "; ".join(problems)
-            fetched = {}
+            prev = art if (attempt == 2 and art) else None
+            if not prev:
+                fetched = {}
             try:
-                art = parse_writer(D.run_writer(writer_system(pl), user + extra, meter, post=post_ai, fetched=fetched))
+                if prev:
+                    art = parse_writer(run_reviser(pl, user, prev, problems, meter, post=post_ai))
+                else:
+                    art = parse_writer(D.run_writer(writer_system(pl), user + extra, meter, post=post_ai, fetched=fetched))
             except Exception as e:
                 problems = ["writer error %s" % type(e).__name__]
                 break
@@ -758,7 +794,7 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
                 os.makedirs(DRAFT_DIR, exist_ok=True)
                 with open(os.path.join(DRAFT_DIR, "%s_%s_%s_FAILED.md" % (today, pl, slug)), "w", encoding="utf8") as f:
                     f.write("# FAILED DRAFT (not published)\n\nReasons: %s\n\nTitle: %s\n\n%s\n" % ("; ".join(reasons), art["title"], art["body"]))
-            log("| %s | %s | %s | FAIL, not published | | | %s | %s |" % (today, pl, slug, cost, "; ".join(reasons)[:300]))
+            log("| %s | %s | %s | FAIL, not published | | | %s | %s |" % (today, pl, slug, cost, "; ".join(reasons).replace("|", "/").replace("\n", " ")[:2500]))
             save()
             print("platform_poster: FAIL %s page=%s problems=%d cost=%s" % (pl, slug, len(reasons), cost))
             results[pl] = "FAIL"
