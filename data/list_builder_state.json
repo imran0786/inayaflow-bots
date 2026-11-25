@@ -1,7 +1,8 @@
 {
- "cursor": 20,
+ "cursor": 32,
  "spent": {
-  "2026-11-24": 2.9261
+  "2026-11-24": 2.9261,
+  "2026-11-25": 1.7711
  },
  "days": {
   "2026-11-24": {
@@ -24,6 +25,44 @@
    "calls": 20,
    "summary": "list-builder: +195 new (total 1956; by category github_awesome_lists 32, ai_saas_directories 30, tool_roundups 23, guest_post_pages 22, communities_profiles 19, resource_pages 16, launch_sites 15, saas_review_platforms 15, edu_library_guides 7, startup_directories_by_country 7, journalist_platforms 5, podcasts_creators 4)",
    "total": 1956
+  },
+  "2026-11-25": {
+   "added": 98,
+   "by_category": {
+    "podcasts_creators": 5,
+    "journalist_platforms": 5,
+    "edu_library_guides": 6,
+    "startup_directories_by_country": 12,
+    "ai_saas_directories": 6,
+    "launch_sites": 7,
+    "tool_roundups": 2,
+    "github_awesome_lists": 21,
+    "saas_review_platforms": 4,
+    "guest_post_pages": 8,
+    "resource_pages": 13,
+    "communities_profiles": 9
+   },
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "claude": {
+     "calls": 12,
+     "cost": 1.7711,
+     "proposed": 206,
+     "spam": 6,
+     "dup": 93,
+     "dead": 9,
+     "added": 98,
+     "followed": 33,
+     "nofollow": 2,
+     "noindex": 1,
+     "unknown": 62,
+     "needs_signup": 54
+    }
+   },
+   "category_summary": "list-builder: +98 new (total 2054; by category github_awesome_lists 21, resource_pages 13, startup_directories_by_country 12, communities_profiles 9, guest_post_pages 8, launch_sites 7, ai_saas_directories 6, edu_library_guides 6, journalist_platforms 5, podcasts_creators 5, saas_review_platforms 4, tool_roundups 2)",
+   "summary": "list-builder: sonnet +98 new (33 followed, $1.77)",
+   "total": 2054
   }
  },
  "rejected": [
@@ -66,7 +105,21 @@
   "smartforumbuilder.com",
   "autodesk.com",
   "angleout.io",
-  "github.com/hyraze/ai-collective-tools"
+  "github.com/hyraze/ai-collective-tools",
+  "makeyourmarkagency.com",
+  "journaliststoolbox.org",
+  "miami.edu",
+  "udayton.edu",
+  "missouri.edu",
+  "guilford.edu",
+  "grimsby-web.co.uk",
+  "ailisticle.com",
+  "thetoolify.dev",
+  "hiltonsoftware.co",
+  "producthunt.com/products/creator-economy-tools",
+  "tastyedits.com",
+  "grow.co",
+  "heartwiredclub.com"
  ],
- "last_summary": "list-builder: +195 new (total 1956; by category github_awesome_lists 32, ai_saas_directories 30, tool_roundups 23, guest_post_pages 22, communities_profiles 19, resource_pages 16, launch_sites 15, saas_review_platforms 15, edu_library_guides 7, startup_directories_by_country 7, journalist_platforms 5, podcasts_creators 4)"
+ "last_summary": "list-builder: sonnet +98 new (33 followed, $1.77)"
 }
