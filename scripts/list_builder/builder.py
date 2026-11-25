@@ -267,20 +267,38 @@ def known_keys(cand, extra_files=()):
     return keys
 
 
-def parse_rows(text):
-    """Model answer -> list of dicts: one JSON object per line (anything else is ignored)."""
-    out = []
-    for line in (text or "").splitlines():
-        line = line.strip().rstrip(",")
-        if not line.startswith("{"):
-            continue
+def _json_objects(text):
+    """JSON objects with a url from any of: one object per line, a ```json fenced block, a JSON array, or an object holding a list ({"places": [...]})."""
+    text = re.sub(r"```[a-zA-Z]*", " ", text or "")
+    out, dec, i = [], json.JSONDecoder(), 0
+    while True:
+        a, b = text.find("{", i), text.find("[", i)
+        cands = [x for x in (a, b) if x >= 0]
+        if not cands:
+            break
+        j = min(cands)
         try:
-            o = json.loads(line)
-        except Exception:
+            o, end = dec.raw_decode(text, j)
+        except ValueError:
+            i = j + 1
             continue
-        if isinstance(o, dict) and o.get("url"):
-            out.append(o)
+        i = end
+        stack = [o]
+        while stack:
+            x = stack.pop()
+            if isinstance(x, dict) and x.get("url"):
+                out.append(x)
+            elif isinstance(x, dict):
+                stack.extend(v for v in x.values() if isinstance(v, (list, dict)))
+            elif isinstance(x, list):
+                stack.extend(reversed(x))
     return out
+
+
+def parse_rows(text):
+    """Model answer -> list of dicts with a url. Accepts one JSON object per line (the format asked for) AND what real models do instead:
+    ```json fences, a JSON array, an object wrapping a list. Anything else is ignored."""
+    return _json_objects(text)
 
 
 def pick_category(cursor):
@@ -475,10 +493,16 @@ def ask_deepseek(system, user, meter, post=None):
     meter.book()                                                       # reserve booked and SAVED before the request goes out
     data = (post or _post_json)(DEEPSEEK_BASE + "/chat/completions",
                                 {"model": DEEPSEEK_MODEL, "max_tokens": MAX_TOKENS,
+                                 "thinking": {"type": "disabled"},   # 25 Nov 2026: thinking is ON by default (DeepSeek docs: "enabled by default, effort high"); it ate all 4000 output tokens and left content empty
                                  "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}, headers)
     meter.settle(data.get("usage"))
-    msg = (data.get("choices") or [{}])[0].get("message") or {}
-    return str(msg.get("content") or "")
+    choice = (data.get("choices") or [{}])[0]
+    msg = choice.get("message") or {}
+    text = str(msg.get("content") or "")
+    if not text.strip():
+        # content empty: say why (count-only line, no content). A cut-off reasoning answer must never look like "the model found nothing".
+        print("list-builder-deepseek: empty answer (finish_reason=%s, reasoning chars=%d)" % (choice.get("finish_reason"), len(str(msg.get("reasoning_content") or ""))))
+    return text
 
 
 SYSTEM = """You build a list of real web places where a free tool for TikTok creators (InayaFlow, https://inayaflow.ai) can get a listing, a mention or a link. You research with web search and answer with JSON lines only.

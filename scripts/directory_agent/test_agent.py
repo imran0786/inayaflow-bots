@@ -482,6 +482,11 @@ class FollowProof(unittest.TestCase):
     """24 Nov 2026: follow-proof pre-check. The network is mocked; nothing here touches the internet."""
     T0 = "2026-11-24"
 
+    def setUp(self):
+        orig = ag.usability_check
+        ag.usability_check = lambda url, get=None: ("UNKNOWN", "not checked in this test")   # these tests are about the follow-proof, not the usability check
+        self.addCleanup(lambda: setattr(ag, "usability_check", orig))
+
     def _site(self, pages):
         """pages: {url: (html, headers)}; installs a fake _http_get, returns the list of fetched urls."""
         fetched = []
@@ -665,6 +670,132 @@ class FollowProof(unittest.TestCase):
         self.assertEqual(v, "UNKNOWN")
         self.assertIn("TimeoutError", ev)
         self.assertEqual(ag.follow_proof("")[0], "UNKNOWN")
+
+
+class Usability(unittest.TestCase):
+    """25 Nov 2026: usability pre-check (plain HTTP, no AI) + reasons for runs that end without an answer + mail matching. No network."""
+    T0 = "2026-11-25"
+
+    def chk(self, pages, url="https://dir.example/submit"):
+        def get(u):
+            return pages.get(u, (0, u, {}, "DNS"))
+        return ag.usability_check(url, get)
+
+    def test_dead_dns_404_and_redirect_to_another_site(self):
+        self.assertEqual(self.chk({})[0], "DEAD")
+        self.assertEqual(self.chk({"https://dir.example/submit": (404, "https://dir.example/submit", {}, "nope")})[0], "DEAD")
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://other.example/", {}, "<form><input></form>")})[0], "DEAD")
+
+    def test_captcha_markers_and_cloudflare_challenge(self):
+        page = "<form><input name=a></form><div class='g-recaptcha'></div>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, page)})[0], "CAPTCHA")
+        self.assertEqual(self.chk({"https://dir.example/submit": (403, "https://dir.example/submit", {"cf-mitigated": "challenge"}, "")})[0], "CAPTCHA")
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, "<div class=cf-turnstile></div><form><input></form>")})[0], "CAPTCHA")
+
+    def test_form_is_ok_and_embedded_forms_count(self):
+        ok = "<form action=/s><input name=url><textarea name=d></textarea></form>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, ok)})[0], "OK")
+        emb = "<h1>Submit</h1><iframe src='https://tally.so/embed/abc'></iframe>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, emb)})[0], "OK")
+
+    def test_no_form_mailto_only_and_follow_one_submit_link(self):
+        mail = "<h1>Send us your tool</h1><a href='mailto:hi@dir.example'>mail</a>" + "x " * 400
+        v, ev = self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, mail)})
+        self.assertEqual(v, "NO_FORM")
+        self.assertIn("e-mail only", ev)
+        home = "<a href='/add-your-tool'>add</a>" + "x " * 400
+        tgt = "<form><input name=u></form>"
+        pages = {"https://dir.example/": (200, "https://dir.example/", {}, home), "https://dir.example/add-your-tool": (200, "https://dir.example/add-your-tool", {}, tgt)}
+        self.assertEqual(self.chk(pages, "https://dir.example/")[0], "OK")
+
+    def test_paid_only_and_google_only_login(self):
+        paid = "<p>Paid listing only. Listing fee $49.</p><form><input></form>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, paid)})[0], "PAID")
+        priced = "<h1>Get featured</h1><p>Submit your tool from $99</p>" + "x " * 400
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, priced)})[0], "PAID")
+        free_and_paid = "<h1>Submit</h1><p>Free listing, or featured $99</p><form><input></form>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, free_and_paid)})[0], "OK")
+        goog = "<h1>Log in</h1><button>Continue with Google</button>" + "x " * 400
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, goog)})[0], "SOCIAL_LOGIN_ONLY")
+        both = "<button>Continue with Google</button><form><input type=email><input type=password></form>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, both)})[0], "OK")
+
+    def test_js_app_and_failed_fetch_stay_unknown_so_the_agent_still_tries(self):
+        js = "<div id='root'></div><script>app()</script>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, js)})[0], "UNKNOWN")
+        self.assertEqual(self.chk({"https://dir.example/submit": (500, "https://dir.example/submit", {}, "")})[0], "UNKNOWN")
+        self.assertEqual(self.chk({"https://dir.example/submit": (0, "https://dir.example/submit", {}, "timeout")})[0], "UNKNOWN")
+
+    def _feed(self, verdicts):
+        sites = [{"name": "A", "submit_url": "https://a.example/submit", "usable": True, "free_check": "free_likely"},
+                 {"name": "B", "submit_url": "https://b.example/submit", "usable": True, "free_check": "free_likely"}]
+        o = (ag.candidate_sites, ag.load_json, ag.follow_proof, ag.usability_check)
+        ag.candidate_sites = lambda d: sites
+        ag.load_json = lambda p, d: [] if p.endswith("directories.json") else d
+        ag.follow_proof = lambda u, deadline=None: ("FOLLOWED", "x")
+        calls = []
+
+        def uc(url, get=None):
+            calls.append(url)
+            return verdicts[url]
+        ag.usability_check = uc
+
+        def restore():
+            ag.candidate_sites, ag.load_json, ag.follow_proof, ag.usability_check = o
+        self.addCleanup(restore)
+        state, stats = {}, {}
+        out = ag.build_feed(state, {}, self.T0, {}, stats)
+        return [s["name"] for s in out], state, stats, calls
+
+    def test_feed_drops_sure_losers_caches_the_verdict_and_never_rechecks_inside_the_window(self):
+        names, state, stats, calls = self._feed({"https://a.example/submit": ("CAPTCHA", "bot-check marker"), "https://b.example/submit": ("OK", "form")})
+        self.assertEqual(names, ["B"])
+        self.assertEqual(stats["use_CAPTCHA"], 1)
+        self.assertEqual(state[ag.USE_KEY]["a.example"]["verdict"], "CAPTCHA")
+        names2 = [s["name"] for s in ag.build_feed(state, {}, "2026-11-26", {}, {})]
+        self.assertEqual(names2, ["B"])
+        self.assertEqual(len(calls), 2)
+        self.assertIsNone(ag.cached_usable(state, "a.example", "2026-12-10"))
+
+    def test_unknown_goes_to_the_agent(self):
+        names, _, _, _ = self._feed({"https://a.example/submit": ("UNKNOWN", "JS app"), "https://b.example/submit": ("DEAD", "x")})
+        self.assertEqual(names, ["A"])
+
+    def test_blocked_verdicts_cover_the_25_nov_failure_mix(self):
+        self.assertTrue({"NO_FORM", "CAPTCHA", "DEAD", "PAID", "SOCIAL_LOGIN_ONLY"} <= ag.USE_BLOCK)
+
+    class _Res:
+        def __init__(self, steps=3, errors=()):
+            self._s, self._e = steps, list(errors)
+
+        def number_of_steps(self):
+            return self._s
+
+        def errors(self):
+            return self._e
+
+    def test_no_answer_always_has_a_reason_code(self):
+        r = ag.no_answer_reason(self._Res(40), {"input_tokens": 100, "output_tokens": 5}, (50000, 9000), 40)
+        self.assertTrue(r.startswith("NO_ANSWER_STEP_LIMIT"), r)
+        r = ag.no_answer_reason(self._Res(7), {"input_tokens": 49000, "output_tokens": 5}, (50000, 9000), 40)
+        self.assertTrue(r.startswith("NO_ANSWER_TOKEN_LIMIT"), r)
+        r = ag.no_answer_reason(self._Res(5, [None, "TimeoutError: page https://x.example failed"]), {"input_tokens": 10, "output_tokens": 1}, (50000, 9000), 40)
+        self.assertTrue(r.startswith("NO_ANSWER_BROWSER_ERROR"), r)
+        self.assertNotIn("https://", r)
+        r = ag.no_answer_reason(self._Res(5), {}, None, 40)
+        self.assertTrue(r.startswith("NO_ANSWER_STOPPED"), r)
+        self.assertLessEqual(len(r), 160)
+
+    def test_confirm_mail_matches_the_site_or_a_mailer_sending_for_it(self):
+        self.assertTrue(ag.mail_is_from_site("mail.dir.example", "hello", "dir.example"))
+        self.assertTrue(ag.mail_is_from_site("sendgrid.net", "Click https://dir.example/verify?token=abc", "dir.example"))
+        self.assertFalse(ag.mail_is_from_site("sendgrid.net", "Click https://other.example/verify?token=abc", "dir.example"))
+        self.assertGreaterEqual(ag.MAIL_WAIT, 240)
+
+    def test_task_says_prefer_email_signup_and_finish_in_the_same_session(self):
+        t = ag.build_task({"name": "Dir", "url": "https://dir.example/submit"})
+        self.assertIn("always use the e-mail option", t)
+        self.assertIn("THIS browser session", t)
 
 
 if __name__ == "__main__":
