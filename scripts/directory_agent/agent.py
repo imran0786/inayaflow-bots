@@ -4,7 +4,7 @@ Runs in GitHub Actions only. PUBLIC repo: stdout carries site names and result c
 passwords, codes or links). Details go to ops/directory_agent_log.md, which the workflow pushes to the PRIVATE repo.
 Dry run (default): the agent fills the form and STOPS right before the final submit click.
 """
-import asyncio, socket, base64, datetime, email, hashlib, hmac, imaplib, json, logging, os, re, shutil, sys, tempfile, time
+import asyncio, threading, socket, base64, datetime, email, hashlib, hmac, imaplib, json, logging, os, re, shutil, sys, tempfile, time
 from email import policy
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
@@ -159,12 +159,21 @@ def confirm_links(text, want):
 
 async def read_mail_async(directory_url):
     """The confirm-mail tool for the browser agent. The IMAP poll (up to MAIL_WAIT s, sleeping between polls) runs in a worker thread, so the event loop of the browser
-    connection and the wait_for timeouts keep running while we wait."""
-    return await asyncio.get_running_loop().run_in_executor(None, read_mail_from_domain, directory_url)
+    connection and the wait_for timeouts keep running while we wait. When wait_for cancels this task (site budget over) the cancel flag is set: the thread stops within
+    about 5 s and flags no mail after that."""
+    cancel = threading.Event()
+    fut = asyncio.get_running_loop().run_in_executor(None, read_mail_from_domain, directory_url, None, cancel)
+    try:
+        return await fut
+    except asyncio.CancelledError:
+        cancel.set()
+        raise
 
 
-def read_mail_from_domain(directory_url, wait=None):
-    """Newest mail from the directory's own domain (INBOX/Junk, last 10 min). PEEK only: does not mark mail read."""
+def read_mail_from_domain(directory_url, wait=None, cancel=None):
+    """Newest mail from the directory's own domain (INBOX/Junk, last 10 min). PEEK only: does not mark mail read.
+    `cancel` (a threading.Event): set by the caller when the site's time budget ran out. The poll then stops at its next check (every 0.5 s while waiting,
+    before every mail and before the IFDirHandled flag), so a timed-out site never leaves a thread polling or flagging mail."""
     pw = os.environ.get("CONTACT_EMAIL_PASSWORD")
     if not pw:
         return "ERROR: mailbox password not available"
@@ -173,6 +182,8 @@ def read_mail_from_domain(directory_url, wait=None):
     start = time.time() - 600
     end = time.time() + wait
     while True:
+        if cancel is not None and cancel.is_set():
+            return "CANCELLED: the site's time budget ended"
         try:
             imap = imaplib.IMAP4_SSL(IMAP_HOST, 993)
             imap.login(CONTACT, pw)
@@ -186,6 +197,8 @@ def read_mail_from_domain(directory_url, wait=None):
                         continue
                     typ, data = imap.uid("SEARCH", None, "SINCE", since)
                     for uid in reversed(data[0].split() if data and data[0] else []):
+                        if cancel is not None and cancel.is_set():
+                            return "CANCELLED: the site's time budget ended"
                         typ, d = imap.uid("FETCH", uid, "(BODY.PEEK[])")
                         msg = next((email.message_from_bytes(p[1], policy=policy.default) for p in d if isinstance(p, tuple)), None)
                         if msg is None:
@@ -202,6 +215,8 @@ def read_mail_from_domain(directory_url, wait=None):
                             continue
                         links = confirm_links(text, want)
                         codes = re.findall(r"(?<!\d)(\d{4,8})(?!\d)", re.sub(r"https?://\S+", " ", text))
+                        if cancel is not None and cancel.is_set():       # after the deadline nothing is flagged: the agent never saw this mail
+                            return "CANCELLED: the site's time budget ended"
                         try:  # tell the mail router and the verify sweeper that this mail was used in a live session
                             imap.uid("STORE", uid, "+FLAGS", "(IFDirHandled)")
                         except Exception:
@@ -217,7 +232,10 @@ def read_mail_from_domain(directory_url, wait=None):
             return "ERROR: mailbox read failed (%s)" % type(e).__name__
         if time.time() >= end:
             return "NO MAIL from that site yet (waited %ds). Try once more later or report EMAIL_CODE_NOT_RECEIVED." % wait
-        time.sleep(10)
+        for _ in range(20):                      # 10 s between polls, in 0.5 s steps so a cancel is seen at once
+            if cancel is not None and cancel.is_set():
+                return "CANCELLED: the site's time budget ended"
+            time.sleep(0.5)
 
 
 def build_task(site, product=None):
@@ -227,7 +245,7 @@ def build_task(site, product=None):
     signup = ("If an account is required, create one with the e-mail %s and the password in <secret:password>. Type it only with the secret tool. "
               "If the account already exists (we may have signed up on an earlier visit), log in with the same e-mail and <secret:password> instead of signing up again. "
               "If the site sends a confirmation mail or a login code, call read_confirmation_mail and use the code or link from it, then continue." % CONTACT
-              if ALLOW_SIGNUP else "Do NOT create any account. If an account is required, report OTHER with 'needs account'.")
+              if signups_allowed() else "Do NOT create any account. If an account is required, report OTHER with 'needs account'.")
     extra = ""
     if product and product.get("kind") != "homepage":
         extra = ("- This is an ADDITIONAL listing: our company already has (or is getting) its main listing here. Submit THIS free tool as its own separate product "
@@ -1028,7 +1046,7 @@ def eligible(site, state, old_state, today, vstate=None):
 # ---- 25 Nov 2026: resume (Imran: finish a site completely, then the next). A site where the ROBOT already signed up (it knows the derived password) but
 # the confirm mail or the listing is missing comes FIRST in the queue; the task text already says "log in with the same e-mail and password instead of signing up again".
 # Only the robot's own records count: the agent state (it writes only its own sign-ups) and the old Playwright bot's state (same derived password, see reg_domain).
-# Sites signed up in Chrome (Google sign-in or Imran's own password) are NOT here and are never touched; extra robot-made sites can be added by hand in data/resume_sites.json.
+# Sites signed up in Chrome (Google sign-in or Imran's own password) are NOT here and are never touched; extra robot-made sites can be added by hand in ops/resume_sites.json (private branch).
 RESUME_STATUSES = ("EMAIL_CODE_NOT_RECEIVED", "UNCONFIRMED")
 RESUME_FILE = os.path.join(ROOT, "ops", "resume_sites.json")   # PRIVATE: restored from imran0786/genie branch ops-directory-logs (names from our mailbox never sit in the public repo)   # {"robot_signed_up": ["domain.com", ...], "sign_up_method_unknown_do_not_touch": [...]}
 
@@ -1036,6 +1054,16 @@ RESUME_FILE = os.path.join(ROOT, "ops", "resume_sites.json")   # PRIVATE: restor
 def _resume_domains():
     d = load_json(RESUME_FILE, {})
     return {str(x).lower() for x in (d.get("robot_signed_up") or [])} if isinstance(d, dict) else set()
+
+
+def resume_file_ok():
+    """True only when the private resume file was restored AND has the do-not-touch list. Otherwise we cannot know which accounts are not ours: no sign-ups."""
+    d = load_json(RESUME_FILE, None)
+    return isinstance(d, dict) and isinstance(d.get("sign_up_method_unknown_do_not_touch"), list)
+
+
+def signups_allowed():
+    return ALLOW_SIGNUP and resume_file_ok()
 
 
 def do_not_touch_domains():
@@ -1047,6 +1075,8 @@ def is_resume(site, state, old_state):
     dom = dom_of(site)
     e = state.get(dom) or state.get(nkey(site["name"])) or {}
     o = (old_state or {}).get(site["name"]) or {}
+    if not resume_file_ok():
+        return False                      # fail closed: no resume attempts without the do-not-touch list
     return bool(dom in _resume_domains() or e.get("status") in RESUME_STATUSES or o.get("confirm_pending"))
 
 
@@ -1261,12 +1291,15 @@ def main():
     state = load_json(STATE_PATH, {})
     old_state = load_json(OLD_STATE_PATH, {})
     update_walls(state, today)
+    if not resume_file_ok():
+        print("resume file missing: sign-ups skipped", flush=True)      # count-only line; plain submit-only sites still run
     manual = bool(batch)
     proof_stats = {}
     if manual:
         sites = json.load(open(os.path.join(ROOT, batch), encoding="utf8"))["sites"]
         if only:
             sites = [s for s in sites if s["name"].lower() in only]
+        sites = [s for s in sites if not domain_block(state, dom_of(s), today)]   # manual batches obey the same walls and the do-not-touch list
         untried = len(sites)
     else:
         sites = build_feed(state, old_state, today, load_json(VSTATE_PATH, {}), proof_stats)

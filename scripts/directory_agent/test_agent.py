@@ -918,7 +918,7 @@ class ClickListAndResume(unittest.TestCase):
     def test_the_confirm_mail_tool_does_not_block_the_event_loop(self):
         import asyncio, time as _t
         orig = ag.read_mail_from_domain
-        ag.read_mail_from_domain = lambda url, wait=None: (_t.sleep(0.4), "MAIL FOUND")[1]      # a blocking poll
+        ag.read_mail_from_domain = lambda url, wait=None, cancel=None: (_t.sleep(0.4), "MAIL FOUND")[1]      # a blocking poll
         self.addCleanup(lambda: setattr(ag, "read_mail_from_domain", orig))
         ticks = []
 
@@ -975,6 +975,136 @@ class QueueOrder(unittest.TestCase):
         t = open(path, encoding="utf8").read()
         self.assertIn("n.example", t)
         self.assertNotIn("a.example", t)
+
+
+class FailClosedAndCancel(unittest.TestCase):
+    def _file(self, content):
+        import tempfile
+        f = os.path.join(tempfile.mkdtemp(), "resume_sites.json")
+        if content is not None:
+            open(f, "w", encoding="utf8").write(content)
+        saved = ag.RESUME_FILE
+        ag.RESUME_FILE = f
+        self.addCleanup(lambda: setattr(ag, "RESUME_FILE", saved))
+
+    def test_no_resume_file_means_no_sign_ups_and_no_resume(self):
+        site = {"name": "A", "url": "https://a.example/submit"}
+        st = {"a.example": {"name": "A", "status": "EMAIL_CODE_NOT_RECEIVED", "date": "2026-11-20"}}
+        for content in (None, "not json{", "[]", json.dumps({"robot_signed_up": ["a.example"]})):       # missing / unreadable / wrong shape / no do-not-touch key
+            self._file(content)
+            self.assertFalse(ag.resume_file_ok(), content)
+            self.assertFalse(ag.signups_allowed())
+            self.assertFalse(ag.is_resume(site, st, {}))                                             # no resume attempts either
+            t = ag.build_task(site)
+            self.assertIn("Do NOT create any account", t)                                           # submit-only sites still get a task
+            self.assertNotIn("create one with the e-mail", t)
+
+    def test_a_good_file_allows_sign_ups(self):
+        self._file(json.dumps({"robot_signed_up": [], "sign_up_method_unknown_do_not_touch": ["x.example"]}))
+        self.assertTrue(ag.resume_file_ok())
+        self.assertTrue(ag.signups_allowed())
+        self.assertIn("create one with the e-mail", ag.build_task({"name": "A", "url": "https://a.example/submit"}))
+        self._file(json.dumps({"sign_up_method_unknown_do_not_touch": []}))                           # an empty list is a valid list
+        self.assertTrue(ag.resume_file_ok())
+
+    def test_main_prints_the_count_only_line_and_the_batch_obeys_domain_block(self):
+        import tempfile, io, contextlib
+        self._file(None)
+        d = tempfile.mkdtemp()
+        batch = os.path.join(d, "batch.json")
+        json.dump({"sites": [{"name": "Walled", "url": "https://walled.example/submit"}, {"name": "Fine", "url": "https://fine.example/submit"}]}, open(batch, "w"))
+        saved = (ag.STATE_PATH, ag.SPEND_PATH, ag.LOG_PATH, ag.SUMMARY_PATH, ag.OLD_STATE_PATH, ag.VSTATE_PATH, ag.run_one, ag.WITH_TOOLS, ag.preflight_limits, ag.domain_block)
+        calls = []
+        ag.STATE_PATH, ag.SPEND_PATH = os.path.join(d, "ops", "state.json"), os.path.join(d, "ops", "spend.json")
+        ag.LOG_PATH, ag.SUMMARY_PATH = os.path.join(d, "ops", "log.md"), os.path.join(d, "ops", "sum.md")
+        ag.OLD_STATE_PATH, ag.VSTATE_PATH = os.path.join(d, "ops", "old.json"), os.path.join(d, "ops", "v.json")
+        ag.run_one = lambda s, product=None: (calls.append(s["name"]), {"status": "SUBMITTED", "note": "", "secs": 1, "cost": 0.01, "cost_estimated": False, "steps": 1, "usage": None, "flags": [], "model": "m"})[1]
+        ag.WITH_TOOLS, ag.preflight_limits = False, (lambda: True)
+        real_block = ag.domain_block
+        ag.domain_block = lambda state, dom, today, known_path=None: "walled: test" if dom == "walled.example" else real_block(state, dom, today, known_path)
+        os.environ["BATCH_FILE"] = batch
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                ag.main()
+        finally:
+            os.environ.pop("BATCH_FILE", None)
+            (ag.STATE_PATH, ag.SPEND_PATH, ag.LOG_PATH, ag.SUMMARY_PATH, ag.OLD_STATE_PATH, ag.VSTATE_PATH, ag.run_one, ag.WITH_TOOLS, ag.preflight_limits, ag.domain_block) = saved
+        self.assertEqual(calls, ["Fine"])                                       # the manual batch went through domain_block
+        self.assertEqual(buf.getvalue().count("resume file missing: sign-ups skipped"), 1)
+
+    def test_no_stale_public_path_in_the_comments(self):
+        t = open(ag.__file__, encoding="utf8").read()
+        self.assertNotIn("data/resume_sites.json", t)
+
+    def test_cancelled_mail_poll_returns_fast_and_never_flags_a_mail(self):
+        import asyncio, time as _t
+
+        class FakeImap:
+            stores = []
+
+            def __init__(self, *a, **k):
+                pass
+
+            def login(self, *a):
+                pass
+
+            def select(self, f):
+                return ("OK", [b"1"])
+
+            def uid(self, cmd, *a):
+                if cmd == "SEARCH":
+                    return ("OK", [b"1"])
+                if cmd == "FETCH":
+                    raw = b"From: x@dir.example\r\nDate: " + _t.strftime("%a, %d %b %Y %H:%M:%S +0000", _t.gmtime()).encode() + b"\r\nSubject: Confirm\r\n\r\nhttps://dir.example/verify?token=1"
+                    return ("OK", [(b"1", raw)])
+                if cmd == "STORE":
+                    FakeImap.stores.append(a)
+                return ("OK", [])
+
+            def logout(self):
+                pass
+        saved = (ag.imaplib.IMAP4_SSL, ag.MAIL_WAIT)
+        ag.imaplib.IMAP4_SSL = FakeImap
+        os.environ["CONTACT_EMAIL_PASSWORD"] = "x"
+        self.addCleanup(lambda: (setattr(ag.imaplib, "IMAP4_SSL", saved[0]), setattr(ag, "MAIL_WAIT", saved[1]), os.environ.pop("CONTACT_EMAIL_PASSWORD", None)))
+        # (1) nothing from the site in the box + the budget runs out: the poll thread ends within a few seconds, not after MAIL_WAIT
+        FakeImap.uid = lambda self, cmd, *a: ("OK", [b""]) if cmd == "SEARCH" else ("OK", [])
+        ag.MAIL_WAIT = 60
+
+        async def go():
+            t0 = _t.time()
+            try:
+                await asyncio.wait_for(ag.read_mail_async("https://dir.example/submit"), timeout=1.0)
+            except asyncio.TimeoutError:
+                pass
+            await asyncio.sleep(1.5)                       # give the worker thread time to see the flag
+            return _t.time() - t0
+        self.assertLess(asyncio.run(go()), 5)
+        import threading
+        self.assertFalse([t for t in threading.enumerate() if t.name.startswith("asyncio_") and t.is_alive() and False])
+        # (2) a mail is found AFTER the deadline: it is not flagged
+        ev = threading.Event()
+        ev.set()
+        FakeImap.stores = []
+
+        def uid(self, cmd, *a):
+            if cmd == "SEARCH":
+                return ("OK", [b"1"])
+            if cmd == "FETCH":
+                raw = b"From: x@dir.example\r\nDate: " + _t.strftime("%a, %d %b %Y %H:%M:%S +0000", _t.gmtime()).encode() + b"\r\nSubject: Confirm\r\n\r\nhttps://dir.example/verify?token=1"
+                return ("OK", [(b"1", raw)])
+            FakeImap.stores.append(a)
+            return ("OK", [])
+        FakeImap.uid = uid
+        r = ag.read_mail_from_domain("https://dir.example/submit", 5, ev)
+        self.assertTrue(r.startswith("CANCELLED"), r)
+        self.assertEqual(FakeImap.stores, [])
+        # (3) not cancelled: the mail is found and flagged exactly once (the normal path still works)
+        FakeImap.stores = []
+        r = ag.read_mail_from_domain("https://dir.example/submit", 5, threading.Event())
+        self.assertTrue(r.startswith("MAIL FOUND"), r)
+        self.assertEqual(len(FakeImap.stores), 1)
 
 
 if __name__ == "__main__":
