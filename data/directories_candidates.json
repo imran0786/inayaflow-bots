@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-24",
+ "generated": "2026-11-25",
  "sources": [
   "github.com/s87343472/backlink-pilot targets.yaml (MIT, last push 2026-10-29, file marked DEPRECATED/unmaintained)",
   "github.com/profullstack/link-directories directories.csv (no licence file, 76 rows)"
@@ -33124,7 +33124,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-24",
    "their_notes": ""
   },
   {
