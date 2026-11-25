@@ -1,7 +1,8 @@
 {
- "cursor": 12,
+ "cursor": 24,
  "spent": {
-  "2026-11-24": 0.0586
+  "2026-11-24": 0.0586,
+  "2026-11-25": 0.0586
  },
  "days": {
   "2026-11-24": {
@@ -28,8 +29,43 @@
    "category_summary": "list-builder: +0 new (total 1956; by category none)",
    "summary": "list-builder: sonnet +0 new (0 followed, $0.00) | deepseek +0 new (0 followed, $0.06) [dry run: nothing saved]",
    "total": 1956
+  },
+  "2026-11-25": {
+   "added": 4,
+   "by_category": {
+    "startup_directories_by_country": 4
+   },
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "deepseek": {
+     "calls": 12,
+     "cost": 0.0586,
+     "proposed": 25,
+     "spam": 0,
+     "dup": 14,
+     "dead": 7,
+     "added": 4,
+     "followed": 0,
+     "nofollow": 0,
+     "noindex": 0,
+     "unknown": 4,
+     "needs_signup": 1
+    }
+   },
+   "category_summary": "list-builder: +4 new (total 2131; by category startup_directories_by_country 4)",
+   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +4 new (0 followed, $0.06)",
+   "total": 2131
   }
  },
- "rejected": [],
- "last_summary": "list-builder: sonnet +0 new (0 followed, $0.00) | deepseek +0 new (0 followed, $0.06) [dry run: nothing saved]"
+ "rejected": [
+  "freeindex.co.uk",
+  "cylex-uk.co.uk",
+  "scoot.co.uk",
+  "touchlocal.com",
+  "yell.com",
+  "businessmagnet.co.uk",
+  "applegate.co.uk"
+ ],
+ "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +4 new (0 followed, $0.06)"
 }
