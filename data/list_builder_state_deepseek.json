@@ -1,8 +1,8 @@
 {
- "cursor": 36,
+ "cursor": 48,
  "spent": {
   "2026-11-24": 0.0586,
-  "2026-11-25": 0.08
+  "2026-11-25": 0.1023
  },
  "days": {
   "2026-11-24": {
@@ -31,31 +31,42 @@
    "total": 1956
   },
   "2026-11-25": {
-   "added": 4,
+   "added": 89,
    "by_category": {
-    "startup_directories_by_country": 4
+    "startup_directories_by_country": 13,
+    "ai_saas_directories": 3,
+    "launch_sites": 3,
+    "tool_roundups": 7,
+    "github_awesome_lists": 9,
+    "saas_review_platforms": 1,
+    "guest_post_pages": 10,
+    "resource_pages": 5,
+    "communities_profiles": 3,
+    "podcasts_creators": 21,
+    "journalist_platforms": 2,
+    "edu_library_guides": 12
    },
-   "runs": 2,
-   "calls": 24,
+   "runs": 3,
+   "calls": 36,
    "providers": {
     "deepseek": {
-     "calls": 24,
-     "cost": 0.08,
-     "proposed": 333,
-     "spam": 16,
-     "dup": 174,
-     "dead": 56,
-     "added": 4,
-     "followed": 0,
+     "calls": 36,
+     "cost": 0.1023,
+     "proposed": 667,
+     "spam": 22,
+     "dup": 373,
+     "dead": 100,
+     "added": 89,
+     "followed": 21,
      "nofollow": 0,
-     "noindex": 0,
-     "unknown": 4,
-     "needs_signup": 1
+     "noindex": 2,
+     "unknown": 66,
+     "needs_signup": 45
     }
    },
-   "category_summary": "list-builder: +83 new (total 2131; by category edu_library_guides 17, podcasts_creators 14, resource_pages 14, startup_directories_by_country 10, guest_post_pages 9, tool_roundups 8, communities_profiles 4, github_awesome_lists 2, journalist_platforms 2, launch_sites 2, ai_saas_directories 1)",
-   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +87 new (13 followed, $0.08) [dry run: nothing saved]",
-   "total": 2131
+   "category_summary": "list-builder: +89 new (total 2216; by category podcasts_creators 21, startup_directories_by_country 13, edu_library_guides 12, guest_post_pages 10, github_awesome_lists 9, tool_roundups 7, resource_pages 5, ai_saas_directories 3, communities_profiles 3, launch_sites 3, journalist_platforms 2, saas_review_platforms 1)",
+   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +89 new (21 followed, $0.10)",
+   "total": 2216
   }
  },
  "rejected": [
@@ -126,7 +137,54 @@
   "startupzone.ca",
   "nlstartups.com",
   "c100.org",
-  "startupfest.io"
+  "startupfest.io",
+  "reddit.com/r/artificial",
+  "github.com/meirwah/awesome-workflow-automation",
+  "aitoolsupdates.com",
+  "aitoolmaze.com",
+  "indietools.net",
+  "github.com/agentops-ai/awesome-ai-agents",
+  "reddit.com/r/alphaandbetausers",
+  "reddit.com/r/startups",
+  "producthunt.com/launch",
+  "reddit.com/r/tiktokmarketing",
+  "reddit.com/r/socialmediamarketing",
+  "reddit.com/r/contentcreators",
+  "producthunt.com/stories",
+  "github.com/visenger/awesome-ml",
+  "github.com/paulmartins947/awesome-productivity",
+  "github.com/krsjoseph/awesome-nocode",
+  "github.com/ryanb58/awesome-social-media",
+  "github.com/eltonfreitas/awesome-digital-marketing",
+  "github.com/ai-for-marketers/awesome-ai-marketing",
+  "github.com/danielmichalski/awesome-ai-tools",
+  "github.com/onigetoc/awesome-content-marketing",
+  "github.com/marketergang/awesome-ai-marketing-tools",
+  "github.com/ossf/awesome-oss",
+  "toolbox.com",
+  "saastimes.com",
+  "saasdirectory.io",
+  "searchenginewatch.com",
+  "smartblogger.com",
+  "socialbarrel.com",
+  "reddit.com/r/nocode",
+  "reddit.com/r/internetisbeautiful",
+  "flowgpt.com",
+  "eye-on.ai",
+  "nytimes.com",
+  "lennyspodcast.com",
+  "podmatch.com",
+  "listennotes.com",
+  "guestio.com",
+  "facebook.com/groups/podcasthostsandguests",
+  "globaldigitalcitizen.org",
+  "commoncraft.com",
+  "startupaus.org",
+  "gov.au",
+  "australianbusinessdirectory.com.au",
+  "startupvictoria.com.au",
+  "launchvic.org",
+  "innovationaus.com"
  ],
- "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +87 new (13 followed, $0.08) [dry run: nothing saved]"
+ "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +89 new (21 followed, $0.10)"
 }

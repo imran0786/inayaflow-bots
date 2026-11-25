@@ -4,5 +4,5 @@ One row per UTC day. calls, cost in USD, proposed URLs, dropped (dead / spam / d
 
 | Date | calls | cost | proposed | dead | spam | dup | added | followed | nofollow | noindex | unknown | needs_signup |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2026-11-25 | 12 | 0.06 | 25 | 7 | 0 | 14 | 4 | 0 | 0 | 0 | 4 | 1 |
+| 2026-11-25 | 36 | 0.10 | 667 | 100 | 22 | 373 | 89 | 21 | 0 | 2 | 66 | 45 |
 | 2026-11-24 | 12 | 0.06 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
