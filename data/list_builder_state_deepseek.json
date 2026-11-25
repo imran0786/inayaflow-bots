@@ -1,8 +1,8 @@
 {
- "cursor": 24,
+ "cursor": 36,
  "spent": {
   "2026-11-24": 0.0586,
-  "2026-11-25": 0.0586
+  "2026-11-25": 0.08
  },
  "days": {
   "2026-11-24": {
@@ -35,16 +35,16 @@
    "by_category": {
     "startup_directories_by_country": 4
    },
-   "runs": 1,
-   "calls": 12,
+   "runs": 2,
+   "calls": 24,
    "providers": {
     "deepseek": {
-     "calls": 12,
-     "cost": 0.0586,
-     "proposed": 25,
-     "spam": 0,
-     "dup": 14,
-     "dead": 7,
+     "calls": 24,
+     "cost": 0.08,
+     "proposed": 333,
+     "spam": 16,
+     "dup": 174,
+     "dead": 56,
      "added": 4,
      "followed": 0,
      "nofollow": 0,
@@ -53,8 +53,8 @@
      "needs_signup": 1
     }
    },
-   "category_summary": "list-builder: +4 new (total 2131; by category startup_directories_by_country 4)",
-   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +4 new (0 followed, $0.06)",
+   "category_summary": "list-builder: +83 new (total 2131; by category edu_library_guides 17, podcasts_creators 14, resource_pages 14, startup_directories_by_country 10, guest_post_pages 9, tool_roundups 8, communities_profiles 4, github_awesome_lists 2, journalist_platforms 2, launch_sites 2, ai_saas_directories 1)",
+   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +87 new (13 followed, $0.08) [dry run: nothing saved]",
    "total": 2131
   }
  },
@@ -65,7 +65,68 @@
   "touchlocal.com",
   "yell.com",
   "businessmagnet.co.uk",
-  "applegate.co.uk"
+  "applegate.co.uk",
+  "aitools.fun",
+  "that-aicollection.com",
+  "producthunt.com/discussions",
+  "socialmediaexaminer.com",
+  "forbes.com",
+  "blog.producthunt.com",
+  "creatoreconomyreport.com",
+  "tubefilter.com",
+  "github.com/social-media-tools/awesome-social-media",
+  "github.com/creator-tools/awesome-creator-tools",
+  "github.com/saasified/awesome-saas",
+  "github.com/marketingtoolslist/awesome-startup-tools",
+  "github.com/producthunt/awesome-product-hunt",
+  "github.com/kelseyhightower/awesome-no-code",
+  "github.com/awesome-lists/awesome-lists",
+  "saasadviser.co",
+  "socialmediatoday.com",
+  "convinceandconvert.com",
+  "kinsta.com",
+  "adobe.com",
+  "semrush.com",
+  "canva.com",
+  "promorepublic.com",
+  "reddit.com/r/marketing",
+  "reddit.com/r/sideproject",
+  "reddit.com/r/growmybusiness",
+  "bloggingmillionairepodcast.com",
+  "smartpassiveincome.com",
+  "vidnami.com",
+  "videomarketingpodcast.com",
+  "terkel.io",
+  "justreachout.io",
+  "pressplugs.com",
+  "narrow.io",
+  "daybook.io",
+  "prlab.io",
+  "uoregon.edu",
+  "indiana.edu",
+  "colorado.edu",
+  "uga.edu",
+  "bu.edu",
+  "missouri.edu",
+  "psu.edu",
+  "umd.edu",
+  "uconn.edu",
+  "cuny.edu",
+  "sfpl.org",
+  "spl.org",
+  "lapl.org",
+  "canadastartups.org",
+  "marsdd.com",
+  "communitech.ca",
+  "canadianbusiness.com",
+  "torontostartups.com",
+  "vancouverstartups.com",
+  "mtlstartups.com",
+  "canadacompanydirectory.ca",
+  "startupzone.ca",
+  "nlstartups.com",
+  "c100.org",
+  "startupfest.io"
  ],
- "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +4 new (0 followed, $0.06)"
+ "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +87 new (13 followed, $0.08) [dry run: nothing saved]"
 }
