@@ -689,6 +689,30 @@ JS_APP_RE = re.compile(r"""id=["'](root|__next|__nuxt|app|svelte)["']|ng-app|dat
 USE_DEAD_TEXT = re.compile(r"domain (is )?(for sale|expired|parked)|this domain (may be|is) for sale|buy this domain|account suspended", re.I)
 
 
+INSTANT_RE = re.compile(r"(instantly|immediately|right away|goes live (at once|now|instantly)|published (instantly|immediately)|live (instantly|immediately)|no (review|approval|moderation)|auto[- ]?(publish|approv))", re.I)
+REVIEW_RE = re.compile(r"(review(ed)? (by|within|before)|approved? (by|within|before)|within \d+(-\d+)? (hours|days|business days)|moderat|manual(ly)? (review|approv)|pending (review|approval)|editorial (review|team)|we will (review|check)|queue)", re.I)
+
+
+def submission_speed(text):
+    """'instant' / 'review' / 'unknown' from the words on the submit page (plain text, no AI). Review words win over instant words."""
+    if REVIEW_RE.search(text or ""):
+        return "review"
+    return "instant" if INSTANT_RE.search(text or "") else "unknown"
+
+
+def speed_of(state, dom):
+    ev = ((state.get(USE_KEY) or {}).get(dom) or {}).get("evidence", "")
+    m = re.search(r"speed=(\w+)", ev)
+    return m.group(1) if m else "unknown"
+
+
+def queue_rank(proof_verdict, speed):
+    """0 = followed + goes live at once, 1 = followed, speed not stated, 2 = followed + review queue, 3 = followed not proven (proof UNKNOWN). NOFOLLOW never gets here."""
+    if proof_verdict == "FOLLOWED":
+        return {"instant": 0, "unknown": 1, "review": 2}.get(speed, 1)
+    return 3
+
+
 def _plain_text(body):
     t = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", body)
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", t))
@@ -745,7 +769,7 @@ def classify_page(status, final, headers, body, own_domain):
     if GOOGLE_LOGIN_RE.search(text) and not has_login_field and not form:
         return "SOCIAL_LOGIN_ONLY", "only a Google / X / GitHub login is offered"
     if form:
-        return "OK", "form on the page"
+        return "OK", "form on the page; speed=" + submission_speed(text)
     if JS_APP_RE.search(body) and len(text) < 1500:
         return "UNKNOWN", "JavaScript app: the form is drawn by the browser"
     return "NO_FORM", "no form on the page"
@@ -793,6 +817,84 @@ def cached_proof(state, dom, today):
     except Exception:
         pass
     return None
+
+
+# ---- 25 Nov 2026: ONE list for what truly needs a person: ops/imran_click_list.md (the section between the markers is rewritten every run; the older rows above it are kept) ----
+CLICK_PATH = os.path.join(ROOT, "ops", "imran_click_list.md")
+CLICK_START, CLICK_END = "<!-- CLOUD-AGENT START (rewritten every run) -->", "<!-- CLOUD-AGENT END -->"
+CLICK_STEPS = {
+    "CAPTCHA": "open the submit page in Chrome, solve the check, fill the listing form (facts in data/listings.json), submit",
+    "PHONE_REQUIRED": "decide if we give a phone number; if yes sign up there and submit the listing",
+    "SOCIAL_LOGIN_ONLY": "sign in with Google as contact@inayaflow.ai (allowed), then submit the listing",
+    "PAID": "only a paid listing exists: skip unless Imran says yes to the price",
+    "EMAIL_CODE_NOT_RECEIVED": "open the site, request the login link again in Chrome, then submit the listing",
+}
+
+
+def click_rows(state, today, limit=80):
+    """[(domain, status, why, proof, step)] for sites the robot can never finish: CAPTCHA / PHONE / Google-only / paid. NOFOLLOW_ONLY sites are left out (no value)."""
+    rows = []
+    for k, e in state.items():
+        if not _is_entry(k, e) or "." not in k or e.get("status") not in CLICK_STEPS:
+            continue
+        pr = ((state.get(PROOF_KEY) or {}).get(k) or {}).get("verdict", "NOT_CHECKED")
+        if pr in ("NOFOLLOW_ONLY", "NOINDEX"):
+            continue
+        rows.append((pr != "FOLLOWED", k, e["status"], str(e.get("note", ""))[:80].replace("|", "/"), "followed" if pr == "FOLLOWED" else pr.lower().replace("_", " "), CLICK_STEPS[e["status"]], e.get("url", "")))
+    rows.sort()
+    return [r[1:] for r in rows[:limit]]
+
+
+def write_click_list(state, today, path=None):
+    path = path or CLICK_PATH
+    try:
+        old = open(path, encoding="utf8").read()
+    except OSError:
+        old = "# Directories that need Imran\n\n"
+    if CLICK_START in old and CLICK_END in old:
+        head, tail = old.split(CLICK_START)[0], old.split(CLICK_END, 1)[1]
+    else:
+        head, tail = old.rstrip("\n") + "\n\n", ""
+    lines = [CLICK_START, "## Cloud directory agent: needs a person (updated %s)" % today, "",
+             "The robot never retries these. Followed = proof checked (a listing page links out without nofollow). Do the followed ones first.", "",
+             "| site | submit page | status | why (robot's note) | followed? | exact step |", "|---|---|---|---|---|---|"]
+    for dom, st, why, proof, step, url in click_rows(state, today):
+        lines.append("| %s | %s | %s | %s | %s | %s |" % (dom, url or ("https://" + dom), st, why, proof, step))
+    lines += ["", "Sites signed up in Chrome (Google sign-in or a password Imran typed) are not in this list and the robot never touches them.", CLICK_END]
+    with open(path, "w", encoding="utf8") as f:
+        f.write(head + "\n".join(lines) + tail)
+
+
+NOFOLLOW_LATER_PATH = os.path.join(ROOT, "ops", "nofollow_later.md")
+
+
+def write_nofollow_later(state, today, path=None):
+    """NOFOLLOW - LATER: sites whose proof says every outbound link is nofollow / ugc / sponsored. Never attempted now; kept for later (Imran, 25 Nov 2026)."""
+    path = path or NOFOLLOW_LATER_PATH
+    rows = sorted(d for d, v in (state.get(PROOF_KEY) or {}).items() if v.get("verdict") == "NOFOLLOW_ONLY")
+    with open(path, "w", encoding="utf8") as f:
+        f.write("# NOFOLLOW - LATER (updated %s)\n\nThe robot does not attempt these now: their listing pages carry only nofollow / ugc / sponsored links. %d sites.\n\n| site | proof date | evidence |\n|---|---|---|\n" % (today, len(rows)))
+        for d in rows:
+            v = state[PROOF_KEY][d]
+            f.write("| %s | %s | %s |\n" % (d, v.get("date", ""), str(v.get("evidence", ""))[:100].replace("|", "/")))
+
+
+def run_breakdown(rows, state, stats):
+    """Per run: tried / live-followed-instant / submitted-followed-queue / skipped-nofollow / needs-person. rows = [(site, result)] of the site-level attempts of this run."""
+    tried = len(rows)
+    inst = queue = need = 0
+    for s, r in rows:
+        dom = dom_of(s)
+        pv = ((state.get(PROOF_KEY) or {}).get(dom) or {}).get("verdict")
+        if r.get("status") == "SUBMITTED" and pv == "FOLLOWED":
+            if speed_of(state, dom) == "instant":
+                inst += 1
+            else:
+                queue += 1
+        if r.get("status") in CLICK_STEPS:
+            need += 1
+    return "tried %d | live followed instant %d | submitted followed (queue/unknown speed) %d | skipped nofollow %d | needs person %d" % (
+        tried, inst, queue, (stats or {}).get("skipped_nofollow", 0), need)
 
 
 def needs_director(state, today):
@@ -897,6 +999,26 @@ def eligible(site, state, old_state, today, vstate=None):
     return True
 
 
+# ---- 25 Nov 2026: resume (Imran: finish a site completely, then the next). A site where the ROBOT already signed up (it knows the derived password) but
+# the confirm mail or the listing is missing comes FIRST in the queue; the task text already says "log in with the same e-mail and password instead of signing up again".
+# Only the robot's own records count: the agent state (it writes only its own sign-ups) and the old Playwright bot's state (same derived password, see reg_domain).
+# Sites signed up in Chrome (Google sign-in or Imran's own password) are NOT here and are never touched; extra robot-made sites can be added by hand in data/resume_sites.json.
+RESUME_STATUSES = ("EMAIL_CODE_NOT_RECEIVED", "UNCONFIRMED")
+RESUME_FILE = os.path.join(ROOT, "data", "resume_sites.json")   # {"robot_signed_up": ["domain.com", ...], "sign_up_method_unknown_do_not_touch": [...]}
+
+
+def _resume_domains():
+    d = load_json(RESUME_FILE, {})
+    return {str(x).lower() for x in (d.get("robot_signed_up") or [])} if isinstance(d, dict) else set()
+
+
+def is_resume(site, state, old_state):
+    dom = dom_of(site)
+    e = state.get(dom) or state.get(nkey(site["name"])) or {}
+    o = (old_state or {}).get(site["name"]) or {}
+    return bool(dom in _resume_domains() or e.get("status") in RESUME_STATUSES or o.get("confirm_pending"))
+
+
 def build_feed(state, old_state, today, vstate=None, stats=None, use_get=None):
     cands = candidate_sites(os.path.join(ROOT, "data"))
     feed = []
@@ -931,6 +1053,8 @@ def build_feed(state, old_state, today, vstate=None, stats=None, use_get=None):
             stats["checked"] += 1
             stats[v] += 1
         if c["verdict"] in PROOF_BLOCK_VERDICTS:
+            if c["verdict"] == "NOFOLLOW_ONLY":
+                stats["skipped_nofollow"] = stats.get("skipped_nofollow", 0) + 1
             continue
         # usability pre-check (25 Nov 2026): a sure loser (dead / bot check / no form / paid only / Google-only login) never reaches the agent
         u = cached_usable(state, dom, today)
@@ -946,7 +1070,10 @@ def build_feed(state, old_state, today, vstate=None, stats=None, use_get=None):
         verdict[id(s)] = c["verdict"]
         kept.append(s)
     # stable: confirmed accounts that are FOLLOWED first, then FOLLOWED, then UNKNOWN
-    kept.sort(key=lambda s: (not (boosted(s, state, vstate) and verdict[id(s)] == "FOLLOWED"), PROOF_RANK.get(verdict[id(s)], 1)))
+    kept.sort(key=lambda s: (not is_resume(s, state, old_state), queue_rank(verdict[id(s)], speed_of(state, dom_of(s))), not (boosted(s, state, vstate) and verdict[id(s)] == "FOLLOWED")))
+    for s in kept:
+        if is_resume(s, state, old_state):
+            s["group"] = "resume"
     return kept
 
 
@@ -1195,6 +1322,9 @@ def main():
     left = max(0, untried - (att - att0))
     need = (" | NEEDS MORE CANDIDATES (%d untried left, below 30)" % left) if (not manual and left < 30) else ""
     line = "| %s | attempts %d | tool listings tried %d | successes today %d | cost %.2f USD | untried left %d%s |" % (today, att - att0, tool_att, succ, tot, left, need)
+    line = line.rstrip(" |") + " | %s |" % run_breakdown([(s_, r_) for s_, r_, _c, pn in rows if pn == "homepage"], state, proof_stats)
+    if proof_stats and any(k.startswith("use_") for k in proof_stats):
+        line = line.rstrip(" |") + " | usability pre-check skipped %d (%s) |" % (sum(v for k, v in proof_stats.items() if k.startswith("use_")), ", ".join("%s %d" % (k[4:], v) for k, v in sorted(proof_stats.items()) if k.startswith("use_")))
     if proof_stats:
         line = line.rstrip(" |") + " | proof checked %d (followed %d / nofollow %d / noindex %d / unknown %d) |" % (
             proof_stats["checked"], proof_stats["FOLLOWED"], proof_stats["NOFOLLOW_ONLY"], proof_stats["NOINDEX"], proof_stats["UNKNOWN"])
@@ -1205,6 +1335,8 @@ def main():
         line += " NEEDS DIRECTOR LOOK: " + "; ".join(nd) + " |"
     if not manual and not DRY:
         save()
+        write_click_list(state, today)
+        write_nofollow_later(state, today)
     with open(LOG_PATH, "a", encoding="utf8") as f:
         f.write("\n## %s %s dry=%s primary=%s %s\n| site | product | group | status | model | secs | steps | cost | flags | note |\n|---|---|---|---|---|---|---|---|---|---|\n" % (
             today, datetime.datetime.utcnow().strftime("%H:%M UTC"), DRY, MODEL, "BATCH" if manual else "FEED"))

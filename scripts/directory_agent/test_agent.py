@@ -637,7 +637,7 @@ class FollowProof(unittest.TestCase):
         v = {"a.example": "UNKNOWN", "b.example": "FOLLOWED", "c.example": "NOFOLLOW_ONLY", "d.example": "NOINDEX", "e.example": "FOLLOWED"}
         names, stats, st, calls = self._feed(self.SITES, v)
         self.assertEqual(names, ["B", "E", "A"])
-        self.assertEqual(stats, {"checked": 5, "FOLLOWED": 2, "NOFOLLOW_ONLY": 1, "NOINDEX": 1, "UNKNOWN": 1})
+        self.assertEqual(stats, {"checked": 5, "FOLLOWED": 2, "NOFOLLOW_ONLY": 1, "NOINDEX": 1, "UNKNOWN": 1, "skipped_nofollow": 1})
         self.assertEqual(st[ag.PROOF_KEY]["c.example"]["verdict"], "NOFOLLOW_ONLY")
         # second run the same day: all from the cache, no new checks
         names2, stats2, _, calls2 = self._feed(self.SITES, v, state=st)
@@ -796,6 +796,69 @@ class Usability(unittest.TestCase):
         t = ag.build_task({"name": "Dir", "url": "https://dir.example/submit"})
         self.assertIn("always use the e-mail option", t)
         self.assertIn("THIS browser session", t)
+
+
+class ClickListAndResume(unittest.TestCase):
+    def test_click_list_keeps_old_rows_lists_followed_first_and_skips_nofollow(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        path = os.path.join(d, "imran_click_list.md")
+        open(path, "w", encoding="utf8").write("# Directories that need Imran\n\n| old row |\n")
+        st = {"a.example": {"name": "A", "status": "CAPTCHA", "note": "turnstile", "url": "https://a.example/submit"},
+              "b.example": {"name": "B", "status": "PHONE_REQUIRED", "note": "phone", "url": "https://b.example/s"},
+              "c.example": {"name": "C", "status": "CAPTCHA", "note": "x"}, "d.example": {"name": "D", "status": "SUBMITTED"},
+              ag.PROOF_KEY: {"a.example": {"verdict": "FOLLOWED"}, "b.example": {"verdict": "UNKNOWN"}, "c.example": {"verdict": "NOFOLLOW_ONLY"}}}
+        ag.write_click_list(st, "2026-11-25", path)
+        ag.write_click_list(st, "2026-11-25", path)           # twice: the section is replaced, not doubled
+        t = open(path, encoding="utf8").read()
+        self.assertIn("| old row |", t)
+        self.assertEqual(t.count(ag.CLICK_START), 1)
+        self.assertLess(t.index("a.example"), t.index("b.example"))   # followed first
+        self.assertNotIn("c.example", t)                              # nofollow-only: not worth a person
+        self.assertNotIn("d.example", t)                              # submitted: nothing to do
+        self.assertIn("exact step", t)
+
+    def test_resume_sites_go_first_and_unknown_owner_sites_are_never_resumed(self):
+        a = {"name": "A", "url": "https://a.example/submit"}
+        b = {"name": "B", "url": "https://b.example/submit"}
+        st = {"a.example": {"name": "A", "status": "EMAIL_CODE_NOT_RECEIVED", "date": "2026-11-20"}}
+        self.assertTrue(ag.is_resume(a, st, {}))
+        self.assertFalse(ag.is_resume(b, st, {}))
+        self.assertTrue(ag.is_resume(b, {}, {"B": {"confirm_pending": True}}))
+        d = json.load(open(ag.RESUME_FILE, encoding="utf8"))
+        self.assertEqual(d["robot_signed_up"], [])
+        self.assertIn("shipboost.io", d["sign_up_method_unknown_do_not_touch"])
+
+
+class QueueOrder(unittest.TestCase):
+    def test_speed_words(self):
+        self.assertEqual(ag.submission_speed("Your tool goes live instantly after you submit"), "instant")
+        self.assertEqual(ag.submission_speed("We review every tool within 3 days; goes live after approval"), "review")
+        self.assertEqual(ag.submission_speed("Submit your tool"), "unknown")
+
+    def test_ok_pages_carry_the_speed_and_the_rank_orders_the_queue(self):
+        page = "<h1>Submit</h1><p>Published immediately.</p><form><input></form>"
+        v, ev = ag.classify_page(200, "https://d.example/s", {}, page, "d.example")
+        self.assertEqual((v, "speed=instant" in ev), ("OK", True))
+        st = {ag.USE_KEY: {"i.example": {"evidence": "form on the page; speed=instant"}, "r.example": {"evidence": "form on the page; speed=review"}}}
+        self.assertEqual(ag.speed_of(st, "i.example"), "instant")
+        ranks = [ag.queue_rank("FOLLOWED", "instant"), ag.queue_rank("FOLLOWED", "unknown"), ag.queue_rank("FOLLOWED", "review"), ag.queue_rank("UNKNOWN", "instant")]
+        self.assertEqual(ranks, sorted(ranks))
+        self.assertEqual(ranks, [0, 1, 2, 3])
+
+    def test_summary_breakdown_and_nofollow_later_file(self):
+        import tempfile
+        st = {ag.PROOF_KEY: {"a.example": {"verdict": "FOLLOWED"}, "b.example": {"verdict": "FOLLOWED"}, "n.example": {"verdict": "NOFOLLOW_ONLY", "date": "2026-11-25", "evidence": "x"}},
+              ag.USE_KEY: {"a.example": {"evidence": "form; speed=instant"}, "b.example": {"evidence": "form; speed=review"}}}
+        rows = [({"name": "A", "url": "https://a.example/s"}, {"status": "SUBMITTED"}), ({"name": "B", "url": "https://b.example/s"}, {"status": "SUBMITTED"}),
+                ({"name": "C", "url": "https://c.example/s"}, {"status": "CAPTCHA"})]
+        line = ag.run_breakdown(rows, st, {"skipped_nofollow": 4})
+        self.assertEqual(line, "tried 3 | live followed instant 1 | submitted followed (queue/unknown speed) 1 | skipped nofollow 4 | needs person 1")
+        path = os.path.join(tempfile.mkdtemp(), "nofollow_later.md")
+        ag.write_nofollow_later(st, "2026-11-25", path)
+        t = open(path, encoding="utf8").read()
+        self.assertIn("n.example", t)
+        self.assertNotIn("a.example", t)
 
 
 if __name__ == "__main__":
