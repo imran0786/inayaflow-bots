@@ -684,7 +684,7 @@ class Usability(unittest.TestCase):
     def test_dead_dns_404_and_redirect_to_another_site(self):
         self.assertEqual(self.chk({})[0], "DEAD")
         self.assertEqual(self.chk({"https://dir.example/submit": (404, "https://dir.example/submit", {}, "nope")})[0], "DEAD")
-        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://other.example/", {}, "<form><input></form>")})[0], "DEAD")
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://other.example/", {}, "<form><input></form>")})[0], "UNKNOWN")   # a redirect is not proof of a dead site
 
     def test_captcha_markers_and_cloudflare_challenge(self):
         page = "<form><input name=a></form><div class='g-recaptcha'></div>"
@@ -798,7 +798,14 @@ class Usability(unittest.TestCase):
         self.assertIn("THIS browser session", t)
 
 
+def f_path(mod):
+    return mod.RESUME_FILE
+
+
 class ClickListAndResume(unittest.TestCase):
+    def chk(self, pages, url="https://dir.example/submit"):
+        return ag.usability_check(url, lambda u: pages.get(u, (0, u, {}, "DNS")))
+
     def test_click_list_keeps_old_rows_lists_followed_first_and_skips_nofollow(self):
         import tempfile
         d = tempfile.mkdtemp()
@@ -818,16 +825,125 @@ class ClickListAndResume(unittest.TestCase):
         self.assertNotIn("d.example", t)                              # submitted: nothing to do
         self.assertIn("exact step", t)
 
-    def test_resume_sites_go_first_and_unknown_owner_sites_are_never_resumed(self):
+    def _resume_file(self, robot=(), dnt=()):
+        import tempfile
+        f = os.path.join(tempfile.mkdtemp(), "resume_sites.json")
+        json.dump({"robot_signed_up": list(robot), "sign_up_method_unknown_do_not_touch": list(dnt)}, open(f, "w"))
+        saved = ag.RESUME_FILE
+        ag.RESUME_FILE = f
+        self.addCleanup(lambda: setattr(ag, "RESUME_FILE", saved))
+
+    def test_resume_sites_go_first(self):
+        self._resume_file()
         a = {"name": "A", "url": "https://a.example/submit"}
         b = {"name": "B", "url": "https://b.example/submit"}
         st = {"a.example": {"name": "A", "status": "EMAIL_CODE_NOT_RECEIVED", "date": "2026-11-20"}}
         self.assertTrue(ag.is_resume(a, st, {}))
         self.assertFalse(ag.is_resume(b, st, {}))
         self.assertTrue(ag.is_resume(b, {}, {"B": {"confirm_pending": True}}))
-        d = json.load(open(ag.RESUME_FILE, encoding="utf8"))
-        self.assertEqual(d["robot_signed_up"], [])
-        self.assertIn("shipboost.io", d["sign_up_method_unknown_do_not_touch"])
+
+    def test_do_not_touch_domains_are_never_in_the_feed_even_as_candidates(self):
+        self._resume_file(dnt=["shipboost.io", "www.sitepatent.com"])
+        self.assertTrue(ag.domain_block({}, "shipboost.io", "2026-11-25").startswith("do not touch"))
+        self.assertTrue(ag.domain_block({}, "sitepatent.com", "2026-11-25").startswith("do not touch"))
+        self.assertIsNone(ag.domain_block({}, "other.example", "2026-11-25"))
+        site = {"name": "ShipBoost", "url": "https://shipboost.io/submit"}
+        self.assertFalse(ag.eligible(site, {}, {}, "2026-11-25"))
+        orig = (ag.candidate_sites, ag.load_json, ag.follow_proof, ag.usability_check)
+        ag.candidate_sites = lambda d: [{"name": "ShipBoost", "submit_url": "https://shipboost.io/submit", "usable": True, "free_check": "free_likely"},
+                                        {"name": "Fine", "submit_url": "https://fine.example/submit", "usable": True, "free_check": "free_likely"}]
+        ag.load_json = lambda path, d: [] if str(path).endswith("directories.json") else (orig[1](path, d) if path == f_path(ag) else d)
+        ag.follow_proof = lambda u, deadline=None: ("FOLLOWED", "x")
+        ag.usability_check = lambda u, get=None: ("OK", "form; speed=unknown")
+
+        def restore():
+            ag.candidate_sites, ag.load_json, ag.follow_proof, ag.usability_check = orig
+        self.addCleanup(restore)
+        names = [x["name"] for x in ag.build_feed({}, {}, "2026-11-25", {}, {})]
+        self.assertEqual(names, ["Fine"])
+
+    def test_the_shipped_public_repo_has_no_resume_file(self):
+        self.assertFalse(os.path.exists(os.path.join(ag.ROOT, "data", "resume_sites.json")))
+        wf = open(os.path.join(ag.ROOT, ".github", "workflows", "directory-agent.yml"), encoding="utf8").read()
+        self.assertEqual(wf.count("resume_sites.json"), 2)                          # restored from and saved to the private branch
+
+    def test_a_resume_site_cannot_be_retried_endlessly(self):
+        self._resume_file(robot=["a.example"])
+        site = {"name": "A", "url": "https://a.example/submit"}
+        st = {"a.example": {"name": "A", "status": "EMAIL_CODE_NOT_RECEIVED", "date": "2026-11-20", "tries": 2}}
+        self.assertTrue(ag.is_resume(site, st, {}))
+        self.assertFalse(ag.eligible(site, st, {}, "2026-11-25"))                   # 2 tries used: the fail counter stops it, resume only changes the ORDER
+        st2 = {"a.example": {"name": "A", "status": "EMAIL_CODE_NOT_RECEIVED", "date": "2026-11-24", "tries": 1}}
+        self.assertFalse(ag.eligible(site, st2, {}, "2026-11-25"))                  # and not twice inside 3 days
+        st3 = {"a.example": {"name": "A", "status": "OTHER", "date": "2026-11-20", "tries": 1}}
+        ag.note_soft(st3, "a.example", "OTHER", "2026-11-20")
+        ag.note_soft(st3, "a.example", "OTHER", "2026-11-21")
+        self.assertIn("parked", ag.domain_block(st3, "a.example", "2026-11-25") or "")
+
+    def test_confirm_links_only_from_the_sites_own_domain(self):
+        text = ("Confirm: https://dir.example/verify?token=abc and https://click.mailer.net/track?u=https%3A%2F%2Fevil.example%2Fconfirm "
+                "and https://evil.example/confirm?token=1 and https://www.dir.example/auth/login?code=9")
+        self.assertEqual(ag.confirm_links(text, "dir.example"), ["https://dir.example/verify?token=abc", "https://www.dir.example/auth/login?code=9"])
+        self.assertEqual(ag.confirm_links("https://evil.example/confirm?token=1", "dir.example"), [])
+
+    def test_dns_is_retried_once_and_a_dns_verdict_is_cached_one_day_only(self):
+        import socket, urllib.error
+        calls = []
+        orig = ag.urlopen
+
+        def boom(req, timeout=0):
+            calls.append(1)
+            raise urllib.error.URLError(socket.gaierror(-2, "no such host"))
+        ag.urlopen = boom
+        orig_sleep = ag.time.sleep
+        ag.time.sleep = lambda x: None
+        self.addCleanup(lambda: (setattr(ag, "urlopen", orig), setattr(ag.time, "sleep", orig_sleep)))
+        st = ag._get_status("https://nope.example/")
+        self.assertEqual((st[0], st[3], len(calls)), (0, "DNS", 2))                  # tried twice
+        state = {ag.USE_KEY: {"d.example": {"verdict": "DEAD", "date": "2026-11-24", "evidence": "no such site (DNS)"},
+                              "g.example": {"verdict": "DEAD", "date": "2026-11-24", "evidence": "HTTP 404"}}}
+        self.assertIsNone(ag.cached_usable(state, "d.example", "2026-11-25"))        # DNS: looked at again after 1 day
+        self.assertIsNotNone(ag.cached_usable(state, "g.example", "2026-11-25"))
+
+    def test_js_app_without_a_form_is_no_form_only_when_nothing_offers_a_submit(self):
+        shell = "<div id='root'></div>" + "<p>About us and our team and news. </p>" * 30
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, shell)})[0], "NO_FORM")
+        with_link = shell + "<a href='/pricing'>Sign up free</a>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, with_link)})[0], "UNKNOWN")
+        with_href = shell + "<a href='/submit-your-tool'>go</a>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, with_href)})[0], "UNKNOWN")
+        empty_shell = "<div id='root'></div><script src=app.js></script>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, empty_shell)})[0], "UNKNOWN")
+
+    def test_the_confirm_mail_tool_does_not_block_the_event_loop(self):
+        import asyncio, time as _t
+        orig = ag.read_mail_from_domain
+        ag.read_mail_from_domain = lambda url, wait=None: (_t.sleep(0.4), "MAIL FOUND")[1]      # a blocking poll
+        self.addCleanup(lambda: setattr(ag, "read_mail_from_domain", orig))
+        ticks = []
+
+        async def ticker():
+            for _ in range(8):
+                ticks.append(1)
+                await asyncio.sleep(0.04)
+
+        async def go():
+            t = asyncio.create_task(ticker())
+            r = await ag.read_mail_async("https://dir.example/s")
+            await t
+            return r
+        self.assertEqual(asyncio.run(go()), "MAIL FOUND")
+        self.assertEqual(len(ticks), 8)                                              # the loop kept ticking while the mail poll waited
+        self.assertTrue(asyncio.iscoroutinefunction(ag.read_mail_async))
+
+    def test_one_attempt_always_fits_the_workflow_timeout(self):
+        self.assertEqual((ag.SITE_SECONDS, ag.MAIL_WAIT, ag.RUN_SECONDS), (900, 540, 8400))
+        self.assertLess(ag.MAIL_WAIT + 120, ag.SITE_SECONDS)                         # the mail wait fits inside one model run
+        self.assertEqual(ag.START_BEFORE, 8400 - 2 * 900)
+        self.assertLessEqual(ag.START_BEFORE + 2 * ag.SITE_SECONDS, 150 * 60)         # latest start + primary + fallback ends inside the 150-minute step timeout
+        wf = open(os.path.join(ag.ROOT, ".github", "workflows", "directory-agent.yml"), encoding="utf8").read()
+        self.assertIn("timeout-minutes: 150", wf)
+        self.assertIn('RUN_SECONDS: "8400"', wf)
 
 
 class QueueOrder(unittest.TestCase):

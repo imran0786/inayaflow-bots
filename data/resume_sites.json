@@ -1,5 +1,0 @@
-{
- "robot_signed_up": [],
- "sign_up_method_unknown_do_not_touch": ["shipboost.io", "sitepatent.com", "tinylaunchpad.com", "directree.io", "awesomeindie.com", "shipgrowth.dev", "launchpadindia.co", "findstack.com", "tinystartups.co", "agenthunter.io"],
- "note": "25 Nov 2026. robot_signed_up: add a domain here ONLY when the cloud robot itself signed up (derived password). The other list was seen in contact@ mail but the sign-up method is unknown (Chrome / Google / Imran password): the robot never touches them."
-}

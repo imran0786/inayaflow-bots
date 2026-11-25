@@ -23,6 +23,7 @@ SUCCESS_CAP = int(os.environ.get("DAILY_SUCCESS_CAP", "30"))   # 22 Nov 2026: 10
 ATTEMPT_CAP = int(os.environ.get("DAILY_ATTEMPT_CAP", "150"))  # site attempts per UTC day, all runs together (was 10 / 50 before 22-23 Nov 2026)
 TOOL_ATTEMPT_CAP = int(os.environ.get("DAILY_TOOL_ATTEMPT_CAP", "200"))  # extra per-tool listings a day, on top of the site attempts
 RUN_SECONDS = int(os.environ.get("RUN_SECONDS", "8400"))   # per run (same value as the workflow)
+START_BEFORE = None   # set below, after SITE_SECONDS
 USD_CAP = float(os.environ.get("DAILY_USD_CAP", "7.10"))      # Director budget 23 Nov 2026 (QA round 2): at most $6 a UTC day, all runs together; a new attempt only starts when spent + ATTEMPT_MAX_USD fits under it; hunter stop is $6
 UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "1.00"))  # an attempt with NO known price (timeout, error, no price from the library) is booked at the full per-attempt reserve (QA round 4: 0.25 -> 0.50 -> 1.00)
 # HARD per-attempt stop (QA round 3): browser-use 1.0.6 has no live cost hook, but every run is a pydantic-ai run and a
@@ -46,8 +47,10 @@ SUMMARY_PATH = os.path.join(ROOT, "ops", "directory_agent_summary.md")
 VSTATE_PATH = os.path.join(ROOT, "ops", "directory_verify_state.json")  # written by scripts/directory_verify (read-only here)
 DRY = os.environ.get("DRY_RUN", "true").strip().lower() != "false"
 ALLOW_SIGNUP = os.environ.get("ALLOW_SIGNUP", "true").strip().lower() == "true"
-SITE_SECONDS = int(os.environ.get("SITE_SECONDS", "900"))   # 25 Nov 2026: 420 -> 720 so a sign-up can wait up to 5 min for its confirm mail inside the SAME browser session
+SITE_SECONDS = int(os.environ.get("SITE_SECONDS", "900"))   # per model run (primary, then fallback): 900 s = 15 min, so a sign-up can wait up to 9 min (MAIL_WAIT 540 s) for its confirm mail inside the SAME browser session.
+# One attempt = primary + fallback = at most 2 x 900 = 1800 s. A new attempt starts only before RUN_SECONDS - 2 x SITE_SECONDS (= 8400 - 1800 = 6600 s), so the last one ends by 8400 s = 140 min, under the 150-minute step timeout of the workflow (job 180).
 MAX_STEPS = int(os.environ.get("MAX_STEPS", "40"))
+START_BEFORE = max(0, RUN_SECONDS - 2 * SITE_SECONDS)   # last moment a new attempt may start (see the SITE_SECONDS note)
 # Price per million tokens used ONLY when browser-use cannot price the model itself (assumption, adjust if wrong).
 PRICE_IN = float(os.environ.get("PRICE_IN_PER_M", "3.0"))
 PRICE_OUT = float(os.environ.get("PRICE_OUT_PER_M", "15.0"))
@@ -144,6 +147,22 @@ def mail_is_from_site(from_host, text, want):
     return any(reg_domain(urlparse(l).hostname or "") == want for l in re.findall(r"https?://[^\s\"'<>)\]]+", text or ""))
 
 
+def confirm_links(text, want):
+    """Confirm / login links of a mail, ONLY those whose registered domain is the site's own domain (`want`). A link to any other domain (a mailer's tracking
+    redirect, an unrelated site) is never handed to the browser agent: its final target is unknown, so it is skipped."""
+    out = []
+    for l in re.findall(r"https?://[^\s\"'<>)\]]+", text or ""):
+        if reg_domain(urlparse(l).hostname or "") == want and re.search(r"verif|confirm|token|magic|auth|activate|validate|sign-?in|login|code", l, re.I) and l not in out:
+            out.append(l)
+    return out
+
+
+async def read_mail_async(directory_url):
+    """The confirm-mail tool for the browser agent. The IMAP poll (up to MAIL_WAIT s, sleeping between polls) runs in a worker thread, so the event loop of the browser
+    connection and the wait_for timeouts keep running while we wait."""
+    return await asyncio.get_running_loop().run_in_executor(None, read_mail_from_domain, directory_url)
+
+
 def read_mail_from_domain(directory_url, wait=None):
     """Newest mail from the directory's own domain (INBOX/Junk, last 10 min). PEEK only: does not mark mail read."""
     pw = os.environ.get("CONTACT_EMAIL_PASSWORD")
@@ -181,8 +200,7 @@ def read_mail_from_domain(directory_url, wait=None):
                         text = re.sub(r"<style.*?</style>", " ", _body(msg), flags=re.S | re.I)
                         if not mail_is_from_site(host, text, want):
                             continue
-                        links = re.findall(r"https?://[^\s\"'<>)\]]+", text)
-                        links = [l for l in links if re.search(r"verif|confirm|token|magic|auth|activate|validate|sign-?in|login|code", l, re.I)]
+                        links = confirm_links(text, want)
                         codes = re.findall(r"(?<!\d)(\d{4,8})(?!\d)", re.sub(r"https?://\S+", " ", text))
                         try:  # tell the mail router and the verify sweeper that this mail was used in a live session
                             imap.uid("STORE", uid, "+FLAGS", "(IFDirHandled)")
@@ -375,8 +393,8 @@ async def run_site(site, model, product=None, budget=None):
     tools = Tools()
 
     @tools.action("Read the newest confirmation e-mail (code or link) the directory sent to our contact mailbox. Waits up to 9 minutes.")
-    def read_confirmation_mail() -> str:
-        return read_mail_from_domain(site["url"])
+    async def read_confirmation_mail() -> str:
+        return await read_mail_async(site["url"])
 
     ws = tempfile.mkdtemp(prefix="dirws-")
     if os.path.isdir(ASSET_DIR):
@@ -535,6 +553,8 @@ def domain_block(state, dom, today, known_path=None):
     """Why this domain must not be tried at all today (any product, main feed or backfill), or None."""
     if not dom:
         return None
+    if dom.lower().removeprefix("www.") in do_not_touch_domains():
+        return "do not touch: account made outside this robot (sign-up method unknown)"
     k = known_reason(dom, known_path)
     if k is not None:
         return "known site: " + str(k)[:60]
@@ -674,7 +694,7 @@ def follow_proof(site_url, deadline=None):
 # Plain HTTP GET of the submit page, no AI, no browser. A site that is dead, behind a bot check, without any form, paid-only or login-with-Google-only never reaches the agent.
 # When the page can't be judged from plain HTML (JS app, unreadable, a timeout) the verdict is UNKNOWN and the site still goes to the agent: this check only removes sure losers.
 USE_KEY = "__usable__"       # inside the state file: {domain: {verdict, date, evidence}}
-USE_DAYS = 14                # CAPTCHA / NO_FORM / PAID / SOCIAL verdicts are looked at again after this many days; DEAD after 30
+USE_DAYS = 14                # every verdict is looked at again after this many days; a DNS failure after 1 day
 USE_BLOCK = {"DEAD", "CAPTCHA", "NO_FORM", "PAID", "SOCIAL_LOGIN_ONLY"}
 USE_CHECKS_PER_RUN = int(os.environ.get("USE_CHECKS_PER_RUN", "120"))
 CAPTCHA_RE = re.compile(r"g-recaptcha|google\.com/recaptcha|recaptcha/api|hcaptcha\.com|h-captcha|cf-turnstile|challenges\.cloudflare\.com/turnstile|"
@@ -689,6 +709,7 @@ JS_APP_RE = re.compile(r"""id=["'](root|__next|__nuxt|app|svelte)["']|ng-app|dat
 USE_DEAD_TEXT = re.compile(r"domain (is )?(for sale|expired|parked)|this domain (may be|is) for sale|buy this domain|account suspended", re.I)
 
 
+SIGNUP_WORDS_RE = re.compile(r"sign[ -]?up|register|create (an )?account|submit|add your|list your|get listed|suggest a", re.I)
 INSTANT_RE = re.compile(r"(instantly|immediately|right away|goes live (at once|now|instantly)|published (instantly|immediately)|live (instantly|immediately)|no (review|approval|moderation)|auto[- ]?(publish|approv))", re.I)
 REVIEW_RE = re.compile(r"(review(ed)? (by|within|before)|approved? (by|within|before)|within \d+(-\d+)? (hours|days|business days)|moderat|manual(ly)? (review|approv)|pending (review|approval)|editorial (review|team)|we will (review|check)|queue)", re.I)
 
@@ -718,7 +739,7 @@ def _plain_text(body):
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", t))
 
 
-def _get_status(url):
+def _get_status(url, _retry=True):
     """(status, final_url, headers, body). HTTP error codes come back as values; DNS / connection failures as (0, url, {}, error name)."""
     try:
         req = Request(url, headers={"User-Agent": PROOF_UA, "Accept": "text/html"})
@@ -732,6 +753,9 @@ def _get_status(url):
         return e.code, url, {k.lower(): v for k, v in (e.headers or {}).items()}, body
     except URLError as e:
         reason = getattr(e, "reason", None)
+        if _retry and isinstance(reason, socket.gaierror):
+            time.sleep(1.5)
+            return _get_status(url, _retry=False)       # one retry: a single DNS blip is not a dead site
         return 0, url, {}, ("DNS" if isinstance(reason, socket.gaierror) else (type(reason).__name__ if reason else "URLError"))
     except Exception as e:
         return 0, url, {}, type(e).__name__
@@ -754,7 +778,7 @@ def classify_page(status, final, headers, body, own_domain):
     if status >= 400:
         return "UNKNOWN", "HTTP %d" % status
     if own_domain and reg_domain(urlparse(final).hostname or "") != own_domain:
-        return "DEAD", "redirects to another site (%s)" % (urlparse(final).hostname or "")
+        return "UNKNOWN", "redirects to another site (%s): the agent looks" % (urlparse(final).hostname or "")   # often a re-brand or a login host, not a dead site
     text = _plain_text(body)
     if USE_DEAD_TEXT.search(text[:3000]):
         return "DEAD", "parked or suspended site"
@@ -770,8 +794,10 @@ def classify_page(status, final, headers, body, own_domain):
         return "SOCIAL_LOGIN_ONLY", "only a Google / X / GitHub login is offered"
     if form:
         return "OK", "form on the page; speed=" + submission_speed(text)
-    if JS_APP_RE.search(body) and len(text) < 1500:
-        return "UNKNOWN", "JavaScript app: the form is drawn by the browser"
+    if JS_APP_RE.search(body):
+        # a JavaScript app draws its forms in the browser: only a page that has real text AND no submit / sign-up wording anywhere is a sure NO_FORM
+        if len(text) < 300 or SIGNUP_WORDS_RE.search(text) or any(SUBMIT_LINK_RE.search(h) for h, _ in _parse(body).links):
+            return "UNKNOWN", "JavaScript app: the form is drawn by the browser"
     return "NO_FORM", "no form on the page"
 
 
@@ -801,7 +827,7 @@ def usability_check(url, get=None):
 def cached_usable(state, dom, today):
     c = (state.get(USE_KEY) or {}).get(dom)
     try:
-        if c and (datetime.date.fromisoformat(today) - datetime.date.fromisoformat(c["date"])).days < (30 if c.get("verdict") == "DEAD" else USE_DAYS):
+        if c and (datetime.date.fromisoformat(today) - datetime.date.fromisoformat(c["date"])).days < (1 if (c.get("verdict") == "DEAD" and "DNS" in str(c.get("evidence", ""))) else USE_DAYS):
             return c
     except Exception:
         pass
@@ -1004,12 +1030,17 @@ def eligible(site, state, old_state, today, vstate=None):
 # Only the robot's own records count: the agent state (it writes only its own sign-ups) and the old Playwright bot's state (same derived password, see reg_domain).
 # Sites signed up in Chrome (Google sign-in or Imran's own password) are NOT here and are never touched; extra robot-made sites can be added by hand in data/resume_sites.json.
 RESUME_STATUSES = ("EMAIL_CODE_NOT_RECEIVED", "UNCONFIRMED")
-RESUME_FILE = os.path.join(ROOT, "data", "resume_sites.json")   # {"robot_signed_up": ["domain.com", ...], "sign_up_method_unknown_do_not_touch": [...]}
+RESUME_FILE = os.path.join(ROOT, "ops", "resume_sites.json")   # PRIVATE: restored from imran0786/genie branch ops-directory-logs (names from our mailbox never sit in the public repo)   # {"robot_signed_up": ["domain.com", ...], "sign_up_method_unknown_do_not_touch": [...]}
 
 
 def _resume_domains():
     d = load_json(RESUME_FILE, {})
     return {str(x).lower() for x in (d.get("robot_signed_up") or [])} if isinstance(d, dict) else set()
+
+
+def do_not_touch_domains():
+    d = load_json(RESUME_FILE, {})
+    return {str(x).lower().removeprefix("www.") for x in (d.get("sign_up_method_unknown_do_not_touch") or [])} if isinstance(d, dict) else set()
 
 
 def is_resume(site, state, old_state):
@@ -1273,7 +1304,7 @@ def main():
         fresh = load_spend()                       # re-read the shared spend file before EVERY attempt (QA round 3)
         for k, v in fresh.items():
             spend[k] = max(float(spend.get(k, 0.0) or 0.0), float(v or 0.0))
-        return time.time() - t_start > RUN_SECONDS or spent_today(spend, today) + ATTEMPT_MAX_USD > USD_CAP
+        return time.time() - t_start > START_BEFORE or spent_today(spend, today) + ATTEMPT_MAX_USD > USD_CAP
 
     def tool_listings(s):
         """Each free tool as its OWN listing on this directory. Stops for the site when it allows one listing per company,

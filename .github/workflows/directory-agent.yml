@@ -55,7 +55,7 @@ jobs:
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           mkdir -p ops
           if git clone -q --branch ops-directory-logs --depth 1 "https://x-access-token:${GENIE_LOGS_TOKEN}@github.com/imran0786/genie.git" /tmp/logs 2>/dev/null; then
-            for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_agent_spend.json directory_state.json directory_verify_state.json imran_click_list.md nofollow_later.md; do
+            for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_agent_spend.json directory_state.json directory_verify_state.json imran_click_list.md nofollow_later.md resume_sites.json; do
               cp "/tmp/logs/ops/$f" "ops/$f" 2>/dev/null || true
             done
             echo "state restored"
@@ -117,7 +117,7 @@ jobs:
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} + ; cd - >/dev/null
           fi
           mkdir -p /tmp/push/ops
-          for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_agent_spend.json imran_click_list.md nofollow_later.md; do
+          for f in directory_agent_log.md directory_agent_state.json directory_agent_summary.md directory_agent_spend.json imran_click_list.md nofollow_later.md resume_sites.json; do
             [ -f "ops/$f" ] && cp "ops/$f" "/tmp/push/ops/$f" || true
           done
           cd /tmp/push
