@@ -974,5 +974,118 @@ class Fixes25Nov(unittest.TestCase):
         self.assertLessEqual(json.load(open(P.STATE_PATH))["spent"][D.utc_today()], 0.90 + 1e-9)
 
 
+# ---------- 25 Nov round 2: facts that survive, 2 QA rewrite rounds, cheap second attempt, full reasons in the private log ----------
+class Round2(unittest.TestCase):
+    def setUp(self):
+        for f in (P.STATE_PATH, P.LOG_PATH):
+            if os.path.exists(f):
+                os.remove(f)
+        P.DRY = False
+        P.DAY_CAP = 0.90
+        os.environ["PLATFORM_STATE_OK"] = "true"
+        os.environ["PLATFORM_FIRST_RUN"] = "true"
+        os.environ["PLATFORM_POSTER_LIVE"] = "true"
+
+    def test_bullets_sharing_a_short_phrase_are_kept(self):
+        page = "Our checker looks at the last videos and shows how many views came from the for you feed in a plain table."
+        raw = "- It reads the last videos and shows views from the for you feed\n- Result is a plain table\n- Nothing to install"
+        got = P.fact_bullets(raw, page)
+        self.assertEqual(len(got), 3)                      # old 5-word filter dropped the first one; only a 7-word run is a copy now
+
+    def test_distill_retries_once_when_too_few_survive(self):
+        page = "Free TikTok tool page with plain explanations of how the checker works and what it needs. " * 3
+        replies = ["- Free TikTok tool page with plain explanations of how the checker works\n- Needs only a public handle",
+                   "- A helper that reads a public profile.\n- It explains the result in simple terms.\n- It is free to use.\n- It cannot promise reach."]
+        users = []
+
+        def post(url, b, h):
+            users.append(b["messages"][0]["content"])
+            return {"content": [{"type": "text", "text": replies[len(users) - 1]}], "usage": {"input_tokens": 1500, "output_tokens": 120}}
+        m = D.Meter(cap=0.9)
+        with contextlib.redirect_stdout(io.StringIO()):
+            facts = P.distill_facts(page, m, post=post)
+        self.assertEqual(len(users), 2)
+        self.assertIn("too close to the page", users[1])
+        self.assertIn("Needs only a public handle", facts)
+        self.assertIn("It cannot promise reach.", facts)
+        self.assertLess(m.cost, 0.01)
+
+    def test_distill_gives_up_cleanly(self):
+        page = "Free TikTok tool page with plain explanations of how the checker works and what it needs. " * 3
+        post = lambda url, b, h: {"content": [{"type": "text", "text": "- Free TikTok tool page with plain explanations of how the checker works"}], "usage": {"input_tokens": 1500, "output_tokens": 50}}
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(P.distill_facts(page, D.Meter(cap=0.9), post=post), "")
+
+    def test_multiline_reason_is_kept_whole(self):
+        raw = 'VERDICT: FAIL\nREASON: "Content and entire\nsentence continues here" | not in our page text\nREASON: "second" | invented'
+        v, r = P.parse_qa(raw)
+        self.assertEqual(v, "FAIL")
+        self.assertEqual(len(r), 2)
+        self.assertIn("Content and entire sentence continues here", r[0])
+
+    def test_private_log_keeps_the_full_reason(self):
+        long_reason = "x" * 20
+        claim = "The tool tells readers to use TikTok Studio for those limits."
+        base = smart_ai([], extra=CLAIM)
+
+        def post(url, b, h):
+            if b["model"] == D.QA_MODEL and "fact-check editor" in b["system"] and "TikTok Studio" in b["messages"][0]["content"]:
+                return {"content": [{"type": "text", "text": 'VERDICT: FAIL\nREASON: "%s" | %s' % (claim, "not on our page " * 30 + long_reason)}], "usage": {"input_tokens": 100, "output_tokens": 50}}
+            if "fact-checker found" in b["system"]:
+                return {"content": [{"type": "text", "text": "{}"}], "usage": {"input_tokens": 100, "output_tokens": 5}}
+            return base(url, b, h)
+        res, _ = quiet(post_ai=post, publishers=fake_publishers([]), getter=get2)
+        self.assertEqual(set(res.values()), {"FAIL"})
+        self.assertIn(long_reason, open(P.LOG_PATH, encoding="utf8").read())
+
+    def test_second_qa_rewrite_round_removes_a_newly_named_claim(self):
+        """QA names claim A, the rewrite removes it, QA then names claim B, the second round removes it, QA passes."""
+        A, B = "The tool tells readers to use TikTok Studio for those limits.", "Two tags beat five tags every single time for reach."
+        extra = "\n\n" + A + "\n\n" + B
+        base = smart_ai([], extra=extra)
+        rounds = {"n": 0}
+
+        def post(url, b, h):
+            u = b["messages"][0]["content"]
+            if b["model"] == D.QA_MODEL and "fact-check editor" in b["system"]:
+                art = u.split("ARTICLE TITLE:", 1)[-1]
+                if "TikTok Studio" in art:
+                    return {"content": [{"type": "text", "text": 'VERDICT: FAIL\nREASON: "%s" | not on page' % A}], "usage": {"input_tokens": 100, "output_tokens": 30}}
+                if "beat five tags" in art:
+                    return {"content": [{"type": "text", "text": 'VERDICT: FAIL\nREASON: "%s" | unsupported comparison' % B}], "usage": {"input_tokens": 100, "output_tokens": 30}}
+                return {"content": [{"type": "text", "text": "VERDICT: PASS"}], "usage": {"input_tokens": 100, "output_tokens": 5}}
+            if "fact-checker found" in b["system"]:
+                rounds["n"] += 1
+                drop = {i: "" for i, l in re.findall(r"^(\d+)\. (.*)$", u, re.M) if ("TikTok Studio" in l and "TikTok Studio" in u.split("FACT-CHECKER REASONS:")[1].split("SENTENCES:")[0]) or ("beat five" in l and "comparison" in u)}
+                return {"content": [{"type": "text", "text": json.dumps(drop)}], "usage": {"input_tokens": 200, "output_tokens": 20}}
+            return base(url, b, h)
+        sent = []
+        res, out = quiet(post_ai=post, publishers=fake_publishers(sent), getter=get2)
+        self.assertEqual(set(res.values()), {"PUBLISHED"})
+        self.assertGreaterEqual(rounds["n"], 6)            # two rounds on each of the 3 platforms
+
+    def test_attempt_two_is_a_toolless_revision_not_a_second_research_run(self):
+        calls = []
+        base = smart_ai(calls, extra="\n\nWe say delve into it.")          # a banned phrase: not repairable, so attempt 2 runs
+        bodies = []
+
+        def spy(url, b, h):
+            if b["model"] == D.WRITER:
+                bodies.append(b)
+            return base(url, b, h)
+        quiet(post_ai=spy, publishers=fake_publishers([]), getter=get2)
+        with_tools = [b for b in bodies if b.get("tools")]
+        without = [b for b in bodies if not b.get("tools")]
+        self.assertEqual(len(with_tools), 3)               # one research run per platform
+        self.assertEqual(len(without), 3)                  # the retry is a revision with no web tools
+        self.assertIn("YOUR DRAFT", without[0]["messages"][0]["content"])
+        self.assertIn("delve", without[0]["messages"][0]["content"])
+
+    def test_writer_prompt_forbids_comparisons_and_invented_features(self):
+        s = P.writer_system("notion")
+        self.assertIn("No comparisons or performance claims", s)
+        self.assertIn("unless a FACT states it exactly", s)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
