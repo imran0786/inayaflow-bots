@@ -2,7 +2,8 @@ name: Keep-alive check (starts any robot GitHub forgot to run)
 
 # 23 Nov 2026: GitHub's cron dropped or delayed scheduled runs for hours (backlink-batch, hunter, directory-agent ~5 h; inbox digest 7 h;
 # report 4.5 h). This check runs after ANY robot run finishes (workflow_run) and every 20 minutes (its own cron), reads the newest run
-# of every scheduled robot and dispatches any whose newest run is older than 1.5 x its interval (scripts/keepalive/keepalive.py).
+# of every scheduled robot and dispatches any robot that missed its time: fast robots by 1.5 x interval, robots that run a few times a day by their real
+# UTC slots (a slot passed >20 min ago with no run since = start it; 25 Nov 2026 clock fix) (scripts/keepalive/keepalive.py).
 # Guards: one check at a time (concurrency); never starts a robot already queued/running; at most one dispatch per robot per hour;
 # this workflow is NOT in the list below, so a dispatch can never trigger a loop. Prints robot file names and ages only.
 # workflow_dispatch with the built-in token DOES start a run (GitHub docs: "workflow_dispatch and repository_dispatch events always create workflow runs").
@@ -21,12 +22,14 @@ on:
       - "Backlink batch (list builder + outreach, every hour)"
       - "Prospect hunter (24/7 research job every 3 hours)"
       - "List builder (new candidate places a day)"
+      - "List builder DeepSeek twin (same duty, side-by-side test)"
       - "Directory agent (browser-use, daily engine)"
       - "Inbox + backlinks report (every 3 h, read-only)"
       - "Heartbeat (keeps the robots running)"
       - "Daily funnel numbers (read-only, counts only)"
       - "Link checker (are our directory listings live, and do they link to us)"
       - "Platform poster (one article a day each on WordPress.com, Blogger, Notion)"
+      - "DEV poster (one article a day on dev.to)"
   schedule:
     - cron: "*/20 * * * *"
   workflow_dispatch:

@@ -5,6 +5,13 @@ name: Heartbeat (keeps the robots running)
 # robots every 10 minutes, starts the daily robots if their schedule was skipped,
 # and restarts itself before the 6-hour job limit. Imran 19 Nov: "It should be on
 # automation, full stop."
+#
+# 25 Nov 2026 FIX (root cause, from the run logs of 23, 24 and 25 Nov): the job died every time GitHub answered ONE dispatch call with
+# "HTTP 500: Failed to run workflow dispatch". The step ran with bash -e and the nudge() helper returned that failure, so a single
+# transient 500 ended the whole 5h40m loop (exit code 1, red run) and the restart line at the end never ran. Now: no -e (shell: bash {0}),
+# every nudge is retried once and a failure is only printed, and the restart is its own step with "if: always()" and retries, so the loop
+# can no longer die silently. The "cancelled" scheduled runs seen every day are harmless: the concurrency group keeps ONE pending
+# run and a newer pending run cancels the older one while the long job runs.
 on:
   workflow_dispatch:
   schedule:
@@ -26,11 +33,12 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}
     steps:
-      - name: Nudge robots every 10 minutes for ~5h40m, then restart
+      - name: Nudge robots every 10 minutes for ~5h40m
+        shell: bash {0}     # NOT bash -e: one failed API call must never end the loop
         run: |
           busy() { gh run list --repo "$REPO" --workflow "$1" --limit 5 --json status --jq '[.[]|select(.status=="in_progress" or .status=="queued")]|length'; }
           ran_today() { gh run list --repo "$REPO" --workflow "$1" --limit 20 --json createdAt,event --jq "[.[]|select(.createdAt|startswith(\"$(date -u +%F)\"))]|length"; }
-          nudge() { if [ "$(busy "$1")" = "0" ]; then gh workflow run "$1" --repo "$REPO" --ref main "${@:2}" && echo "$(date -u +%H:%M) started $1"; else echo "$(date -u +%H:%M) $1 already running"; fi; }
+          nudge() { if [ "$(busy "$1")" = "0" ]; then gh workflow run "$1" --repo "$REPO" --ref main "${@:2}" >/dev/null 2>&1 || { sleep 5; gh workflow run "$1" --repo "$REPO" --ref main "${@:2}" >/dev/null 2>&1; } && echo "$(date -u +%H:%M) started $1" || echo "$(date -u +%H:%M) could not start $1 (GitHub API error, will try again in 10 min)"; else echo "$(date -u +%H:%M) $1 already running"; fi; }
           age_min() { last=$(gh run list --repo "$REPO" --workflow "$1" --limit 1 --json createdAt --jq '.[0].createdAt // empty'); if [ -z "$last" ]; then echo 99999; else echo $(( ($(date -u +%s) - $(date -u -d "$last" +%s)) / 60 )); fi; }
           ran_since_uk() { since=$(date -u -d "TZ=\"Europe/London\" today $2" +%Y-%m-%dT%H:%M:%SZ); gh run list --repo "$REPO" --workflow "$1" --limit 10 --json createdAt --jq "[.[]|select(.createdAt >= \"$since\")]|length"; }
           end=$((SECONDS+20400))
@@ -58,4 +66,14 @@ jobs:
             n=$((n+1))
             sleep 600
           done
-          gh workflow run heartbeat.yml --repo "$REPO" --ref main && echo "restarted heartbeat"
+          echo "loop ended normally"
+      - name: Restart the heartbeat (always, even when the loop above failed)
+        if: always()
+        shell: bash {0}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if gh workflow run heartbeat.yml --repo "$REPO" --ref main; then echo "restarted heartbeat"; exit 0; fi
+            echo "restart attempt $i failed, waiting"; sleep 30
+          done
+          echo "could not restart the heartbeat; keepalive-check restarts it at its next 3-hour slot"
+          exit 0

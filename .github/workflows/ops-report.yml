@@ -34,6 +34,7 @@ jobs:
           python3 -W ignore scripts/reports/test_reports.py
           python3 -W ignore scripts/reports/test_action_tracker.py
           python3 -W ignore scripts/reports/test_targets.py
+          python3 -W ignore scripts/reports/test_output_alarms.py
           python3 -W ignore scripts/keepalive/test_keepalive.py
       - name: Build and save the report (private repo, never here)
         env:

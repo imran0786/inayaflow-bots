@@ -323,6 +323,11 @@ def prune_history(d, keep=80):
         os.remove(os.path.join(d, n))
 
 
+def at_put_on_top(report, block):
+    import action_tracker as at
+    return at.put_on_top(report, block)
+
+
 def main():
     work = c.clone()
     latest = os.path.join(work, LATEST)
@@ -357,6 +362,19 @@ def main():
         except Exception as e:
             report = report.rstrip("\n") + "\n\n> ROBOT AGE SECTION ERROR: not built this run (%s).\n" % type(e).__name__
             print("robot ages: FAILED %s" % type(e).__name__)
+        try:  # OUTPUT ALARMS (25 Nov 2026): judged by OUTPUT, table at the very top; a failure here never breaks the rest of the report
+            import output_alarms as oa
+            tnow = c.now()
+            snaps = (c.read_json(os.path.join(work, oa.SNAP_FILE), {}) or {}).get("snaps", [])
+            block, osum, new_snaps = oa.build(oa.read_inputs(), tnow, oa.run_ages(os.environ.get("GITHUB_TOKEN", ""), tnow), snaps)
+            report = at_put_on_top(report, block)
+            n["robots_red"] = n.get("robots_red", 0) + len(osum["broken48"])
+            if not c.DRY:
+                c.write_json(os.path.join(work, oa.SNAP_FILE), {"snaps": new_snaps})
+            print("output alarms: broken24=%d broken48=%d unknown=%d" % (len(osum["broken24"]), len(osum["broken48"]), len(osum["unknown"])))
+        except Exception as e:
+            report = report.replace("\n", "\n\n> OUTPUT ALARM SECTION ERROR: not built this run (%s).\n" % type(e).__name__, 1)
+            print("output alarms: FAILED %s" % type(e).__name__)
         save_ai_used(work, used_before, c.USAGE["calls"])
         c.write_text(latest, report)
         c.write_text(os.path.join(work, "ops", "history", "report_%s.md" % c.stamp()), report)
