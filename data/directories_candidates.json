@@ -44908,6 +44908,56 @@
    "status": "HOLD not a directory",
    "followed_sample": "29 followed / 0 not",
    "needs": []
+  },
+  {
+   "name": "Submit Here",
+   "domain": "cazaproducto.com",
+   "submit_url": "https://cazaproducto.com/productos/new?utm_source=launchdb.vercel.app&via=launchdb",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://cazaproducto.com/",
+   "free_check": "free_confirmed_on_page",
+   "captcha_words_on_page": false,
+   "has_form_on_page": true,
+   "quality": "relevant",
+   "usable": true,
+   "followed": "followed",
+   "checked": "2026-11-25",
+   "judge_reason": "Free waitlist listing, no card; product directory with Herramientas and Marketing categories, EN toggle.",
+   "status": "TODO",
+   "followed_sample": "36 followed / 0 not",
+   "needs": [
+    "account"
+   ]
+  },
+  {
+   "name": "Submit Here",
+   "domain": "toolradar.com",
+   "submit_url": "https://toolradar.com/vendors",
+   "source": "list-builder: theshubh77/awesome-saas-directories",
+   "their_category": "",
+   "their_auto_flag": "",
+   "their_notes": "",
+   "their_status": null,
+   "http": 200,
+   "final_url": "https://toolradar.com/",
+   "free_check": "free_confirmed_on_page",
+   "captcha_words_on_page": false,
+   "has_form_on_page": false,
+   "quality": "relevant",
+   "usable": true,
+   "followed": "unknown",
+   "checked": "2026-11-25",
+   "judge_reason": "Submit page states free to list, no credit card; accepts AI and software tools; may need account claim.",
+   "status": "TODO",
+   "followed_sample": "0 followed / 0 not",
+   "needs": [
+    "account"
+   ]
   }
  ]
 }
