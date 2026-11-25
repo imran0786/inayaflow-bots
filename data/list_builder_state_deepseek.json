@@ -1,8 +1,8 @@
 {
- "cursor": 48,
+ "cursor": 60,
  "spent": {
   "2026-11-24": 0.0586,
-  "2026-11-25": 0.1023
+  "2026-11-25": 0.1249
  },
  "days": {
   "2026-11-24": {
@@ -31,42 +31,42 @@
    "total": 1956
   },
   "2026-11-25": {
-   "added": 89,
+   "added": 153,
    "by_category": {
-    "startup_directories_by_country": 13,
-    "ai_saas_directories": 3,
-    "launch_sites": 3,
-    "tool_roundups": 7,
-    "github_awesome_lists": 9,
-    "saas_review_platforms": 1,
-    "guest_post_pages": 10,
-    "resource_pages": 5,
-    "communities_profiles": 3,
-    "podcasts_creators": 21,
-    "journalist_platforms": 2,
-    "edu_library_guides": 12
+    "startup_directories_by_country": 21,
+    "ai_saas_directories": 4,
+    "launch_sites": 4,
+    "tool_roundups": 9,
+    "github_awesome_lists": 18,
+    "saas_review_platforms": 10,
+    "guest_post_pages": 18,
+    "resource_pages": 10,
+    "communities_profiles": 4,
+    "podcasts_creators": 28,
+    "journalist_platforms": 10,
+    "edu_library_guides": 17
    },
-   "runs": 3,
-   "calls": 36,
+   "runs": 4,
+   "calls": 48,
    "providers": {
     "deepseek": {
-     "calls": 36,
-     "cost": 0.1023,
-     "proposed": 667,
-     "spam": 22,
-     "dup": 373,
-     "dead": 100,
-     "added": 89,
-     "followed": 21,
+     "calls": 48,
+     "cost": 0.1249,
+     "proposed": 1001,
+     "spam": 24,
+     "dup": 596,
+     "dead": 145,
+     "added": 153,
+     "followed": 35,
      "nofollow": 0,
      "noindex": 2,
-     "unknown": 66,
-     "needs_signup": 45
+     "unknown": 116,
+     "needs_signup": 79
     }
    },
-   "category_summary": "list-builder: +89 new (total 2216; by category podcasts_creators 21, startup_directories_by_country 13, edu_library_guides 12, guest_post_pages 10, github_awesome_lists 9, tool_roundups 7, resource_pages 5, ai_saas_directories 3, communities_profiles 3, launch_sites 3, journalist_platforms 2, saas_review_platforms 1)",
-   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +89 new (21 followed, $0.10)",
-   "total": 2216
+   "category_summary": "list-builder: +153 new (total 2281; by category podcasts_creators 28, startup_directories_by_country 21, github_awesome_lists 18, guest_post_pages 18, edu_library_guides 17, journalist_platforms 10, resource_pages 10, saas_review_platforms 10, tool_roundups 9, ai_saas_directories 4, communities_profiles 4, launch_sites 4)",
+   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +153 new (35 followed, $0.12)",
+   "total": 2281
   }
  },
  "rejected": [
@@ -184,7 +184,55 @@
   "australianbusinessdirectory.com.au",
   "startupvictoria.com.au",
   "launchvic.org",
-  "innovationaus.com"
+  "innovationaus.com",
+  "github.com/steven-tey/awesome-no-code",
+  "findaitools.org",
+  "github.com/getstream/awesome-saas-boilerplates",
+  "github.com/bmpvieira/awesome-social-media",
+  "github.com/marketingtoolslist/awesome-marketing-tools",
+  "github.com/bt3gl/awesome-growth-hacking",
+  "github.com/indiehackers/awesome-indie-hackers",
+  "github.com/johnvibes/awesome-no-code-tools",
+  "github.com/paulmartin91/awesome-productivity",
+  "github.com/awesome-windows/awesome",
+  "github.com/marketingtoolslist/awesome-content-marketing",
+  "github.com/burningiris/awesome-digital-nomads",
+  "github.com/creator-economy/awesome-creator-economy",
+  "github.com/wanglaoer/awesome-marketing",
+  "github.com/ai-marketing/awesome-ai-marketing",
+  "github.com/awesome-tools/awesome-tools",
+  "github.com/video-tools/awesome-video-tools",
+  "github.com/ankitshubham/awesome-startup-tools",
+  "github.com/ml-tools/awesome-ml-startups",
+  "github.com/saas-tools/awesome-saas-tools",
+  "github.com/solopreneur/awesome-solopreneur",
+  "github.com/influencer-marketing/awesome-influencer-marketing",
+  "alternativeme.com",
+  "siftery.com",
+  "notion.so/integrations",
+  "cloudflare.com",
+  "smallbiztrends.com",
+  "noobpreneur.com",
+  "marketinginsidergroup.com",
+  "bplans.com",
+  "growmap.com",
+  "successfulblogging.com",
+  "reddit.com/r/entrepreneur",
+  "reddit.com/r/indiehackers",
+  "openstartups.com",
+  "indiemakers.io",
+  "thefamilybusinesspodcast.co.uk",
+  "startupstories.co",
+  "rocketship.fm",
+  "startup.club",
+  "foundersjourney.co",
+  "journaliststoolbox.org",
+  "newswiretoday.com",
+  "europeana.eu",
+  "10000startups.com",
+  "indianstartups.in",
+  "techstory.in",
+  "bizindia.net"
  ],
- "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +89 new (21 followed, $0.10)"
+ "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +153 new (35 followed, $0.12)"
 }

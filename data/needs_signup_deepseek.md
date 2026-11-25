@@ -4,6 +4,40 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| ProductNation/iSPIRT | https://www.ispirt.in/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-25 |
+| Khan Academy | https://www.khanacademy.org/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-25 |
+| Startup Basecamp | https://startupbasecamp.org/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| Startup.info | https://startup.info/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| MicroStartups | https://microstartups.org/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| No CS Degree | https://www.nocsdegree.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| Betanews / WinBeta | https://betanews.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| PR.com | https://www.pr.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| OpenPR | https://www.openpr.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| The Startup Chat | https://thestartupchat.com/ | podcasts_creators | deepseek | UNKNOWN | 2026-11-25 |
+| This Week in Startups | https://thisweekinstartups.com/ | podcasts_creators | deepseek | UNKNOWN | 2026-11-25 |
+| Startup.co | https://startup.co/ | communities_profiles | deepseek | UNKNOWN | 2026-11-25 |
+| ShoutMeLoud | https://www.shoutmeloud.com/write-for-us | guest_post_pages | deepseek | UNKNOWN | 2026-11-25 |
+| AllBusiness | https://www.allbusiness.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-25 |
+| Social Media Explorer | https://socialmediaexplorer.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-25 |
+| Trello Power-Ups | https://trello.com/power-ups | saas_review_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| MonsterONE | https://monsterone.com/ | saas_review_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| Shopware Store | https://store.shopware.com/ | saas_review_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| WordPress.org Plugin Directory | https://wordpress.org/plugins/ | saas_review_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| Atlassian Marketplace | https://marketplace.atlassian.com/ | saas_review_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| Slack App Directory | https://api.slack.com/start/distributing/directory | saas_review_platforms | deepseek | FOLLOWED | 2026-11-25 |
+| GitHub Marketplace | https://github.com/marketplace | saas_review_platforms | deepseek | FOLLOWED | 2026-11-25 |
+| Chrome Web Store | https://chromewebstore.google.com/ | saas_review_platforms | deepseek | UNKNOWN | 2026-11-25 |
+| awesome-youtubers | https://github.com/JoseDeFreitas/awesome-youtubers | github_awesome_lists | deepseek | FOLLOWED | 2026-11-25 |
+| awesome-remote-job | https://github.com/lukasz-madon/awesome-remote-job | github_awesome_lists | deepseek | FOLLOWED | 2026-11-25 |
+| awesome-product-management | https://github.com/dend/awesome-product-management | github_awesome_lists | deepseek | FOLLOWED | 2026-11-25 |
+| awesome-video (krzemienski) | https://github.com/krzemienski/awesome-video | github_awesome_lists | deepseek | FOLLOWED | 2026-11-25 |
+| awesome-design-tools | https://github.com/goabstract/Awesome-Design-Tools | github_awesome_lists | deepseek | FOLLOWED | 2026-11-25 |
+| awesome-web-apps | https://github.com/unicodeveloper/awesome-opensource-apps | github_awesome_lists | deepseek | FOLLOWED | 2026-11-25 |
+| awesome-mac | https://github.com/jaywcjlove/awesome-mac | github_awesome_lists | deepseek | FOLLOWED | 2026-11-25 |
+| awesome-oss-alternatives | https://github.com/RunaCapital/awesome-oss-alternatives | github_awesome_lists | deepseek | FOLLOWED | 2026-11-25 |
+| awesome-for-beginners | https://github.com/MunGell/awesome-for-beginners | github_awesome_lists | deepseek | FOLLOWED | 2026-11-25 |
+| Product Lift | https://www.productlift.dev/ | launch_sites | deepseek | FOLLOWED | 2026-11-25 |
+| IndieMaker | https://indiemaker.co/ | ai_saas_directories | deepseek | UNKNOWN | 2026-11-25 |
 | TrueLocal | https://www.truelocal.com.au/ | startup_directories_by_country | deepseek | FOLLOWED | 2026-11-25 |
 | Yellow Pages Australia | https://www.yellowpages.com.au/ | startup_directories_by_country | deepseek | FOLLOWED | 2026-11-25 |
 | TeacherTube | https://www.teachertube.com/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-25 |
