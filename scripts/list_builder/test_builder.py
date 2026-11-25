@@ -409,6 +409,43 @@ class DeepSeekTwin(Base):
         self.assertEqual(pc["dead"], n)
         self.assertEqual(pc["added"], 1)
 
+    # ---- 25 Nov 2026: why the first DeepSeek dry run said "asked 0, raw 0" ----
+    def test_request_turns_thinking_off(self):
+        ds = FakeDeepSeek([good(1, url="https://new-example.com/submit")])
+        self.go(ds, provider="deepseek")
+        self.assertEqual(ds.bodies[0][1]["thinking"], {"type": "disabled"})      # on by default at DeepSeek: it used all 4000 output tokens
+
+    def test_parse_rows_reads_real_deepseek_shapes(self):
+        a, c = good(1, url="https://a-example.com/"), good(2, url="https://c-example.com/")
+        one_per_line = "LIST DONE\n" + json.dumps(a) + ",\n" + json.dumps(c) + "\nCOUNT 2"
+        fenced = "Here is the list:\n```json\n" + json.dumps(a, indent=1) + "\n" + json.dumps(c, indent=1) + "\n```\nCOUNT 2"
+        array = "```json\n" + json.dumps([a, c], indent=2) + "\n```"
+        wrapped = json.dumps({"places": [a, c], "count": 2})
+        for txt in (one_per_line, fenced, array, wrapped):
+            self.assertEqual([r["url"] for r in b.parse_rows(txt)], [a["url"], c["url"]], txt[:40])
+        self.assertEqual(b.parse_rows("Sorry, I cannot help"), [])
+        self.assertEqual(b.parse_rows(""), [])
+
+    def test_fenced_array_answer_with_reasoning_field_still_adds_rows(self):
+        items = [good(1, url="https://new-example.com/submit"), good(2, url="https://other-example.com/")]
+        text = "```json\n" + json.dumps(items, indent=2) + "\n```"
+
+        def post(url, body, headers):
+            return {"choices": [{"finish_reason": "stop", "message": {"content": text, "reasoning_content": "thinking..."}}],
+                    "usage": {"prompt_tokens": 3000, "completion_tokens": 900}}
+        self.go(post, provider="deepseek")
+        self.assertEqual({s["domain"] for s in self.ds_cands() if s.get("added") == TODAY}, {"new-example.com", "other-example.com"})
+
+    def test_empty_content_from_cut_off_reasoning_is_reported_not_silent(self):
+        import io, contextlib
+        buf = io.StringIO()
+        post = lambda url, body, headers: {"choices": [{"finish_reason": "length", "message": {"content": "", "reasoning_content": "x" * 5000}}],
+                                           "usage": {"prompt_tokens": 3000, "completion_tokens": 4000}}
+        os.environ["DEEPSEEK_API_KEY"] = "test"
+        with contextlib.redirect_stdout(buf):
+            b.ask_deepseek("s", "u", b.Meter({"spent": {}}, TODAY, provider="deepseek"), post=post)
+        self.assertIn("empty answer (finish_reason=length", buf.getvalue())
+
     def test_dedupe_against_what_sonnet_added(self):
         self.go(lambda *a: answer([good(7, url="https://shared-example.com/")]))      # Sonnet first
         ds = FakeDeepSeek([good(8, url="https://shared-example.com/x")])

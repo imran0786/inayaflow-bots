@@ -81,16 +81,39 @@ TYPES = [  # (type value in the result, what to find)
 ]
 
 
+# 25 Nov 2026: why the outreach list never grew. Of the 5 types only blog_article and resource_page can ever become a mail, and the old rotation changed type once every
+# ~1.4 days (24 pages x 5 types), so over 22-25 Nov the hunter ran platform / directory / journalist only: ZERO blog or resource-page jobs. Journalist results have no
+# consumer in the feeder at all. Now the TYPE changes with every job and 5 of every 8 jobs are mail types.
+TYPE_SEQ = ["blog_article", "resource_page", "blog_article", "directory", "blog_article", "resource_page", "platform", "blog_article"]
+TYPE_BY_KEY = {t[0]: t for t in TYPES}
+
+
 def slot(now=None, k=0):
     """(page, type, slot number): 8 runs a day (every 3 hours) x JOBS_PER_RUN jobs; k = 0..JOBS_PER_RUN-1 is the job inside the run.
-    Slot numbers step by 1 per job; the rotation lists quick-win pages twice (ROTATION), every page still meets every type."""
+    Slot numbers step by 1 per job. Page = ROTATION[n]; type = TYPE_SEQ[n + n // len(ROTATION)] so every page meets every type in the sequence after 8 turns."""
     now = now or c.now()
     n = (now.timetuple().tm_yday * 8 + now.hour // 3) * JOBS_PER_RUN + k
-    return ROTATION[n % len(ROTATION)], TYPES[(n // len(ROTATION)) % len(TYPES)], n
+    return ROTATION[n % len(ROTATION)], TYPE_BY_KEY[TYPE_SEQ[(n + n // len(ROTATION)) % len(TYPE_SEQ)]], n
 
 
 def job_id(now, page, typ):
     return "%s-hunter-%s-%s" % (now.strftime("%Y-%m-%d-%H%M"), page[0], typ[0].replace("_", "-"))
+
+
+def listicle_note(tkey, slug):
+    """Extra FIND guidance for the two mail types: 'best X tools' list articles with a NAMED author are the best prospects (24 Nov research: listicle authors answer; ~1 link per 100 mails)."""
+    if tkey not in ("blog_article", "resource_page"):
+        return ""
+    return ("BEST TARGETS: 'best TikTok tools', 'free TikTok tools', 'TikTok analytics tools', 'TikTok hashtag generators' style list articles and resource pages, "
+            "written or updated in 2025-2026, with a NAMED author or editor and a contact address printed on the site. Put the author's name in the author field.")
+
+
+def relax_note(tkey):
+    if tkey not in ("blog_article", "resource_page"):
+        return ""
+    menu = "; ".join("%s = %s" % (p[0], p[3]) for p in PAGES)
+    return ("\nRELAXED MATCH (25 Nov 2026): the article may instead be about the topic of ANY ONE of our pages below, if that really is its MAIN subject (a passing mention is not enough). "
+            "Then set \"page\" to that page's slug. Honest rule: the article's main subject must be that page's topic. PAGES (slug = topic): " + menu + ".")
 
 
 def build_brief(now, page, typ):
@@ -102,20 +125,21 @@ def build_brief(now, page, typ):
 OUR PAGE: %s
 It is %s.
 TOPIC a prospect must be about: %s.
-
+%s
 FIND: %s
 
 HOW: use web search and fetch. Open each candidate page yourself; never list something you did not open. Work until you have up to 12 VERIFIED prospects or the search budget is used.
 Skip: sites already linking to inayaflow.ai, spam / link-farm / casino / adult sites, pages that are sponsored or paid-only, anything needing a payment, a phone number or a CAPTCHA to contact or list.
-Topic match is HARD: a prospect must be about the topic above, not about TikTok in general.
+Topic match is HARD: a prospect must be about the topic above, not about TikTok in general.%s
 Never invent an e-mail address. Use an e-mail ONLY if it is printed on that site's OWN page (put that page's URL in email_source_url; the address must be on the SAME site). No address printed = leave email empty.
 For links: open a live example page on the site and read the link's rel in the page code. "followed" = no nofollow/ugc/sponsored. Put what you saw in rel_evidence (one short sentence). Unknown = "unknown".
 
 RESULT: your single result must contain, after a first line "HUNT %s DONE", ONLY JSON lines (one object per line, no markdown fence, no commentary between them), then a last line "COUNT n". Each line:
-{"url": "<prospect page or submit page>", "type": "%s", "page": "%s", "name": "<site name>", "topic": "<what the page is about, 8 words max>", "email": "<printed address or empty>", "email_source_url": "<url where it is printed or empty>", "rel": "followed|nofollow|unknown", "rel_evidence": "<what you saw>", "free": "yes|no|unknown", "note": "<15 words max>"}
+{"url": "<prospect page or submit page>", "type": "%s", "page": "%s", "name": "<site name>", "topic": "<what the page is about, 8 words max>", "email": "<printed address or empty>", "email_source_url": "<url where it is printed or empty>", "author": "<the named author or editor, or empty>", "rel": "followed|nofollow|unknown", "rel_evidence": "<what you saw>", "free": "yes|no|unknown", "note": "<15 words max>"}
 The "page" value must be exactly: %s. Use the type values: blog_article, directory, launch_site, platform, resource_page, journalist.
+Open the article, then its author page, /contact and /about: read the address from the page TEXT (a printed address or an obfuscated one such as name [at] site [dot] com; write it normally). A site with only a contact form: leave email empty.
 If you find nothing verifiable, write "HUNT %s DONE" and "COUNT 0" - never pad the list.
-Company voice "we" in any note; true claims only; no Arabic.""" % (url, what, topic, tfind, pid, tkey, slug, slug, pid)
+Company voice "we" in any note; true claims only; no Arabic.""" % (url, what, topic, listicle_note(tkey, slug), tfind, relax_note(tkey), pid, tkey, slug, slug, pid)
     allowed = "read, write_result, web"
     return "\n".join(["---", "id: " + pid, "role: research", "model: sonnet", "max_cost: %.2f" % MAX_COST, "allowed: " + allowed,
                       "max_searches: %d" % MAX_SEARCHES, "output: " + pid, "submitted: " + now.isoformat(), "---", "",
