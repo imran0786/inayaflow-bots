@@ -735,12 +735,12 @@ class Repair(unittest.TestCase):
         self.assertEqual(fixed["body"].replace(re.search(r"Our rr[^\n]*", fixed["body"]).group(0), COPY.strip()), a["body"])
         self.assertEqual(fixed["title"], a["title"])
 
-    def test_still_failing_after_one_repair_is_failed_as_before(self):
+    def test_still_failing_after_the_repair_rounds_is_failed_as_before(self):
         calls, sent = [], []
         res, out = quiet(post_ai=ai_with_repair(calls, COPY, "RAW:Free TikTok tool page with plain explanations of how the checker works and what it needs."), publishers=fake_publishers(sent))
         self.assertEqual(set(res.values()), {"FAIL"})
         self.assertEqual(sent, [])
-        self.assertEqual(calls.count("repair"), 3)                    # ONE repair per platform, not one per writer attempt
+        self.assertEqual(calls.count("repair"), 6)                    # at most 2 rewrites per platform, shared by both writer attempts
         log = open(P.LOG_PATH, encoding="utf8").read()
         self.assertIn("overlap with our site", log)
         self.assertTrue([d for d in os.listdir(P.DRAFT_DIR) if d.endswith("_FAILED.md")])
@@ -796,6 +796,182 @@ class Repair(unittest.TestCase):
         self.assertEqual(D.qa_lenient('{"verdict":"FAIL","reasons":["x is wrong"]} then {"verdict":"PASS"')["verdict"], "FAIL")
         self.assertIsNone(D.qa_lenient("looks fine to me"))
         self.assertIsNone(D.qa_lenient(""))
+
+
+# ---------- 25 Nov: why every draft failed on 24 Nov, and the fixes (facts bullets, 2 rewrites, tolerant QA with strict retry, QA-claim rewrite) ----------
+SITE2 = (SITE_TEXT + " Is eligibility for the for you feed a post or a profile question is answered on this page in plain words. "
+         "Followers is the size of the audience and likes show how many people reacted to a video.")
+CLAIM = "\n\nThe tool tells readers to use TikTok Studio for those limits."
+OVER = "\n\nPeople ask is eligibility for the for you feed a post or a profile question every week."
+
+
+def get2(url, timeout=15, limit=0):
+    if url.startswith("https://inayaflow.ai"):
+        return 200, url, "<html><body><p>%s</p></body></html>" % SITE2
+    return fake_get(url)
+
+
+def smart_ai(calls, extra="", qa_mode="ok", facts_reply=None, seen=None, repair_text=None):
+    """Scripted Anthropic: writer body carries `extra`; Haiku answers facts / overlap-repair / qa-repair / QA by what the system prompt asks."""
+    base = fake_ai(calls, bodyfn=lambda pl, tgt: body_for(pl, tgt, extra=extra))
+    n = {"qa": 0, "rep": 0}
+
+    def text(t):
+        return {"content": [{"type": "text", "text": t}], "usage": {"input_tokens": 3000, "output_tokens": 80}}
+
+    def post(url, b, h):
+        sysm = b["system"]
+        user = b["messages"][0]["content"]
+        if b["model"] == D.QA_MODEL:
+            if "notes for a writer" in sysm:
+                calls.append("facts")
+                return text(facts_reply if facts_reply is not None else "- The page is a free checker that explains its result in plain words.\n- It needs nothing but the public details.\n- It is a helper, not a promise of results.\n- The page also explains what the numbers mean for a creator.")
+            if "fact-checker found" in sysm:
+                calls.append("qa_repair")
+                drop = {}
+                for i, l in re.findall(r"^(\d+)\. (.*)$", user, re.M):
+                    if "TikTok Studio" in l:
+                        drop[i] = ""
+                return text(json.dumps(drop))
+            if "copy editor" in sysm:
+                calls.append("repair")
+                n["rep"] += 1
+                sent = re.findall(r"^(\d+)\. \[[^\]]*\] (.*)$", user, re.M)
+                if seen is not None:
+                    seen.append(user)
+                if repair_text == "same":
+                    return text(json.dumps({k: v for k, v in sent}))
+                return text(json.dumps({k: "%s we cover it." % filler("rw" + chr(97 + n["rep"] % 26) + chr(97 + int(k) % 26), 14) for k, _ in sent}))
+            calls.append("qa")
+            n["qa"] += 1
+            claim = "TikTok Studio" in user.split("ARTICLE TITLE:", 1)[-1]
+            if qa_mode == "garbled" and "Your reply must start" not in sysm:
+                return text("Let me read this article carefully. The first section discusses captions and the second")
+            if qa_mode == "never":
+                return text("I am unable to decide.")
+            if claim:
+                return text('VERDICT: FAIL\nREASON: "The tool tells readers to use TikTok Studio for those limits." | not in our page text')
+            return text("VERDICT: PASS")
+        return base(url, b, h)
+    return post
+
+
+class Fixes25Nov(unittest.TestCase):
+    def setUp(self):
+        for f in (P.STATE_PATH, P.LOG_PATH):
+            if os.path.exists(f):
+                os.remove(f)
+        P.DRY = False
+        P.DAY_CAP = 0.90
+        os.environ["PLATFORM_STATE_OK"] = "true"
+        os.environ["PLATFORM_FIRST_RUN"] = "true"
+        os.environ["PLATFORM_POSTER_LIVE"] = "true"
+
+    def run_flow(self, **kw):
+        calls, sent = [], []
+        res, out = quiet(post_ai=smart_ai(calls, **kw), publishers=fake_publishers(sent), getter=get2)
+        return res, out, calls, sent
+
+    # failure kind 1: a 10-word run copied from our site (log rows 1-7)
+    def test_site_overlap_is_rewritten_and_publishes(self):
+        res, out, calls, sent = self.run_flow(extra=OVER)
+        self.assertEqual(set(res.values()), {"PUBLISHED"})
+        self.assertIn("repair wordpress problems 1 -> 0", out)
+        self.assertEqual(len(sent), 3)
+
+    # the rewrite prompt carries the exact offending phrase
+    def test_repair_prompt_lists_the_exact_phrase(self):
+        seen = []
+        self.run_flow(extra=OVER, seen=seen)
+        self.assertTrue(seen and "is eligibility for the for you feed a post or" in seen[0])
+
+    # a rewrite that still copies gets a SECOND rewrite attempt, then fails honestly
+    def test_two_rewrites_then_honest_fail(self):
+        res, out, calls, sent = self.run_flow(extra=OVER, repair_text="same")
+        self.assertEqual(set(res.values()), {"FAIL"})
+        self.assertEqual(sent, [])
+        self.assertEqual(calls.count("repair"), 6)
+
+    # failure kind 2: first person
+    def test_first_person_rewritten(self):
+        res, out, calls, sent = self.run_flow(extra="\n\nI think we should always check our hashtags before posting anything.")
+        self.assertEqual(set(res.values()), {"PUBLISHED"})
+
+    # failure kind 3: 'QA answer not understood' (cut-off prose): the strict retry now reads
+    def test_unreadable_qa_gets_a_strict_retry(self):
+        res, out, calls, sent = self.run_flow(qa_mode="garbled")
+        self.assertEqual(set(res.values()), {"PUBLISHED"})
+        self.assertEqual(calls.count("qa"), 6)                         # two asks per platform
+
+    def test_qa_never_readable_fails_with_the_old_words(self):
+        res, out, calls, sent = self.run_flow(qa_mode="never")
+        self.assertEqual(set(res.values()), {"FAIL"})
+        self.assertIn("QA answer not understood", open(P.LOG_PATH, encoding="utf8").read())
+
+    # failure kind 4: a claim about the tool that is not on our page: the named sentence is removed, QA runs again, PASS
+    def test_unsupported_claim_sentence_is_removed(self):
+        res, out, calls, sent = self.run_flow(extra=CLAIM)
+        self.assertEqual(set(res.values()), {"PUBLISHED"})
+        self.assertEqual(calls.count("qa_repair"), 3)
+
+    # ... and when the false claim cannot be removed it stays a FAIL (the honesty rule is not loosened)
+    def test_unremovable_false_claim_still_fails(self):
+        base = smart_ai([], extra=CLAIM)
+
+        def never_fix(url, b, h):
+            if "fact-checker found" in b["system"]:
+                return {"content": [{"type": "text", "text": "{}"}], "usage": {"input_tokens": 100, "output_tokens": 5}}
+            return base(url, b, h)
+        sent = []
+        res, _ = quiet(post_ai=never_fix, publishers=fake_publishers(sent), getter=get2)
+        self.assertEqual(set(res.values()), {"FAIL"})
+        self.assertEqual(sent, [])
+        self.assertIn("TikTok Studio", open(P.LOG_PATH, encoding="utf8").read())
+
+    def test_parse_qa_forms(self):
+        self.assertEqual(P.parse_qa("VERDICT: PASS")[0], "PASS")
+        self.assertEqual(P.parse_qa("**VERDICT:** PASS\n")[0], "PASS")
+        self.assertEqual(P.parse_qa("PASS")[0], "PASS")
+        self.assertEqual(P.parse_qa('{"verdict":"PASS","reasons":[]}')[0], "PASS")
+        v, r = P.parse_qa('```json\n{"verdict":"FAIL","reasons":["a number is invented"]}\n```')
+        self.assertEqual((v, r), ("FAIL", ["a number is invented"]))
+        v, r = P.parse_qa('VERDICT: FAIL\nREASON: "tool says x" | not on page\nREASON: "y" | invented')
+        self.assertEqual(v, "FAIL")
+        self.assertEqual(len(r), 2)
+        self.assertEqual(P.parse_qa("VERDICT: PASS but this could FAIL a reviewer")[0], "FAIL")      # FAIL wins
+        self.assertIsNone(P.parse_qa("Let me read this carefully. The first section")[0])
+        self.assertIsNone(P.parse_qa("")[0])
+
+    def test_fact_bullets_filter_copies(self):
+        page = "Free TikTok tool page with plain explanations of how the checker works and what it needs."
+        raw = "- Free TikTok tool page with plain explanations of how the checker works\n- A helper that shows a result in simple words.\n- ok"
+        self.assertEqual(P.fact_bullets(raw, page), ["A helper that shows a result in simple words."])
+
+    def _spy(self, **kw):
+        seen = []
+        base = smart_ai([], **kw)
+
+        def spy(url, b, h):
+            if b["model"] == D.WRITER:
+                seen.append(b["messages"][0]["content"])
+            return base(url, b, h)
+        res, _ = quiet(post_ai=spy, publishers=fake_publishers([]), getter=get2)
+        return res, seen
+
+    def test_writer_gets_facts_not_the_page_sentences(self):
+        res, seen = self._spy()
+        self.assertNotIn("plain explanations of how the checker works", seen[0])
+        self.assertIn("FACTS ABOUT OUR PAGE", seen[0])
+        self.assertIn("free checker that explains its result", seen[0])
+
+    def test_bad_facts_fall_back_to_page_text(self):
+        res, seen = self._spy(facts_reply="- Free TikTok tool page with plain explanations of how the checker works and what it needs.")
+        self.assertIn("plain explanations of how the checker works", seen[0])
+        self.assertEqual(set(res.values()), {"PUBLISHED"})
+
+    def test_cost_stays_inside_the_cap_with_repairs(self):
+        self.run_flow(extra="\n\nI think we should always check our hashtags before posting anything." + CLAIM)
+        self.assertLessEqual(json.load(open(P.STATE_PATH))["spent"][D.utc_today()], 0.90 + 1e-9)
 
 
 if __name__ == "__main__":
