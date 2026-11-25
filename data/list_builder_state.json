@@ -1,8 +1,8 @@
 {
- "cursor": 32,
+ "cursor": 40,
  "spent": {
   "2026-11-24": 2.9261,
-  "2026-11-25": 1.7711
+  "2026-11-25": 2.9326
  },
  "days": {
   "2026-11-24": {
@@ -27,42 +27,42 @@
    "total": 1956
   },
   "2026-11-25": {
-   "added": 98,
+   "added": 171,
    "by_category": {
-    "podcasts_creators": 5,
-    "journalist_platforms": 5,
-    "edu_library_guides": 6,
-    "startup_directories_by_country": 12,
-    "ai_saas_directories": 6,
-    "launch_sites": 7,
-    "tool_roundups": 2,
-    "github_awesome_lists": 21,
+    "podcasts_creators": 6,
+    "journalist_platforms": 8,
+    "edu_library_guides": 12,
+    "startup_directories_by_country": 20,
+    "ai_saas_directories": 17,
+    "launch_sites": 15,
+    "tool_roundups": 17,
+    "github_awesome_lists": 42,
     "saas_review_platforms": 4,
     "guest_post_pages": 8,
     "resource_pages": 13,
     "communities_profiles": 9
    },
-   "runs": 1,
-   "calls": 12,
+   "runs": 2,
+   "calls": 20,
    "providers": {
     "claude": {
-     "calls": 12,
-     "cost": 1.7711,
-     "proposed": 206,
-     "spam": 6,
-     "dup": 93,
-     "dead": 9,
-     "added": 98,
-     "followed": 33,
-     "nofollow": 2,
+     "calls": 20,
+     "cost": 2.9326,
+     "proposed": 322,
+     "spam": 8,
+     "dup": 131,
+     "dead": 12,
+     "added": 171,
+     "followed": 66,
+     "nofollow": 3,
      "noindex": 1,
-     "unknown": 62,
-     "needs_signup": 54
+     "unknown": 101,
+     "needs_signup": 94
     }
    },
-   "category_summary": "list-builder: +98 new (total 2054; by category github_awesome_lists 21, resource_pages 13, startup_directories_by_country 12, communities_profiles 9, guest_post_pages 8, launch_sites 7, ai_saas_directories 6, edu_library_guides 6, journalist_platforms 5, podcasts_creators 5, saas_review_platforms 4, tool_roundups 2)",
-   "summary": "list-builder: sonnet +98 new (33 followed, $1.77)",
-   "total": 2054
+   "category_summary": "list-builder: +171 new (total 2127; by category github_awesome_lists 42, startup_directories_by_country 20, ai_saas_directories 17, tool_roundups 17, launch_sites 15, resource_pages 13, edu_library_guides 12, communities_profiles 9, guest_post_pages 8, journalist_platforms 8, podcasts_creators 6, saas_review_platforms 4)",
+   "summary": "list-builder: sonnet +171 new (66 followed, $2.93)",
+   "total": 2127
   }
  },
  "rejected": [
@@ -119,7 +119,12 @@
   "producthunt.com/products/creator-economy-tools",
   "tastyedits.com",
   "grow.co",
-  "heartwiredclub.com"
+  "heartwiredclub.com",
+  "expertclick.com",
+  "hull.ac.uk",
+  "lr.edu",
+  "sdstate.edu",
+  "startupsincanada.com"
  ],
- "last_summary": "list-builder: sonnet +98 new (33 followed, $1.77)"
+ "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93)"
 }
