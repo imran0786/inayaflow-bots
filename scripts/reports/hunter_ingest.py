@@ -71,16 +71,20 @@ def outreach_row(d, job_id, n):
     if c.reg_domain(email.split("@")[-1]) != site:  # a free-mail or third-party address is not the site's own contact
         return None
     return {"n": n, "site": site, "page": url.split()[0][:300], "page_date": "", "topic": clean(d.get("topic", ""), 80), "match": match,
-            "contact": src, "emails": [email], "pri": "B", "note": "hunter %s" % job_id}
+            "contact": src, "emails": [email], "pri": "B", "note": "hunter %s" % job_id, "author": clean(d.get("author", ""), 60)}
 
 
 def directory_row(d, job_id, today):
     """Row for data/directories_candidates.json or None. Needs: free = yes, a followed / nofollow link seen, a submit URL."""
     url = str(d.get("url", ""))
     rel = str(d.get("rel", "")).lower()
-    if d.get("type") not in DIR_TYPES or str(d.get("free", "")).lower() != "yes" or rel not in ("followed", "nofollow"):
+    # 25 Nov 2026: "unknown" rel is accepted. The hunter's fetch tool returns text only, so it could never read a rel: 100% of its directory rows said unknown and
+    # were dropped. The row goes in as UNCHECKED and the batch's own live check (verify_unchecked) + the directory agent's follow-proof decide.
+    if d.get("type") not in DIR_TYPES or str(d.get("free", "")).lower() != "yes" or rel not in ("followed", "nofollow", "unknown"):
         return None
-    if not url.startswith("https://") or not str(d.get("rel_evidence", "")).strip():
+    if not url.startswith("https://"):
+        return None
+    if rel != "unknown" and not str(d.get("rel_evidence", "")).strip():
         return None
     dom = _host(url)
     if not dom or dom == "inayaflow.ai":
@@ -89,7 +93,7 @@ def directory_row(d, job_id, today):
     return {"name": name, "domain": dom, "submit_url": url, "source": "hunter %s" % job_id, "their_category": "", "their_auto_flag": "",
             "their_notes": "", "their_status": None, "http": None, "final_url": url, "free_check": "unchecked", "captcha_words_on_page": False,
             "has_form_on_page": False, "quality": "unknown", "usable": False, "followed": "unknown", "checked": today,
-            "judge_reason": "hunter says %s: %s" % (rel, clean(d.get("rel_evidence", ""), 120)), "status": "UNCHECKED hunter"}
+            "judge_reason": "hunter says %s: %s" % (rel, clean(d.get("rel_evidence", ""), 120) or "not read (text-only fetch)"), "status": "UNCHECKED hunter"}
 
 
 def ingest(done_files, state, prospects, cands, exclude_domains, outbox_idx, in_outbox, today, other_cands=None):

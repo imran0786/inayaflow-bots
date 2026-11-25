@@ -10,6 +10,7 @@ import hunter_ingest as hi
 sys.path.insert(0, HERE)
 import common as c
 import runner
+import backlink_batch as bb
 
 
 def at(h, d=23):
@@ -27,10 +28,10 @@ class Hunter(unittest.TestCase):
         self.assertEqual(len(hu.PAGES), 17)                                        # homepage, hashtag guide, 9 tools, 6 more quick-win pages
         self.assertEqual(len(hu.ROTATION), 24)                                     # the 7 quick-win pages are listed twice
         seen = set()
-        for n in range(24 * 5):
-            page, typ = hu.ROTATION[n % 24], hu.TYPES[(n // 24) % 5]
+        for n in range(24 * 8):
+            page, typ = hu.ROTATION[n % 24], hu.TYPE_BY_KEY[hu.TYPE_SEQ[(n + n // 24) % 8]]
             seen.add((page[0], typ[0]))
-        self.assertEqual(len(seen), 17 * 5)                                        # every page still meets every type over 120 slots
+        self.assertEqual(len(seen), 17 * 4)                                        # every page meets every type in the sequence over 192 slots (4 types: journalist has no consumer)
         counts = {}
         for p in hu.ROTATION:
             counts[p[0]] = counts.get(p[0], 0) + 1
@@ -203,7 +204,7 @@ class Ingest(unittest.TestCase):
                dict(GOOD_MAIL, email=""),
                dict(GOOD_MAIL, page="unknown-page"),
                dict(GOOD_MAIL, type="journalist"),
-               dict(GOOD_DIR, free="unknown"), dict(GOOD_DIR, rel="unknown"), dict(GOOD_DIR, rel_evidence=""), dict(GOOD_DIR, url="http://insecure.io/x"),
+               dict(GOOD_DIR, free="unknown"), dict(GOOD_DIR, rel_evidence=""), dict(GOOD_DIR, url="http://insecure.io/x"),
                dict(GOOD_DIR, url="https://inayaflow.ai/tools")]
         cnt, _s, pros, cands = self.run_ingest({"jobs/done/z-hunter-y.md": result(*bad)})
         self.assertEqual((len(pros), len(cands["sites"])), (0, 0))
@@ -240,6 +241,124 @@ class Ingest(unittest.TestCase):
         files = {"jobs/done/2026-11-22-research-other.md": result(GOOD_MAIL), "jobs/done/q-hunter-r.md": "status: DONE\n{not json}\nsome text\n"}
         cnt, _s, pros, _c = self.run_ingest(files)
         self.assertEqual((cnt["results"], len(pros)), (1, 0))
+
+
+class FeedFix(unittest.TestCase):
+    """25 Nov 2026: the hunter's finds now reach the outreach list."""
+
+    def test_mail_types_are_most_of_the_rotation_and_the_type_changes_every_job(self):
+        mail = sum(1 for t in hu.TYPE_SEQ if t in ("blog_article", "resource_page"))
+        self.assertGreaterEqual(mail * 8, 5 * len(hu.TYPE_SEQ))                     # at least 5 of every 8 jobs can become a mail
+        self.assertNotIn("journalist", hu.TYPE_SEQ)                                 # no consumer: nothing reads those results
+        types = [hu.slot(at(h), k)[1][0] for h in (0, 3) for k in range(hu.JOBS_PER_RUN)]
+        self.assertGreaterEqual(len(set(types)), 2)                                 # the first 4 jobs of a day are not all the same type
+        day = [hu.slot(at(0, d), 0)[1][0] for d in range(20, 30)]
+        self.assertTrue({"blog_article", "resource_page"} <= set(day))              # over 10 days both mail types come up in the budgeted first slot
+
+    def test_mail_brief_asks_for_listicles_authors_and_the_relaxed_match(self):
+        now = at(8)
+        page = hu.PAGES[2]
+        b = hu.build_brief(now, page, hu.TYPE_BY_KEY["blog_article"])
+        self.assertIn("BEST TARGETS", b)
+        self.assertIn('"author"', b)
+        self.assertIn("RELAXED MATCH", b)
+        for p in hu.PAGES:
+            self.assertIn(p[0] + " = ", b)                                          # the menu of our pages is in the brief
+        d = hu.build_brief(now, page, hu.TYPE_BY_KEY["directory"])
+        self.assertNotIn("RELAXED MATCH", d)                                         # directories keep their own wording
+        self.assertNotIn("BEST TARGETS", d)
+
+    def test_unknown_rel_directory_rows_now_go_in_unchecked(self):
+        row = hi.directory_row(dict(GOOD_DIR, rel="unknown", rel_evidence=""), "j1", "2026-11-25")
+        self.assertIsNotNone(row)
+        self.assertEqual(row["status"], "UNCHECKED hunter")
+        self.assertFalse(row["usable"])                                              # the live check decides, never the hunter's word
+        self.assertIsNone(hi.directory_row(dict(GOOD_DIR, rel="followed", rel_evidence=""), "j1", "2026-11-25"))
+
+    def test_author_is_stored_and_a_cost_cap_result_in_failed_is_read(self):
+        res = result(dict(GOOD_MAIL, author="Jane Writer"))
+        state, pros = {}, []
+        cnt = hi.ingest({"jobs/failed/2026-11-24-hunter-x-blog-article.md": res}, state, pros, {"sites": []}, set(), {}, lambda *a: False, "2026-11-25")
+        self.assertEqual(cnt["prospects"], 1)
+        self.assertEqual(pros[0]["author"], "Jane Writer")
+        self.assertEqual(pros[0]["pri"], "B")
+
+    def test_batch_reads_done_and_failed_results(self):
+        t = open(os.path.join(HERE, "backlink_batch.py"), encoding="utf8").read()
+        self.assertIn('["jobs/done", "jobs/failed"], name_has="-hunter-"', t)
+
+
+class RelaxedTopic(unittest.TestCase):
+    PAGE = "<title>Best TikTok tools</title>" + "Words about tools and shadowban checks. " * 40
+
+    def prospect(self, match="hashtags"):
+        return {"site": "a.com", "page": "https://a.com/p", "match": match, "emails": ["ed@a.com"]}
+
+    def get(self, url, timeout=15, limit=0):
+        if url == "https://a.com/p":
+            return 200, url, self.PAGE
+        if url.endswith("/contact"):
+            return 200, url, "Write to ed@a.com"
+        return 404, url, ""
+
+    def ai(self, topic_match, best):
+        return lambda s, u, m=0: json.dumps({"topic_match": topic_match, "best_page": best, "sponsored_or_paid": False, "title": "Best TikTok tools", "covers": "It covers free tools."})
+
+    def test_article_about_another_target_page_is_pitched_that_page(self):
+        job, why = bb.prepare_first(self.prospect(), self.get, self.ai(False, "shadowban"))
+        self.assertIsNone(why)
+        self.assertEqual(job["match"], "shadowban")                                  # honest re-pointing, and the mail names the shadowban self-check
+        self.assertIn("shadowban", job["body"].lower())
+
+    def test_no_alt_or_a_page_outside_our_17_stays_a_skip(self):
+        self.assertEqual(bb.prepare_first(self.prospect(), self.get, self.ai(False, ""))[1], "topic is not an exact match")
+        self.assertEqual(bb.prepare_first(self.prospect(), self.get, self.ai(False, "scripts"))[1], "topic is not an exact match")      # "scripts" is not one of the 17
+        self.assertEqual(bb.prepare_first(self.prospect(), self.get, self.ai(False, "made-up"))[1], "topic is not an exact match")
+
+    def test_old_topic_skips_are_looked_at_once_more_but_other_skips_are_not(self):
+        ps = [{"n": 1, "site": "A", "page": "https://a.com/p", "match": "money", "emails": ["x@a.com"], "pri": "B"},
+              {"n": 2, "site": "B", "page": "https://b.com/p", "match": "money", "emails": ["x@b.com"], "pri": "B"},
+              {"n": 3, "site": "C", "page": "https://c.com/p", "match": "money", "emails": ["x@c.com"], "pri": "B"},
+              {"n": 4, "site": "D", "page": "https://d.com/p", "match": "money", "emails": ["x@d.com"], "pri": "B"}]
+        st = {"outreach": {"a.com": {"status": "skipped", "why": "topic is not an exact match", "date": "2026-11-20"},
+                           "b.com": {"status": "skipped", "why": "topic is not an exact match", "date": "2026-11-25"},      # already judged with the new check
+                           "c.com": {"status": "skipped", "why": "contact address not found on the live site", "date": "2026-11-20"}}}
+        ok, _h = bb.eligible_prospects(ps, st, set())
+        self.assertEqual([p["site"] for p in ok], ["A", "D"])
+
+
+class EndToEnd(unittest.TestCase):
+    def test_a_hunter_result_becomes_a_queued_mail(self):
+        """hunter result file -> hunter_ingest -> prospect row -> run_outreach (page + contact check + judge + guard) -> a mail job for the outbox robot."""
+        import tempfile
+        res = result(dict(GOOD_MAIL, url="https://blog.example.com/best-tiktok-tools", page="shadowban-checker", author="Jane Writer", email="editor@example.com",
+                          email_source_url="https://blog.example.com/contact"))
+        state, pros = {}, []
+        cnt = hi.ingest({"jobs/done/2026-11-25-0301-hunter-shadowban-checker-blog-article.md": res}, state, pros, {"sites": []}, set(), {}, lambda *a: False, "2026-11-25")
+        self.assertEqual(cnt["prospects"], 1)
+        work = tempfile.mkdtemp()
+        os.makedirs(os.path.join(work, "ops"))
+        json.dump(pros, open(os.path.join(work, "ops", "outreach_prospects.json"), "w"))
+        page = "<title>Best TikTok tools</title>" + "A list of tools and a shadowban check. " * 40
+
+        def get(url, timeout=15, limit=0):
+            if url == "https://blog.example.com/best-tiktok-tools":
+                return 200, url, page
+            if url.endswith("/contact"):
+                return 200, url, "Email editor@example.com"
+            return 404, url, ""
+        ai = lambda s_, u, m=0: json.dumps({"topic_match": True, "best_page": "shadowban", "sponsored_or_paid": False, "title": "Best TikTok tools", "covers": "It covers free tools."})
+        saved = (c.fetch_file, c.read_tree)
+        c.fetch_file = lambda branch, path: ""
+        c.read_tree = lambda *a, **k: {}
+        try:
+            queued, skipped, human = bb.run_outreach(work, {}, True, get, ai)
+        finally:
+            c.fetch_file, c.read_tree = saved
+        self.assertEqual((len(queued), len(skipped)), (1, 0), skipped)
+        self.assertEqual(queued[0]["to"], ["editor@example.com"])
+        self.assertIn("We ", queued[0]["body"])
+        self.assertNotIn(" I ", queued[0]["body"])
 
 
 if __name__ == "__main__":

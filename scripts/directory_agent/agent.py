@@ -4,10 +4,11 @@ Runs in GitHub Actions only. PUBLIC repo: stdout carries site names and result c
 passwords, codes or links). Details go to ops/directory_agent_log.md, which the workflow pushes to the PRIVATE repo.
 Dry run (default): the agent fills the form and STOPS right before the final submit click.
 """
-import asyncio, base64, datetime, email, hashlib, hmac, imaplib, json, logging, os, re, shutil, sys, tempfile, time
+import asyncio, socket, base64, datetime, email, hashlib, hmac, imaplib, json, logging, os, re, shutil, sys, tempfile, time
 from email import policy
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 os.environ.setdefault("BROWSER_USE_SETUP_LOGGING", "false")  # public logs: keep the library quiet
@@ -22,6 +23,7 @@ SUCCESS_CAP = int(os.environ.get("DAILY_SUCCESS_CAP", "30"))   # 22 Nov 2026: 10
 ATTEMPT_CAP = int(os.environ.get("DAILY_ATTEMPT_CAP", "150"))  # site attempts per UTC day, all runs together (was 10 / 50 before 22-23 Nov 2026)
 TOOL_ATTEMPT_CAP = int(os.environ.get("DAILY_TOOL_ATTEMPT_CAP", "200"))  # extra per-tool listings a day, on top of the site attempts
 RUN_SECONDS = int(os.environ.get("RUN_SECONDS", "8400"))   # per run (same value as the workflow)
+START_BEFORE = None   # set below, after SITE_SECONDS
 USD_CAP = float(os.environ.get("DAILY_USD_CAP", "7.10"))      # Director budget 23 Nov 2026 (QA round 2): at most $6 a UTC day, all runs together; a new attempt only starts when spent + ATTEMPT_MAX_USD fits under it; hunter stop is $6
 UNPRICED_USD = float(os.environ.get("UNPRICED_ATTEMPT_USD", "1.00"))  # an attempt with NO known price (timeout, error, no price from the library) is booked at the full per-attempt reserve (QA round 4: 0.25 -> 0.50 -> 1.00)
 # HARD per-attempt stop (QA round 3): browser-use 1.0.6 has no live cost hook, but every run is a pydantic-ai run and a
@@ -45,8 +47,10 @@ SUMMARY_PATH = os.path.join(ROOT, "ops", "directory_agent_summary.md")
 VSTATE_PATH = os.path.join(ROOT, "ops", "directory_verify_state.json")  # written by scripts/directory_verify (read-only here)
 DRY = os.environ.get("DRY_RUN", "true").strip().lower() != "false"
 ALLOW_SIGNUP = os.environ.get("ALLOW_SIGNUP", "true").strip().lower() == "true"
-SITE_SECONDS = int(os.environ.get("SITE_SECONDS", "420"))
+SITE_SECONDS = int(os.environ.get("SITE_SECONDS", "900"))   # per model run (primary, then fallback): 900 s = 15 min, so a sign-up can wait up to 9 min (MAIL_WAIT 540 s) for its confirm mail inside the SAME browser session.
+# One attempt = primary + fallback = at most 2 x 900 = 1800 s. A new attempt starts only before RUN_SECONDS - 2 x SITE_SECONDS (= 8400 - 1800 = 6600 s), so the last one ends by 8400 s = 140 min, under the 150-minute step timeout of the workflow (job 180).
 MAX_STEPS = int(os.environ.get("MAX_STEPS", "40"))
+START_BEFORE = max(0, RUN_SECONDS - 2 * SITE_SECONDS)   # last moment a new attempt may start (see the SITE_SECONDS note)
 # Price per million tokens used ONLY when browser-use cannot price the model itself (assumption, adjust if wrong).
 PRICE_IN = float(os.environ.get("PRICE_IN_PER_M", "3.0"))
 PRICE_OUT = float(os.environ.get("PRICE_OUT_PER_M", "15.0"))
@@ -133,11 +137,38 @@ def _body(msg):
     return "\n".join(out)
 
 
-def read_mail_from_domain(directory_url, wait=90):
+MAIL_WAIT = int(os.environ.get("MAIL_WAIT_SECONDS", "540"))   # 25 Nov 2026: was 90 s ("magic link not received within 75 s"); the tool polls every 10 s and stops at the first mail
+
+
+def mail_is_from_site(from_host, text, want):
+    """True when the mail comes from the site's own domain, OR a mail service sends it for the site (the site's domain is in a link of the mail): UNKNOWN_SENDER fix."""
+    if reg_domain(from_host) == want:
+        return True
+    return any(reg_domain(urlparse(l).hostname or "") == want for l in re.findall(r"https?://[^\s\"'<>)\]]+", text or ""))
+
+
+def confirm_links(text, want):
+    """Confirm / login links of a mail, ONLY those whose registered domain is the site's own domain (`want`). A link to any other domain (a mailer's tracking
+    redirect, an unrelated site) is never handed to the browser agent: its final target is unknown, so it is skipped."""
+    out = []
+    for l in re.findall(r"https?://[^\s\"'<>)\]]+", text or ""):
+        if reg_domain(urlparse(l).hostname or "") == want and re.search(r"verif|confirm|token|magic|auth|activate|validate|sign-?in|login|code", l, re.I) and l not in out:
+            out.append(l)
+    return out
+
+
+async def read_mail_async(directory_url):
+    """The confirm-mail tool for the browser agent. The IMAP poll (up to MAIL_WAIT s, sleeping between polls) runs in a worker thread, so the event loop of the browser
+    connection and the wait_for timeouts keep running while we wait."""
+    return await asyncio.get_running_loop().run_in_executor(None, read_mail_from_domain, directory_url)
+
+
+def read_mail_from_domain(directory_url, wait=None):
     """Newest mail from the directory's own domain (INBOX/Junk, last 10 min). PEEK only: does not mark mail read."""
     pw = os.environ.get("CONTACT_EMAIL_PASSWORD")
     if not pw:
         return "ERROR: mailbox password not available"
+    wait = MAIL_WAIT if wait is None else wait
     want = reg_domain(urlparse(directory_url).hostname)
     start = time.time() - 600
     end = time.time() + wait
@@ -161,16 +192,15 @@ def read_mail_from_domain(directory_url, wait=90):
                             continue
                         frm = str(msg.get("From", ""))
                         host = frm.split("@")[-1].strip(" >").lower() if "@" in frm else ""
-                        if reg_domain(host) != want:
-                            continue
                         try:
                             if msg["Date"].datetime.timestamp() < start:
                                 continue
                         except Exception:
                             pass
                         text = re.sub(r"<style.*?</style>", " ", _body(msg), flags=re.S | re.I)
-                        links = re.findall(r"https?://[^\s\"'<>)\]]+", text)
-                        links = [l for l in links if re.search(r"verif|confirm|token|magic|auth|activate|validate|sign-?in|login|code", l, re.I)]
+                        if not mail_is_from_site(host, text, want):
+                            continue
+                        links = confirm_links(text, want)
                         codes = re.findall(r"(?<!\d)(\d{4,8})(?!\d)", re.sub(r"https?://\S+", " ", text))
                         try:  # tell the mail router and the verify sweeper that this mail was used in a live session
                             imap.uid("STORE", uid, "+FLAGS", "(IFDirHandled)")
@@ -215,7 +245,9 @@ RULES:
 - Never solve or try to get past a CAPTCHA or bot check: stop and report CAPTCHA.
 - Never pay and never choose a paid plan, 'featured', 'fast track' or sponsored option; choose the free option. If only paid listing exists, report PAID.
 - Never give a phone number. If one is required, report PHONE_REQUIRED.
-- Never use Google, GitHub, Twitter/X or any social sign-in. If that is the only way in, report SOCIAL_LOGIN_ONLY.
+- Never use Google, GitHub, Twitter/X or any social sign-in. If the site offers BOTH a social button and an e-mail + password form (or an e-mail link / code), always use the e-mail option. If a social button is the only way in, report SOCIAL_LOGIN_ONLY.
+- Sign-up must finish in THIS browser session: after you submit the sign-up form, call read_confirmation_mail (it waits up to 9 minutes), open the confirm link in this same browser or type the code, then continue to the submit form. Only if no mail arrives report EMAIL_CODE_NOT_RECEIVED.
+- Every note starts with a short reason when the status is not SUBMITTED, e.g. 'captcha on submit', 'no form', 'needs phone', 'paid only'.
 {extra}- If a badge or backlink to the directory on our site is REQUIRED to be listed, do not agree to it: report BADGE_REQUIRED.
 - If our product is already listed, report ALREADY_LISTED. If the site is dead or has no submit form, report DEAD or NO_FORM.
 - Choose categories that fit (social media / marketing / creator tools / AI tools). Tick only mandatory terms/privacy boxes, never newsletters.
@@ -321,6 +353,34 @@ def preflight_limits():
         return False
 
 
+def no_answer_reason(res, usage, lim, max_steps, partial=""):
+    """A note that starts with a reason CODE for a run that ended without a status: NO_ANSWER_STEP_LIMIT / NO_ANSWER_TOKEN_LIMIT / NO_ANSWER_BROWSER_ERROR / NO_ANSWER_STOPPED."""
+    steps, err = None, ""
+    try:
+        steps = res.number_of_steps()
+    except Exception:
+        pass
+    try:
+        errs = [str(e) for e in (res.errors() or []) if e]
+        err = scrub(errs[-1])[:70] if errs else ""
+    except Exception:
+        pass
+    tin = tout = 0
+    if isinstance(usage, dict):
+        tin = sum(v for k, v in usage.items() if "input" in str(k).lower() and isinstance(v, (int, float)))
+        tout = sum(v for k, v in usage.items() if "output" in str(k).lower() and isinstance(v, (int, float)))
+    if lim and (tin >= lim[0] * 0.9 or tout >= lim[1] * 0.9):
+        code = "NO_ANSWER_TOKEN_LIMIT"
+    elif steps is not None and steps >= max_steps:
+        code = "NO_ANSWER_STEP_LIMIT"
+    elif err:
+        code = "NO_ANSWER_BROWSER_ERROR"
+    else:
+        code = "NO_ANSWER_STOPPED"
+    tail = (" last error: " + err) if err else (" last text: " + scrub(partial)[:60] if partial else "")
+    return ("%s after %s steps, %d in / %d out tokens.%s" % (code, steps if steps is not None else "?", tin, tout, tail))[:160]
+
+
 async def run_site(site, model, product=None, budget=None):
     from pydantic import BaseModel
     from browser_use import Agent, Browser, ChatAnthropic, Tools
@@ -332,9 +392,9 @@ async def run_site(site, model, product=None, budget=None):
 
     tools = Tools()
 
-    @tools.action("Read the newest confirmation e-mail (code or link) the directory sent to our contact mailbox. Waits up to 90 s.")
-    def read_confirmation_mail() -> str:
-        return read_mail_from_domain(site["url"])
+    @tools.action("Read the newest confirmation e-mail (code or link) the directory sent to our contact mailbox. Waits up to 9 minutes.")
+    async def read_confirmation_mail() -> str:
+        return await read_mail_async(site["url"])
 
     ws = tempfile.mkdtemp(prefix="dirws-")
     if os.path.isdir(ASSET_DIR):
@@ -359,9 +419,15 @@ async def run_site(site, model, product=None, budget=None):
     out = getattr(res, "structured_output", None)
     status = (getattr(out, "status", "") or "OTHER").strip().upper()
     note = (getattr(out, "note", "") or str(res.final_result() or ""))[:160]
-    if status not in RESULT_CODES:
-        status, note = "OTHER", ("unrecognised status; " + note)[:160]
     usage = getattr(res, "usage", None)
+    lim = _CUR_LIMITS.get("tokens")
+    if out is None or not (getattr(out, "status", "") or "").strip():
+        # 25 Nov 2026: 139 log rows said only "fallback after OTHER;": the run ended (step / token limit, browser error) without an answer and the empty note hid why
+        status, note = "OTHER", no_answer_reason(res, usage, lim, MAX_STEPS, note)
+    elif status not in RESULT_CODES:
+        status, note = "OTHER", ("UNRECOGNISED_STATUS %s; %s" % (status[:30], note))[:160]
+    elif not note.strip():
+        note = "NO_NOTE: the model gave status %s without a note" % status
     cost = getattr(res, "cost_usd", None)
     est = False
     if cost is None and isinstance(usage, dict):
@@ -487,6 +553,8 @@ def domain_block(state, dom, today, known_path=None):
     """Why this domain must not be tried at all today (any product, main feed or backfill), or None."""
     if not dom:
         return None
+    if dom.lower().removeprefix("www.") in do_not_touch_domains():
+        return "do not touch: account made outside this robot (sign-up method unknown)"
     k = known_reason(dom, known_path)
     if k is not None:
         return "known site: " + str(k)[:60]
@@ -622,6 +690,150 @@ def follow_proof(site_url, deadline=None):
         return "UNKNOWN", "check failed: " + type(e).__name__
 
 
+# ---- 25 Nov 2026: usability pre-check (25 Nov run = 150 attempts, $2.26; NO_FORM 45, CAPTCHA 45, OTHER 36, DEAD 14, PAID 6). ----
+# Plain HTTP GET of the submit page, no AI, no browser. A site that is dead, behind a bot check, without any form, paid-only or login-with-Google-only never reaches the agent.
+# When the page can't be judged from plain HTML (JS app, unreadable, a timeout) the verdict is UNKNOWN and the site still goes to the agent: this check only removes sure losers.
+USE_KEY = "__usable__"       # inside the state file: {domain: {verdict, date, evidence}}
+USE_DAYS = 14                # every verdict is looked at again after this many days; a DNS failure after 1 day
+USE_BLOCK = {"DEAD", "CAPTCHA", "NO_FORM", "PAID", "SOCIAL_LOGIN_ONLY"}
+USE_CHECKS_PER_RUN = int(os.environ.get("USE_CHECKS_PER_RUN", "120"))
+CAPTCHA_RE = re.compile(r"g-recaptcha|google\.com/recaptcha|recaptcha/api|hcaptcha\.com|h-captcha|cf-turnstile|challenges\.cloudflare\.com/turnstile|"
+                        r"verify you are human|checking your browser before accessing|enable javascript and cookies to continue|<title>\s*just a moment", re.I)
+PAID_ONLY_RE = re.compile(r"paid (listing|submission|placement)s? only|no free (listing|submission|option|plan)|listing fee|submission fee|"
+                          r"(is|are) not free|pay (to|for) (submit|list|get listed)|payment (is )?required|only (offers|offer) paid|free listings? (are|is) (closed|not available)", re.I)
+PRICE_RE = re.compile(r"[$€£]\s?\d{2,4}\b")
+GOOGLE_LOGIN_RE = re.compile(r"(sign|log)\s?in with google|continue with google|sign up with google|login with google|continue with (x|twitter|github)\b", re.I)
+SUBMIT_LINK_RE = re.compile(r"submit|add[-_ ](a[-_ ])?(your[-_ ])?(tool|site|product|startup|app|link|listing)|list[-_ ]your|suggest|get[-_ ]listed|write[-_ ]for[-_ ]us", re.I)
+EMBED_FORM_RE = re.compile(r"tally\.so|typeform\.com|forms\.gle|docs\.google\.com/forms|airtable\.com/(embed|shr)|jotform\.com|formspree|hsforms|wufoo|fillout\.com|paperform", re.I)
+JS_APP_RE = re.compile(r"""id=["'](root|__next|__nuxt|app|svelte)["']|ng-app|data-reactroot|window\.__NUXT__|__NEXT_DATA__""", re.I)
+USE_DEAD_TEXT = re.compile(r"domain (is )?(for sale|expired|parked)|this domain (may be|is) for sale|buy this domain|account suspended", re.I)
+
+
+SIGNUP_WORDS_RE = re.compile(r"sign[ -]?up|register|create (an )?account|submit|add your|list your|get listed|suggest a", re.I)
+INSTANT_RE = re.compile(r"(instantly|immediately|right away|goes live (at once|now|instantly)|published (instantly|immediately)|live (instantly|immediately)|no (review|approval|moderation)|auto[- ]?(publish|approv))", re.I)
+REVIEW_RE = re.compile(r"(review(ed)? (by|within|before)|approved? (by|within|before)|within \d+(-\d+)? (hours|days|business days)|moderat|manual(ly)? (review|approv)|pending (review|approval)|editorial (review|team)|we will (review|check)|queue)", re.I)
+
+
+def submission_speed(text):
+    """'instant' / 'review' / 'unknown' from the words on the submit page (plain text, no AI). Review words win over instant words."""
+    if REVIEW_RE.search(text or ""):
+        return "review"
+    return "instant" if INSTANT_RE.search(text or "") else "unknown"
+
+
+def speed_of(state, dom):
+    ev = ((state.get(USE_KEY) or {}).get(dom) or {}).get("evidence", "")
+    m = re.search(r"speed=(\w+)", ev)
+    return m.group(1) if m else "unknown"
+
+
+def queue_rank(proof_verdict, speed):
+    """0 = followed + goes live at once, 1 = followed, speed not stated, 2 = followed + review queue, 3 = followed not proven (proof UNKNOWN). NOFOLLOW never gets here."""
+    if proof_verdict == "FOLLOWED":
+        return {"instant": 0, "unknown": 1, "review": 2}.get(speed, 1)
+    return 3
+
+
+def _plain_text(body):
+    t = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", body)
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", t))
+
+
+def _get_status(url, _retry=True):
+    """(status, final_url, headers, body). HTTP error codes come back as values; DNS / connection failures as (0, url, {}, error name)."""
+    try:
+        req = Request(url, headers={"User-Agent": PROOF_UA, "Accept": "text/html"})
+        with urlopen(req, timeout=PROOF_TIMEOUT) as r:
+            return r.status, r.geturl(), {k.lower(): v for k, v in r.headers.items()}, r.read(PROOF_MAX_BYTES).decode("utf8", "replace")
+    except HTTPError as e:
+        try:
+            body = e.read(200000).decode("utf8", "replace")
+        except Exception:
+            body = ""
+        return e.code, url, {k.lower(): v for k, v in (e.headers or {}).items()}, body
+    except URLError as e:
+        reason = getattr(e, "reason", None)
+        if _retry and isinstance(reason, socket.gaierror):
+            time.sleep(1.5)
+            return _get_status(url, _retry=False)       # one retry: a single DNS blip is not a dead site
+        return 0, url, {}, ("DNS" if isinstance(reason, socket.gaierror) else (type(reason).__name__ if reason else "URLError"))
+    except Exception as e:
+        return 0, url, {}, type(e).__name__
+
+
+def _has_form(body):
+    return (bool(re.search(r"<form\b", body, re.I)) and bool(re.search(r"<(input|textarea|select)\b", body, re.I))) or bool(EMBED_FORM_RE.search(body))
+
+
+def classify_page(status, final, headers, body, own_domain):
+    """(verdict, evidence) from ONE fetched submit page. verdict: DEAD / CAPTCHA / NO_FORM / PAID / SOCIAL_LOGIN_ONLY / OK / UNKNOWN."""
+    if status == 0:
+        if body in ("DNS", "ConnectionRefusedError"):
+            return "DEAD", "no such site (%s)" % body
+        return "UNKNOWN", "fetch failed (%s)" % body
+    if status in (404, 410):
+        return "DEAD", "HTTP %d" % status
+    if headers.get("cf-mitigated", "").lower() == "challenge" or (status in (403, 429, 503) and CAPTCHA_RE.search(body or "")):
+        return "CAPTCHA", "bot check page (HTTP %d)" % status
+    if status >= 400:
+        return "UNKNOWN", "HTTP %d" % status
+    if own_domain and reg_domain(urlparse(final).hostname or "") != own_domain:
+        return "UNKNOWN", "redirects to another site (%s): the agent looks" % (urlparse(final).hostname or "")   # often a re-brand or a login host, not a dead site
+    text = _plain_text(body)
+    if USE_DEAD_TEXT.search(text[:3000]):
+        return "DEAD", "parked or suspended site"
+    if CAPTCHA_RE.search(body):
+        return "CAPTCHA", "bot-check marker on the submit page"
+    if PAID_ONLY_RE.search(text):
+        return "PAID", "page says the listing is paid only"
+    form = _has_form(body)
+    if not form and not re.search(r"(?i)\bfree\b", text) and PRICE_RE.search(text) and re.search(r"(?i)submit|listing|list your|feature", text):
+        return "PAID", "prices on the submit page and no free option mentioned"
+    has_login_field = bool(re.search(r"""<input[^>]+type=["']?(email|password)""", body, re.I))
+    if GOOGLE_LOGIN_RE.search(text) and not has_login_field and not form:
+        return "SOCIAL_LOGIN_ONLY", "only a Google / X / GitHub login is offered"
+    if form:
+        return "OK", "form on the page; speed=" + submission_speed(text)
+    if JS_APP_RE.search(body):
+        # a JavaScript app draws its forms in the browser: only a page that has real text AND no submit / sign-up wording anywhere is a sure NO_FORM
+        if len(text) < 300 or SIGNUP_WORDS_RE.search(text) or any(SUBMIT_LINK_RE.search(h) for h, _ in _parse(body).links):
+            return "UNKNOWN", "JavaScript app: the form is drawn by the browser"
+    return "NO_FORM", "no form on the page"
+
+
+def usability_check(url, get=None):
+    """(verdict, evidence) for a candidate's submit URL. Never raises. A page with no form that links to a submit page on the SAME site is followed once."""
+    get = get or _get_status
+    try:
+        own = reg_domain(urlparse(url).hostname or "")
+        st, final, hdr, body = get(url)
+        v, ev = classify_page(st, final, hdr, body, own)
+        if v == "NO_FORM":
+            for href, _ in _parse(body).links:
+                u = urljoin(final, href.strip())
+                pu = urlparse(u)
+                if pu.scheme in ("http", "https") and reg_domain(pu.hostname or "") == own and SUBMIT_LINK_RE.search(pu.path) and u.split("#")[0] != final.split("#")[0]:
+                    st2, final2, hdr2, body2 = get(u.split("#")[0])
+                    v2, ev2 = classify_page(st2, final2, hdr2, body2, own)
+                    if v2 != "NO_FORM":
+                        return v2, ev2
+                    break
+            return "NO_FORM", "no form on the page" + (" (e-mail only)" if re.search(r"mailto:", body, re.I) else "")
+        return v, ev
+    except Exception as e:
+        return "UNKNOWN", "check failed: " + type(e).__name__
+
+
+def cached_usable(state, dom, today):
+    c = (state.get(USE_KEY) or {}).get(dom)
+    try:
+        if c and (datetime.date.fromisoformat(today) - datetime.date.fromisoformat(c["date"])).days < (1 if (c.get("verdict") == "DEAD" and "DNS" in str(c.get("evidence", ""))) else USE_DAYS):
+            return c
+    except Exception:
+        pass
+    return None
+
+
 def cached_proof(state, dom, today):
     """The cached verdict dict when it is under PROOF_DAYS old, else None."""
     c = (state.get(PROOF_KEY) or {}).get(dom)
@@ -631,6 +843,84 @@ def cached_proof(state, dom, today):
     except Exception:
         pass
     return None
+
+
+# ---- 25 Nov 2026: ONE list for what truly needs a person: ops/imran_click_list.md (the section between the markers is rewritten every run; the older rows above it are kept) ----
+CLICK_PATH = os.path.join(ROOT, "ops", "imran_click_list.md")
+CLICK_START, CLICK_END = "<!-- CLOUD-AGENT START (rewritten every run) -->", "<!-- CLOUD-AGENT END -->"
+CLICK_STEPS = {
+    "CAPTCHA": "open the submit page in Chrome, solve the check, fill the listing form (facts in data/listings.json), submit",
+    "PHONE_REQUIRED": "decide if we give a phone number; if yes sign up there and submit the listing",
+    "SOCIAL_LOGIN_ONLY": "sign in with Google as contact@inayaflow.ai (allowed), then submit the listing",
+    "PAID": "only a paid listing exists: skip unless Imran says yes to the price",
+    "EMAIL_CODE_NOT_RECEIVED": "open the site, request the login link again in Chrome, then submit the listing",
+}
+
+
+def click_rows(state, today, limit=80):
+    """[(domain, status, why, proof, step)] for sites the robot can never finish: CAPTCHA / PHONE / Google-only / paid. NOFOLLOW_ONLY sites are left out (no value)."""
+    rows = []
+    for k, e in state.items():
+        if not _is_entry(k, e) or "." not in k or e.get("status") not in CLICK_STEPS:
+            continue
+        pr = ((state.get(PROOF_KEY) or {}).get(k) or {}).get("verdict", "NOT_CHECKED")
+        if pr in ("NOFOLLOW_ONLY", "NOINDEX"):
+            continue
+        rows.append((pr != "FOLLOWED", k, e["status"], str(e.get("note", ""))[:80].replace("|", "/"), "followed" if pr == "FOLLOWED" else pr.lower().replace("_", " "), CLICK_STEPS[e["status"]], e.get("url", "")))
+    rows.sort()
+    return [r[1:] for r in rows[:limit]]
+
+
+def write_click_list(state, today, path=None):
+    path = path or CLICK_PATH
+    try:
+        old = open(path, encoding="utf8").read()
+    except OSError:
+        old = "# Directories that need Imran\n\n"
+    if CLICK_START in old and CLICK_END in old:
+        head, tail = old.split(CLICK_START)[0], old.split(CLICK_END, 1)[1]
+    else:
+        head, tail = old.rstrip("\n") + "\n\n", ""
+    lines = [CLICK_START, "## Cloud directory agent: needs a person (updated %s)" % today, "",
+             "The robot never retries these. Followed = proof checked (a listing page links out without nofollow). Do the followed ones first.", "",
+             "| site | submit page | status | why (robot's note) | followed? | exact step |", "|---|---|---|---|---|---|"]
+    for dom, st, why, proof, step, url in click_rows(state, today):
+        lines.append("| %s | %s | %s | %s | %s | %s |" % (dom, url or ("https://" + dom), st, why, proof, step))
+    lines += ["", "Sites signed up in Chrome (Google sign-in or a password Imran typed) are not in this list and the robot never touches them.", CLICK_END]
+    with open(path, "w", encoding="utf8") as f:
+        f.write(head + "\n".join(lines) + tail)
+
+
+NOFOLLOW_LATER_PATH = os.path.join(ROOT, "ops", "nofollow_later.md")
+
+
+def write_nofollow_later(state, today, path=None):
+    """NOFOLLOW - LATER: sites whose proof says every outbound link is nofollow / ugc / sponsored. Never attempted now; kept for later (Imran, 25 Nov 2026)."""
+    path = path or NOFOLLOW_LATER_PATH
+    rows = sorted(d for d, v in (state.get(PROOF_KEY) or {}).items() if v.get("verdict") == "NOFOLLOW_ONLY")
+    with open(path, "w", encoding="utf8") as f:
+        f.write("# NOFOLLOW - LATER (updated %s)\n\nThe robot does not attempt these now: their listing pages carry only nofollow / ugc / sponsored links. %d sites.\n\n| site | proof date | evidence |\n|---|---|---|\n" % (today, len(rows)))
+        for d in rows:
+            v = state[PROOF_KEY][d]
+            f.write("| %s | %s | %s |\n" % (d, v.get("date", ""), str(v.get("evidence", ""))[:100].replace("|", "/")))
+
+
+def run_breakdown(rows, state, stats):
+    """Per run: tried / live-followed-instant / submitted-followed-queue / skipped-nofollow / needs-person. rows = [(site, result)] of the site-level attempts of this run."""
+    tried = len(rows)
+    inst = queue = need = 0
+    for s, r in rows:
+        dom = dom_of(s)
+        pv = ((state.get(PROOF_KEY) or {}).get(dom) or {}).get("verdict")
+        if r.get("status") == "SUBMITTED" and pv == "FOLLOWED":
+            if speed_of(state, dom) == "instant":
+                inst += 1
+            else:
+                queue += 1
+        if r.get("status") in CLICK_STEPS:
+            need += 1
+    return "tried %d | live followed instant %d | submitted followed (queue/unknown speed) %d | skipped nofollow %d | needs person %d" % (
+        tried, inst, queue, (stats or {}).get("skipped_nofollow", 0), need)
 
 
 def needs_director(state, today):
@@ -735,7 +1025,32 @@ def eligible(site, state, old_state, today, vstate=None):
     return True
 
 
-def build_feed(state, old_state, today, vstate=None, stats=None):
+# ---- 25 Nov 2026: resume (Imran: finish a site completely, then the next). A site where the ROBOT already signed up (it knows the derived password) but
+# the confirm mail or the listing is missing comes FIRST in the queue; the task text already says "log in with the same e-mail and password instead of signing up again".
+# Only the robot's own records count: the agent state (it writes only its own sign-ups) and the old Playwright bot's state (same derived password, see reg_domain).
+# Sites signed up in Chrome (Google sign-in or Imran's own password) are NOT here and are never touched; extra robot-made sites can be added by hand in data/resume_sites.json.
+RESUME_STATUSES = ("EMAIL_CODE_NOT_RECEIVED", "UNCONFIRMED")
+RESUME_FILE = os.path.join(ROOT, "ops", "resume_sites.json")   # PRIVATE: restored from imran0786/genie branch ops-directory-logs (names from our mailbox never sit in the public repo)   # {"robot_signed_up": ["domain.com", ...], "sign_up_method_unknown_do_not_touch": [...]}
+
+
+def _resume_domains():
+    d = load_json(RESUME_FILE, {})
+    return {str(x).lower() for x in (d.get("robot_signed_up") or [])} if isinstance(d, dict) else set()
+
+
+def do_not_touch_domains():
+    d = load_json(RESUME_FILE, {})
+    return {str(x).lower().removeprefix("www.") for x in (d.get("sign_up_method_unknown_do_not_touch") or [])} if isinstance(d, dict) else set()
+
+
+def is_resume(site, state, old_state):
+    dom = dom_of(site)
+    e = state.get(dom) or state.get(nkey(site["name"])) or {}
+    o = (old_state or {}).get(site["name"]) or {}
+    return bool(dom in _resume_domains() or e.get("status") in RESUME_STATUSES or o.get("confirm_pending"))
+
+
+def build_feed(state, old_state, today, vstate=None, stats=None, use_get=None):
     cands = candidate_sites(os.path.join(ROOT, "data"))
     feed = []
     # candidates: free_likely + their auto flag first
@@ -757,7 +1072,7 @@ def build_feed(state, old_state, today, vstate=None, stats=None):
     stats = stats if stats is not None else {}
     stats.update({"checked": 0, "FOLLOWED": 0, "NOFOLLOW_ONLY": 0, "NOINDEX": 0, "UNKNOWN": 0})
     cache = state.setdefault(PROOF_KEY, {})
-    t0, kept, verdict = time.time(), [], {}
+    t0, kept, verdict, use_n = time.time(), [], {}, 0
     for s in out:
         dom = dom_of(s)
         c = cached_proof(state, dom, today)
@@ -769,11 +1084,27 @@ def build_feed(state, old_state, today, vstate=None, stats=None):
             stats["checked"] += 1
             stats[v] += 1
         if c["verdict"] in PROOF_BLOCK_VERDICTS:
+            if c["verdict"] == "NOFOLLOW_ONLY":
+                stats["skipped_nofollow"] = stats.get("skipped_nofollow", 0) + 1
+            continue
+        # usability pre-check (25 Nov 2026): a sure loser (dead / bot check / no form / paid only / Google-only login) never reaches the agent
+        u = cached_usable(state, dom, today)
+        if u is None:
+            if use_n >= USE_CHECKS_PER_RUN or time.time() - t0 > PROOF_SECONDS * 2:
+                continue   # waits for the next run
+            v2, ev2 = usability_check(s["url"], use_get)
+            u = state.setdefault(USE_KEY, {})[dom] = {"verdict": v2, "date": today, "evidence": ev2[:160]}
+            use_n += 1
+        if u and u["verdict"] in USE_BLOCK:
+            stats["use_" + u["verdict"]] = stats.get("use_" + u["verdict"], 0) + 1
             continue
         verdict[id(s)] = c["verdict"]
         kept.append(s)
     # stable: confirmed accounts that are FOLLOWED first, then FOLLOWED, then UNKNOWN
-    kept.sort(key=lambda s: (not (boosted(s, state, vstate) and verdict[id(s)] == "FOLLOWED"), PROOF_RANK.get(verdict[id(s)], 1)))
+    kept.sort(key=lambda s: (not is_resume(s, state, old_state), queue_rank(verdict[id(s)], speed_of(state, dom_of(s))), not (boosted(s, state, vstate) and verdict[id(s)] == "FOLLOWED")))
+    for s in kept:
+        if is_resume(s, state, old_state):
+            s["group"] = "resume"
     return kept
 
 
@@ -905,9 +1236,9 @@ def run_one(s, product=None):
             print("directory agent: cost limits are not in force: STOP", flush=True)
             raise
         except asyncio.TimeoutError:
-            r = {"status": "TIMEOUT", "note": "site budget used", "secs": SITE_SECONDS, "cost": None, "cost_estimated": False, "steps": None, "usage": None, "flags": []}
+            r = {"status": "TIMEOUT", "note": "NO_ANSWER_TIME_LIMIT: the site budget of %d s was used" % SITE_SECONDS, "secs": SITE_SECONDS, "cost": None, "cost_estimated": False, "steps": None, "usage": None, "flags": []}
         except Exception as e:
-            r = {"status": "ERROR", "note": type(e).__name__, "secs": 0, "cost": None, "cost_estimated": False, "steps": None, "usage": None, "flags": []}
+            r = {"status": "ERROR", "note": "ERROR_" + type(e).__name__, "secs": 0, "cost": None, "cost_estimated": False, "steps": None, "usage": None, "flags": []}
         r["model"] = model
         if out is not None:  # keep cost of the first try; if EITHER run has no known price the whole attempt is unpriced (booked at the full reserve)
             r["cost"] = None if (r["cost"] is None or out["cost"] is None) else r["cost"] + out["cost"]
@@ -973,7 +1304,7 @@ def main():
         fresh = load_spend()                       # re-read the shared spend file before EVERY attempt (QA round 3)
         for k, v in fresh.items():
             spend[k] = max(float(spend.get(k, 0.0) or 0.0), float(v or 0.0))
-        return time.time() - t_start > RUN_SECONDS or spent_today(spend, today) + ATTEMPT_MAX_USD > USD_CAP
+        return time.time() - t_start > START_BEFORE or spent_today(spend, today) + ATTEMPT_MAX_USD > USD_CAP
 
     def tool_listings(s):
         """Each free tool as its OWN listing on this directory. Stops for the site when it allows one listing per company,
@@ -1022,6 +1353,9 @@ def main():
     left = max(0, untried - (att - att0))
     need = (" | NEEDS MORE CANDIDATES (%d untried left, below 30)" % left) if (not manual and left < 30) else ""
     line = "| %s | attempts %d | tool listings tried %d | successes today %d | cost %.2f USD | untried left %d%s |" % (today, att - att0, tool_att, succ, tot, left, need)
+    line = line.rstrip(" |") + " | %s |" % run_breakdown([(s_, r_) for s_, r_, _c, pn in rows if pn == "homepage"], state, proof_stats)
+    if proof_stats and any(k.startswith("use_") for k in proof_stats):
+        line = line.rstrip(" |") + " | usability pre-check skipped %d (%s) |" % (sum(v for k, v in proof_stats.items() if k.startswith("use_")), ", ".join("%s %d" % (k[4:], v) for k, v in sorted(proof_stats.items()) if k.startswith("use_")))
     if proof_stats:
         line = line.rstrip(" |") + " | proof checked %d (followed %d / nofollow %d / noindex %d / unknown %d) |" % (
             proof_stats["checked"], proof_stats["FOLLOWED"], proof_stats["NOFOLLOW_ONLY"], proof_stats["NOINDEX"], proof_stats["UNKNOWN"])
@@ -1032,6 +1366,8 @@ def main():
         line += " NEEDS DIRECTOR LOOK: " + "; ".join(nd) + " |"
     if not manual and not DRY:
         save()
+        write_click_list(state, today)
+        write_nofollow_later(state, today)
     with open(LOG_PATH, "a", encoding="utf8") as f:
         f.write("\n## %s %s dry=%s primary=%s %s\n| site | product | group | status | model | secs | steps | cost | flags | note |\n|---|---|---|---|---|---|---|---|---|---|\n" % (
             today, datetime.datetime.utcnow().strftime("%H:%M UTC"), DRY, MODEL, "BATCH" if manual else "FEED"))

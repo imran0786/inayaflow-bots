@@ -49,6 +49,7 @@ MIN_GAP_HOURS = float(os.environ.get("MIN_GAP_HOURS", "3"))
 FORCE = os.environ.get("FORCE", "false").strip().lower() == "true"
 OUTBOX_WORK = os.environ.get("OUTBOX_WORK", "/tmp/ops_outbox_batch")
 OWN = "inayaflow.ai"
+RELAXED_FROM = "2026-11-25"   # skips for "topic is not an exact match" made before this day get ONE more look with the relaxed (17-page) check
 
 SKIP_HOSTS = {"github.com", "twitter.com", "x.com", "facebook.com", "linkedin.com", "instagram.com", "youtube.com", "youtu.be",
               "t.me", "discord.gg", "discord.com", "reddit.com", "medium.com", "google.com", "apple.com", "tiktok.com",
@@ -468,7 +469,10 @@ def eligible_prospects(prospects, state, exclude_domains, pri="B"):
         if p.get("pri") != pri or k in seen:
             continue
         seen.add(k)
-        if k in state.get("outreach", {}) or k in exclude_domains or any(c.reg_domain(e.split("@")[-1]) in exclude_domains for e in p.get("emails", [])):
+        prev = state.get("outreach", {}).get(k)
+        seen_before = k in state.get("outreach", {})
+        revive = bool(prev) and prev.get("status") == "skipped" and prev.get("why") == "topic is not an exact match" and str(prev.get("date", "")) < RELAXED_FROM
+        if (seen_before and not revive) or k in exclude_domains or any(c.reg_domain(e.split("@")[-1]) in exclude_domains for e in p.get("emails", [])):
             continue
         if p.get("match") not in MATCH:
             continue
@@ -504,6 +508,38 @@ Answer with strict JSON only:
  "sponsored_or_paid": true|false,   (the page says sponsored / paid placement / "advertise with us to be listed")
  "title": "the article's own title, copied exactly, without the site name, max 14 words",
  "covers": "ONE plain sentence starting with 'It covers', max 18 words, facts from the article only, no praise"}"""
+
+
+# 25 Nov 2026 (board note 24 Nov): the check is relaxed from "the prospect's own topic only" to "any one of our 17 target pages", but it stays HONEST:
+# the model must say the article's MAIN subject is the topic of ONE named page of ours (a passing mention = no match), and that page is the one we pitch.
+TARGET_KEYS = None   # filled lazily: the MATCH keys whose page is in TARGET_PAGES
+
+
+def target_keys():
+    global TARGET_KEYS
+    if TARGET_KEYS is None:
+        TARGET_KEYS = [k for k, v in MATCH.items() if v[0] in TARGET_PAGES]
+    return TARGET_KEYS
+
+
+def topic_menu():
+    return "\n".join("%s = %s" % (k, MATCH[k][1]) for k in target_keys())
+
+
+TOPIC_SYSTEM_MULTI = TOPIC_SYSTEM + """
+ALSO answer "best_page": the KEY (from this list) whose topic is the article's MAIN subject, or "" when none of them is. The key must come from the list; a passing mention is not a match.
+Add "best_page" to the same JSON object. If topic_match is true, best_page may repeat OUR TOPIC's key.
+PAGES OF OURS (key = topic):
+%s"""
+
+
+def judge_page_multi(match, title, text, ai=c.haiku):
+    """Like judge_page, plus "alt": one of our target-page keys the article is REALLY about when it is not about `match` (else '')."""
+    d = c.json_obj(ai(TOPIC_SYSTEM_MULTI % topic_menu(), "OUR TOPIC: %s\n\nARTICLE TITLE TAG: %s\n\nARTICLE TEXT:\n%s" % (MATCH[match][1], title, text), 1000)) or {}
+    best = str(d.get("best_page", "")).strip()
+    return {"match": d.get("topic_match") is True, "sponsored": d.get("sponsored_or_paid") is True,
+            "title": re.sub(r"['\"\n]", "", c.cell(d.get("title", ""), 110)), "covers": c.cell(d.get("covers", ""), 170),
+            "alt": best if best in target_keys() and best != match else ""}
 
 
 def judge_page(match, title, text, ai=c.haiku):
@@ -562,11 +598,13 @@ def prepare_first(p, get=c.http_get, ai=c.haiku):
     to = find_email_on_site(p["emails"], html, final, get)
     if not to:
         return None, "contact address not found on the live site"
-    j = judge_page(p["match"], c.html_title(html), c.html_text(html, 6000), ai)
+    j = judge_page_multi(p["match"], c.html_title(html), c.html_text(html, 6000), ai)
     if j["sponsored"]:
         return None, "page looks sponsored / paid"
     if not j["match"]:
-        return None, "topic is not an exact match"
+        if not j["alt"]:
+            return None, "topic is not an exact match"
+        p = dict(p, match=j["alt"])        # honest re-pointing: the article's main subject is the topic of this other page of ours
     if len(j["title"].split()) < 2:
         return None, "no clean title"
     subject, body = build_email(p["match"], j["title"], j["covers"])
@@ -873,7 +911,7 @@ def main():
         hunt = {}
         try:
             import hunter_ingest as hi
-            done = c.read_tree("ops-jobs", ["jobs/done"], name_has="-hunter-")
+            done = c.read_tree("ops-jobs", ["jobs/done", "jobs/failed"], name_has="-hunter-")   # 25 Nov 2026: a COST_CAP result still holds the verified lines it wrote before it stopped
             prospects = c.read_json(os.path.join(work, PROSPECTS), [])
             excl = {c.reg_domain(l.strip().lower()) for l in c.fetch_file("main", "ops/outreach_domains.txt").splitlines() if l.strip() and not l.startswith("#")}
             ob_idx = outbox_index(c.read_tree("ops-outbox", ["outbox/sent", "outbox/pending", "outbox/failed"]))

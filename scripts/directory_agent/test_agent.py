@@ -482,6 +482,11 @@ class FollowProof(unittest.TestCase):
     """24 Nov 2026: follow-proof pre-check. The network is mocked; nothing here touches the internet."""
     T0 = "2026-11-24"
 
+    def setUp(self):
+        orig = ag.usability_check
+        ag.usability_check = lambda url, get=None: ("UNKNOWN", "not checked in this test")   # these tests are about the follow-proof, not the usability check
+        self.addCleanup(lambda: setattr(ag, "usability_check", orig))
+
     def _site(self, pages):
         """pages: {url: (html, headers)}; installs a fake _http_get, returns the list of fetched urls."""
         fetched = []
@@ -632,7 +637,7 @@ class FollowProof(unittest.TestCase):
         v = {"a.example": "UNKNOWN", "b.example": "FOLLOWED", "c.example": "NOFOLLOW_ONLY", "d.example": "NOINDEX", "e.example": "FOLLOWED"}
         names, stats, st, calls = self._feed(self.SITES, v)
         self.assertEqual(names, ["B", "E", "A"])
-        self.assertEqual(stats, {"checked": 5, "FOLLOWED": 2, "NOFOLLOW_ONLY": 1, "NOINDEX": 1, "UNKNOWN": 1})
+        self.assertEqual(stats, {"checked": 5, "FOLLOWED": 2, "NOFOLLOW_ONLY": 1, "NOINDEX": 1, "UNKNOWN": 1, "skipped_nofollow": 1})
         self.assertEqual(st[ag.PROOF_KEY]["c.example"]["verdict"], "NOFOLLOW_ONLY")
         # second run the same day: all from the cache, no new checks
         names2, stats2, _, calls2 = self._feed(self.SITES, v, state=st)
@@ -665,6 +670,311 @@ class FollowProof(unittest.TestCase):
         self.assertEqual(v, "UNKNOWN")
         self.assertIn("TimeoutError", ev)
         self.assertEqual(ag.follow_proof("")[0], "UNKNOWN")
+
+
+class Usability(unittest.TestCase):
+    """25 Nov 2026: usability pre-check (plain HTTP, no AI) + reasons for runs that end without an answer + mail matching. No network."""
+    T0 = "2026-11-25"
+
+    def chk(self, pages, url="https://dir.example/submit"):
+        def get(u):
+            return pages.get(u, (0, u, {}, "DNS"))
+        return ag.usability_check(url, get)
+
+    def test_dead_dns_404_and_redirect_to_another_site(self):
+        self.assertEqual(self.chk({})[0], "DEAD")
+        self.assertEqual(self.chk({"https://dir.example/submit": (404, "https://dir.example/submit", {}, "nope")})[0], "DEAD")
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://other.example/", {}, "<form><input></form>")})[0], "UNKNOWN")   # a redirect is not proof of a dead site
+
+    def test_captcha_markers_and_cloudflare_challenge(self):
+        page = "<form><input name=a></form><div class='g-recaptcha'></div>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, page)})[0], "CAPTCHA")
+        self.assertEqual(self.chk({"https://dir.example/submit": (403, "https://dir.example/submit", {"cf-mitigated": "challenge"}, "")})[0], "CAPTCHA")
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, "<div class=cf-turnstile></div><form><input></form>")})[0], "CAPTCHA")
+
+    def test_form_is_ok_and_embedded_forms_count(self):
+        ok = "<form action=/s><input name=url><textarea name=d></textarea></form>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, ok)})[0], "OK")
+        emb = "<h1>Submit</h1><iframe src='https://tally.so/embed/abc'></iframe>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, emb)})[0], "OK")
+
+    def test_no_form_mailto_only_and_follow_one_submit_link(self):
+        mail = "<h1>Send us your tool</h1><a href='mailto:hi@dir.example'>mail</a>" + "x " * 400
+        v, ev = self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, mail)})
+        self.assertEqual(v, "NO_FORM")
+        self.assertIn("e-mail only", ev)
+        home = "<a href='/add-your-tool'>add</a>" + "x " * 400
+        tgt = "<form><input name=u></form>"
+        pages = {"https://dir.example/": (200, "https://dir.example/", {}, home), "https://dir.example/add-your-tool": (200, "https://dir.example/add-your-tool", {}, tgt)}
+        self.assertEqual(self.chk(pages, "https://dir.example/")[0], "OK")
+
+    def test_paid_only_and_google_only_login(self):
+        paid = "<p>Paid listing only. Listing fee $49.</p><form><input></form>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, paid)})[0], "PAID")
+        priced = "<h1>Get featured</h1><p>Submit your tool from $99</p>" + "x " * 400
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, priced)})[0], "PAID")
+        free_and_paid = "<h1>Submit</h1><p>Free listing, or featured $99</p><form><input></form>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, free_and_paid)})[0], "OK")
+        goog = "<h1>Log in</h1><button>Continue with Google</button>" + "x " * 400
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, goog)})[0], "SOCIAL_LOGIN_ONLY")
+        both = "<button>Continue with Google</button><form><input type=email><input type=password></form>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, both)})[0], "OK")
+
+    def test_js_app_and_failed_fetch_stay_unknown_so_the_agent_still_tries(self):
+        js = "<div id='root'></div><script>app()</script>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, js)})[0], "UNKNOWN")
+        self.assertEqual(self.chk({"https://dir.example/submit": (500, "https://dir.example/submit", {}, "")})[0], "UNKNOWN")
+        self.assertEqual(self.chk({"https://dir.example/submit": (0, "https://dir.example/submit", {}, "timeout")})[0], "UNKNOWN")
+
+    def _feed(self, verdicts):
+        sites = [{"name": "A", "submit_url": "https://a.example/submit", "usable": True, "free_check": "free_likely"},
+                 {"name": "B", "submit_url": "https://b.example/submit", "usable": True, "free_check": "free_likely"}]
+        o = (ag.candidate_sites, ag.load_json, ag.follow_proof, ag.usability_check)
+        ag.candidate_sites = lambda d: sites
+        ag.load_json = lambda p, d: [] if p.endswith("directories.json") else d
+        ag.follow_proof = lambda u, deadline=None: ("FOLLOWED", "x")
+        calls = []
+
+        def uc(url, get=None):
+            calls.append(url)
+            return verdicts[url]
+        ag.usability_check = uc
+
+        def restore():
+            ag.candidate_sites, ag.load_json, ag.follow_proof, ag.usability_check = o
+        self.addCleanup(restore)
+        state, stats = {}, {}
+        out = ag.build_feed(state, {}, self.T0, {}, stats)
+        return [s["name"] for s in out], state, stats, calls
+
+    def test_feed_drops_sure_losers_caches_the_verdict_and_never_rechecks_inside_the_window(self):
+        names, state, stats, calls = self._feed({"https://a.example/submit": ("CAPTCHA", "bot-check marker"), "https://b.example/submit": ("OK", "form")})
+        self.assertEqual(names, ["B"])
+        self.assertEqual(stats["use_CAPTCHA"], 1)
+        self.assertEqual(state[ag.USE_KEY]["a.example"]["verdict"], "CAPTCHA")
+        names2 = [s["name"] for s in ag.build_feed(state, {}, "2026-11-26", {}, {})]
+        self.assertEqual(names2, ["B"])
+        self.assertEqual(len(calls), 2)
+        self.assertIsNone(ag.cached_usable(state, "a.example", "2026-12-10"))
+
+    def test_unknown_goes_to_the_agent(self):
+        names, _, _, _ = self._feed({"https://a.example/submit": ("UNKNOWN", "JS app"), "https://b.example/submit": ("DEAD", "x")})
+        self.assertEqual(names, ["A"])
+
+    def test_blocked_verdicts_cover_the_25_nov_failure_mix(self):
+        self.assertTrue({"NO_FORM", "CAPTCHA", "DEAD", "PAID", "SOCIAL_LOGIN_ONLY"} <= ag.USE_BLOCK)
+
+    class _Res:
+        def __init__(self, steps=3, errors=()):
+            self._s, self._e = steps, list(errors)
+
+        def number_of_steps(self):
+            return self._s
+
+        def errors(self):
+            return self._e
+
+    def test_no_answer_always_has_a_reason_code(self):
+        r = ag.no_answer_reason(self._Res(40), {"input_tokens": 100, "output_tokens": 5}, (50000, 9000), 40)
+        self.assertTrue(r.startswith("NO_ANSWER_STEP_LIMIT"), r)
+        r = ag.no_answer_reason(self._Res(7), {"input_tokens": 49000, "output_tokens": 5}, (50000, 9000), 40)
+        self.assertTrue(r.startswith("NO_ANSWER_TOKEN_LIMIT"), r)
+        r = ag.no_answer_reason(self._Res(5, [None, "TimeoutError: page https://x.example failed"]), {"input_tokens": 10, "output_tokens": 1}, (50000, 9000), 40)
+        self.assertTrue(r.startswith("NO_ANSWER_BROWSER_ERROR"), r)
+        self.assertNotIn("https://", r)
+        r = ag.no_answer_reason(self._Res(5), {}, None, 40)
+        self.assertTrue(r.startswith("NO_ANSWER_STOPPED"), r)
+        self.assertLessEqual(len(r), 160)
+
+    def test_confirm_mail_matches_the_site_or_a_mailer_sending_for_it(self):
+        self.assertTrue(ag.mail_is_from_site("mail.dir.example", "hello", "dir.example"))
+        self.assertTrue(ag.mail_is_from_site("sendgrid.net", "Click https://dir.example/verify?token=abc", "dir.example"))
+        self.assertFalse(ag.mail_is_from_site("sendgrid.net", "Click https://other.example/verify?token=abc", "dir.example"))
+        self.assertGreaterEqual(ag.MAIL_WAIT, 240)
+
+    def test_task_says_prefer_email_signup_and_finish_in_the_same_session(self):
+        t = ag.build_task({"name": "Dir", "url": "https://dir.example/submit"})
+        self.assertIn("always use the e-mail option", t)
+        self.assertIn("THIS browser session", t)
+
+
+def f_path(mod):
+    return mod.RESUME_FILE
+
+
+class ClickListAndResume(unittest.TestCase):
+    def chk(self, pages, url="https://dir.example/submit"):
+        return ag.usability_check(url, lambda u: pages.get(u, (0, u, {}, "DNS")))
+
+    def test_click_list_keeps_old_rows_lists_followed_first_and_skips_nofollow(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        path = os.path.join(d, "imran_click_list.md")
+        open(path, "w", encoding="utf8").write("# Directories that need Imran\n\n| old row |\n")
+        st = {"a.example": {"name": "A", "status": "CAPTCHA", "note": "turnstile", "url": "https://a.example/submit"},
+              "b.example": {"name": "B", "status": "PHONE_REQUIRED", "note": "phone", "url": "https://b.example/s"},
+              "c.example": {"name": "C", "status": "CAPTCHA", "note": "x"}, "d.example": {"name": "D", "status": "SUBMITTED"},
+              ag.PROOF_KEY: {"a.example": {"verdict": "FOLLOWED"}, "b.example": {"verdict": "UNKNOWN"}, "c.example": {"verdict": "NOFOLLOW_ONLY"}}}
+        ag.write_click_list(st, "2026-11-25", path)
+        ag.write_click_list(st, "2026-11-25", path)           # twice: the section is replaced, not doubled
+        t = open(path, encoding="utf8").read()
+        self.assertIn("| old row |", t)
+        self.assertEqual(t.count(ag.CLICK_START), 1)
+        self.assertLess(t.index("a.example"), t.index("b.example"))   # followed first
+        self.assertNotIn("c.example", t)                              # nofollow-only: not worth a person
+        self.assertNotIn("d.example", t)                              # submitted: nothing to do
+        self.assertIn("exact step", t)
+
+    def _resume_file(self, robot=(), dnt=()):
+        import tempfile
+        f = os.path.join(tempfile.mkdtemp(), "resume_sites.json")
+        json.dump({"robot_signed_up": list(robot), "sign_up_method_unknown_do_not_touch": list(dnt)}, open(f, "w"))
+        saved = ag.RESUME_FILE
+        ag.RESUME_FILE = f
+        self.addCleanup(lambda: setattr(ag, "RESUME_FILE", saved))
+
+    def test_resume_sites_go_first(self):
+        self._resume_file()
+        a = {"name": "A", "url": "https://a.example/submit"}
+        b = {"name": "B", "url": "https://b.example/submit"}
+        st = {"a.example": {"name": "A", "status": "EMAIL_CODE_NOT_RECEIVED", "date": "2026-11-20"}}
+        self.assertTrue(ag.is_resume(a, st, {}))
+        self.assertFalse(ag.is_resume(b, st, {}))
+        self.assertTrue(ag.is_resume(b, {}, {"B": {"confirm_pending": True}}))
+
+    def test_do_not_touch_domains_are_never_in_the_feed_even_as_candidates(self):
+        self._resume_file(dnt=["shipboost.io", "www.sitepatent.com"])
+        self.assertTrue(ag.domain_block({}, "shipboost.io", "2026-11-25").startswith("do not touch"))
+        self.assertTrue(ag.domain_block({}, "sitepatent.com", "2026-11-25").startswith("do not touch"))
+        self.assertIsNone(ag.domain_block({}, "other.example", "2026-11-25"))
+        site = {"name": "ShipBoost", "url": "https://shipboost.io/submit"}
+        self.assertFalse(ag.eligible(site, {}, {}, "2026-11-25"))
+        orig = (ag.candidate_sites, ag.load_json, ag.follow_proof, ag.usability_check)
+        ag.candidate_sites = lambda d: [{"name": "ShipBoost", "submit_url": "https://shipboost.io/submit", "usable": True, "free_check": "free_likely"},
+                                        {"name": "Fine", "submit_url": "https://fine.example/submit", "usable": True, "free_check": "free_likely"}]
+        ag.load_json = lambda path, d: [] if str(path).endswith("directories.json") else (orig[1](path, d) if path == f_path(ag) else d)
+        ag.follow_proof = lambda u, deadline=None: ("FOLLOWED", "x")
+        ag.usability_check = lambda u, get=None: ("OK", "form; speed=unknown")
+
+        def restore():
+            ag.candidate_sites, ag.load_json, ag.follow_proof, ag.usability_check = orig
+        self.addCleanup(restore)
+        names = [x["name"] for x in ag.build_feed({}, {}, "2026-11-25", {}, {})]
+        self.assertEqual(names, ["Fine"])
+
+    def test_the_shipped_public_repo_has_no_resume_file(self):
+        self.assertFalse(os.path.exists(os.path.join(ag.ROOT, "data", "resume_sites.json")))
+        wf = open(os.path.join(ag.ROOT, ".github", "workflows", "directory-agent.yml"), encoding="utf8").read()
+        self.assertEqual(wf.count("resume_sites.json"), 2)                          # restored from and saved to the private branch
+
+    def test_a_resume_site_cannot_be_retried_endlessly(self):
+        self._resume_file(robot=["a.example"])
+        site = {"name": "A", "url": "https://a.example/submit"}
+        st = {"a.example": {"name": "A", "status": "EMAIL_CODE_NOT_RECEIVED", "date": "2026-11-20", "tries": 2}}
+        self.assertTrue(ag.is_resume(site, st, {}))
+        self.assertFalse(ag.eligible(site, st, {}, "2026-11-25"))                   # 2 tries used: the fail counter stops it, resume only changes the ORDER
+        st2 = {"a.example": {"name": "A", "status": "EMAIL_CODE_NOT_RECEIVED", "date": "2026-11-24", "tries": 1}}
+        self.assertFalse(ag.eligible(site, st2, {}, "2026-11-25"))                  # and not twice inside 3 days
+        st3 = {"a.example": {"name": "A", "status": "OTHER", "date": "2026-11-20", "tries": 1}}
+        ag.note_soft(st3, "a.example", "OTHER", "2026-11-20")
+        ag.note_soft(st3, "a.example", "OTHER", "2026-11-21")
+        self.assertIn("parked", ag.domain_block(st3, "a.example", "2026-11-25") or "")
+
+    def test_confirm_links_only_from_the_sites_own_domain(self):
+        text = ("Confirm: https://dir.example/verify?token=abc and https://click.mailer.net/track?u=https%3A%2F%2Fevil.example%2Fconfirm "
+                "and https://evil.example/confirm?token=1 and https://www.dir.example/auth/login?code=9")
+        self.assertEqual(ag.confirm_links(text, "dir.example"), ["https://dir.example/verify?token=abc", "https://www.dir.example/auth/login?code=9"])
+        self.assertEqual(ag.confirm_links("https://evil.example/confirm?token=1", "dir.example"), [])
+
+    def test_dns_is_retried_once_and_a_dns_verdict_is_cached_one_day_only(self):
+        import socket, urllib.error
+        calls = []
+        orig = ag.urlopen
+
+        def boom(req, timeout=0):
+            calls.append(1)
+            raise urllib.error.URLError(socket.gaierror(-2, "no such host"))
+        ag.urlopen = boom
+        orig_sleep = ag.time.sleep
+        ag.time.sleep = lambda x: None
+        self.addCleanup(lambda: (setattr(ag, "urlopen", orig), setattr(ag.time, "sleep", orig_sleep)))
+        st = ag._get_status("https://nope.example/")
+        self.assertEqual((st[0], st[3], len(calls)), (0, "DNS", 2))                  # tried twice
+        state = {ag.USE_KEY: {"d.example": {"verdict": "DEAD", "date": "2026-11-24", "evidence": "no such site (DNS)"},
+                              "g.example": {"verdict": "DEAD", "date": "2026-11-24", "evidence": "HTTP 404"}}}
+        self.assertIsNone(ag.cached_usable(state, "d.example", "2026-11-25"))        # DNS: looked at again after 1 day
+        self.assertIsNotNone(ag.cached_usable(state, "g.example", "2026-11-25"))
+
+    def test_js_app_without_a_form_is_no_form_only_when_nothing_offers_a_submit(self):
+        shell = "<div id='root'></div>" + "<p>About us and our team and news. </p>" * 30
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, shell)})[0], "NO_FORM")
+        with_link = shell + "<a href='/pricing'>Sign up free</a>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, with_link)})[0], "UNKNOWN")
+        with_href = shell + "<a href='/submit-your-tool'>go</a>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, with_href)})[0], "UNKNOWN")
+        empty_shell = "<div id='root'></div><script src=app.js></script>"
+        self.assertEqual(self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, empty_shell)})[0], "UNKNOWN")
+
+    def test_the_confirm_mail_tool_does_not_block_the_event_loop(self):
+        import asyncio, time as _t
+        orig = ag.read_mail_from_domain
+        ag.read_mail_from_domain = lambda url, wait=None: (_t.sleep(0.4), "MAIL FOUND")[1]      # a blocking poll
+        self.addCleanup(lambda: setattr(ag, "read_mail_from_domain", orig))
+        ticks = []
+
+        async def ticker():
+            for _ in range(8):
+                ticks.append(1)
+                await asyncio.sleep(0.04)
+
+        async def go():
+            t = asyncio.create_task(ticker())
+            r = await ag.read_mail_async("https://dir.example/s")
+            await t
+            return r
+        self.assertEqual(asyncio.run(go()), "MAIL FOUND")
+        self.assertEqual(len(ticks), 8)                                              # the loop kept ticking while the mail poll waited
+        self.assertTrue(asyncio.iscoroutinefunction(ag.read_mail_async))
+
+    def test_one_attempt_always_fits_the_workflow_timeout(self):
+        self.assertEqual((ag.SITE_SECONDS, ag.MAIL_WAIT, ag.RUN_SECONDS), (900, 540, 8400))
+        self.assertLess(ag.MAIL_WAIT + 120, ag.SITE_SECONDS)                         # the mail wait fits inside one model run
+        self.assertEqual(ag.START_BEFORE, 8400 - 2 * 900)
+        self.assertLessEqual(ag.START_BEFORE + 2 * ag.SITE_SECONDS, 150 * 60)         # latest start + primary + fallback ends inside the 150-minute step timeout
+        wf = open(os.path.join(ag.ROOT, ".github", "workflows", "directory-agent.yml"), encoding="utf8").read()
+        self.assertIn("timeout-minutes: 150", wf)
+        self.assertIn('RUN_SECONDS: "8400"', wf)
+
+
+class QueueOrder(unittest.TestCase):
+    def test_speed_words(self):
+        self.assertEqual(ag.submission_speed("Your tool goes live instantly after you submit"), "instant")
+        self.assertEqual(ag.submission_speed("We review every tool within 3 days; goes live after approval"), "review")
+        self.assertEqual(ag.submission_speed("Submit your tool"), "unknown")
+
+    def test_ok_pages_carry_the_speed_and_the_rank_orders_the_queue(self):
+        page = "<h1>Submit</h1><p>Published immediately.</p><form><input></form>"
+        v, ev = ag.classify_page(200, "https://d.example/s", {}, page, "d.example")
+        self.assertEqual((v, "speed=instant" in ev), ("OK", True))
+        st = {ag.USE_KEY: {"i.example": {"evidence": "form on the page; speed=instant"}, "r.example": {"evidence": "form on the page; speed=review"}}}
+        self.assertEqual(ag.speed_of(st, "i.example"), "instant")
+        ranks = [ag.queue_rank("FOLLOWED", "instant"), ag.queue_rank("FOLLOWED", "unknown"), ag.queue_rank("FOLLOWED", "review"), ag.queue_rank("UNKNOWN", "instant")]
+        self.assertEqual(ranks, sorted(ranks))
+        self.assertEqual(ranks, [0, 1, 2, 3])
+
+    def test_summary_breakdown_and_nofollow_later_file(self):
+        import tempfile
+        st = {ag.PROOF_KEY: {"a.example": {"verdict": "FOLLOWED"}, "b.example": {"verdict": "FOLLOWED"}, "n.example": {"verdict": "NOFOLLOW_ONLY", "date": "2026-11-25", "evidence": "x"}},
+              ag.USE_KEY: {"a.example": {"evidence": "form; speed=instant"}, "b.example": {"evidence": "form; speed=review"}}}
+        rows = [({"name": "A", "url": "https://a.example/s"}, {"status": "SUBMITTED"}), ({"name": "B", "url": "https://b.example/s"}, {"status": "SUBMITTED"}),
+                ({"name": "C", "url": "https://c.example/s"}, {"status": "CAPTCHA"})]
+        line = ag.run_breakdown(rows, st, {"skipped_nofollow": 4})
+        self.assertEqual(line, "tried 3 | live followed instant 1 | submitted followed (queue/unknown speed) 1 | skipped nofollow 4 | needs person 1")
+        path = os.path.join(tempfile.mkdtemp(), "nofollow_later.md")
+        ag.write_nofollow_later(st, "2026-11-25", path)
+        t = open(path, encoding="utf8").read()
+        self.assertIn("n.example", t)
+        self.assertNotIn("a.example", t)
 
 
 if __name__ == "__main__":
