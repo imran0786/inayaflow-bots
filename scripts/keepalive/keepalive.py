@@ -142,6 +142,8 @@ def flag(interval, runs, now, wf=""):
     if stuck_busy(wf, runs, now):
         return "RED (stuck)"
     if wf in SLOTS:
+        if any(r.get("status") in BUSY for r in runs):      # a fresh busy run (the heartbeat legitimately runs 5h40m) is a run in progress: ok (a stuck one returned RED above)
+            return "ok"
         slot = last_slot(SLOTS[wf], now)
         late = slot is not None and (now - slot).total_seconds() > 2 * SLOT_GRACE_MIN * 60 and (nr is None or parse_time(nr["created_at"]) < slot)
         return "RED (missed slot)" if late else "ok"

@@ -65,7 +65,7 @@ class Extractors(unittest.TestCase):
     def test_directory_counts_real_submissions_and_new_live(self):
         ev = oa.directory_events(AGENT, LIVE)
         self.assertEqual(oa.within(ev, NOW, 24), 14 + 1 + 1)      # 24 Nov highest "successes today" (14, noon 24 h ago) + 25 Nov (1) + a.com first seen live 25 Nov
-        self.assertEqual(oa.within(ev, NOW, 12), 1 + 1)           # only today's date-only rows are inside 12 h
+        self.assertEqual(oa.within(ev, NOW, 12), 14 + 1 + 1)      # date-only rows count for their whole UTC day: a 12 h window reaches back to yesterday noon - 12 h
         early = datetime.datetime(2026, 11, 25, 8, 0, tzinfo=UTC)  # before noon: today's date-only rows still count at once
         self.assertEqual(oa.within(ev, early, 24), 14 + 1 + 1)
 
@@ -136,6 +136,58 @@ class Table(unittest.TestCase):
         self.assertEqual([x["t"] for x in s], ["2026-11-25 11:30", "2026-11-25 12:00"])
         s2 = oa.update_snapshots(s, NOW + datetime.timedelta(minutes=10), 92)
         self.assertEqual(len(s2), 2)                                              # same hour: no second snapshot
+
+
+class DateOnlyAndOff(unittest.TestCase):
+    def test_date_only_row_is_not_a_false_broken_late_in_the_day(self):
+        late = datetime.datetime(2026, 11, 26, 11, 0, tzinfo=UTC)         # yesterday's post (25 Nov) is 23 h old at noon-based timing, 35 h by the old count
+        ev = oa.published_events(PLAT_OK)                                  # dated 2026-11-25
+        self.assertEqual(oa.within(ev, late, 24), 1)
+        self.assertEqual(oa.within(ev, datetime.datetime(2026, 11, 27, 1, 0, tzinfo=UTC), 24), 0)   # 61 h by the day-noon: gone
+
+    def inputs(self):
+        return {"batch_log": BATCH, "outbox_sent": SENT, "agent_summary": AGENT, "live_links": LIVE, "platform_log": PLAT_FAIL, "dev_log": PLAT_FAIL,
+                "cand_sonnet": cand([{"added": "2026-11-25", "found_by": "sonnet"}]), "cand_deepseek": "", "prospects": json.dumps([{"n": 1}] * 91)}
+
+    def test_off_robots_are_never_broken(self):
+        off = {"DEV poster": "switch DEV_POSTER_LIVE not true", "Platform poster": "switch PLATFORM_POSTER_LIVE not true", "List builder (DeepSeek)": "key not set"}
+        text, s, _ = oa.build(self.inputs(), NOW, {}, [], off)
+        self.assertEqual(s["broken24"], [])
+        self.assertEqual(s["broken48"], [])
+        self.assertIn("OFF (key not set)", text)
+        self.assertNotIn("**BROKEN", text)
+        self.assertTrue(text.startswith("## ROBOT OUTPUT: every robot"))
+
+    def test_off_robot_with_output_shows_its_output(self):
+        text, s, _ = oa.build(dict(self.inputs(), platform_log=PLAT_OK), NOW, {}, [], {"Platform poster": "x"})
+        self.assertIn("| Platform poster | unknown | 1 |", text)
+        self.assertIn("ok", text.split("| Platform poster")[1].split("\n")[0])
+
+    def test_switch_states_from_variables_and_log(self):
+        import urllib.error, io
+        def api_get(path, token):
+            if path.endswith("DEV_POSTER_LIVE"):
+                return {"value": "false"}
+            if path.endswith("PLATFORM_POSTER_LIVE"):
+                return {"value": "true"}
+        out = oa.switch_states("t", api_get, lambda wf, tok: "x\nlist-builder-deepseek: no key, skipped\n")
+        self.assertEqual(sorted(out), ["DEV poster", "List builder (DeepSeek)"])
+
+        def forbidden(path, token):
+            raise urllib.error.HTTPError("u", 403, "x", {}, io.BytesIO(b""))
+        out = oa.switch_states("t", forbidden, lambda wf, tok: "")
+        self.assertEqual(out, {})                                          # token cannot read variables: unknown, NOT called off
+
+        def missing(path, token):
+            raise urllib.error.HTTPError("u", 404, "x", {}, io.BytesIO(b""))
+        self.assertIn("DEV poster", oa.switch_states("t", missing, lambda wf, tok: ""))   # variable not set = off
+
+    def test_error_block_goes_to_the_very_top(self):
+        import action_tracker as at
+        rep = at.put_on_top("# Inbox + backlinks report\n\nbody\n", at.mail_health([]) + "\n" + at.action_block([]))
+        out = at.put_on_top(rep, oa.error_block(ValueError("secret")))
+        self.assertTrue(out.split("\n")[2].startswith("> OUTPUT ALARM SECTION ERROR"))
+        self.assertNotIn("secret", out)
 
 
 class Fixtures(unittest.TestCase):

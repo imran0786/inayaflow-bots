@@ -36,6 +36,7 @@ jobs:
       - name: Nudge robots every 10 minutes for ~5h40m
         shell: bash {0}     # NOT bash -e: one failed API call must never end the loop
         run: |
+          echo "LOOP_START=$(date +%s)" >> "$GITHUB_ENV"
           busy() { gh run list --repo "$REPO" --workflow "$1" --limit 5 --json status --jq '[.[]|select(.status=="in_progress" or .status=="queued")]|length'; }
           ran_today() { gh run list --repo "$REPO" --workflow "$1" --limit 20 --json createdAt,event --jq "[.[]|select(.createdAt|startswith(\"$(date -u +%F)\"))]|length"; }
           nudge() { if [ "$(busy "$1")" = "0" ]; then gh workflow run "$1" --repo "$REPO" --ref main "${@:2}" >/dev/null 2>&1 || { sleep 5; gh workflow run "$1" --repo "$REPO" --ref main "${@:2}" >/dev/null 2>&1; } && echo "$(date -u +%H:%M) started $1" || echo "$(date -u +%H:%M) could not start $1 (GitHub API error, will try again in 10 min)"; else echo "$(date -u +%H:%M) $1 already running"; fi; }
@@ -71,6 +72,8 @@ jobs:
         if: always()
         shell: bash {0}
         run: |
+          # a loop that died within ~10 minutes must NOT restart itself (tight failure cycle): leave it to keep-alive (3-hour slot)
+          if [ $(( $(date +%s) - ${LOOP_START:-$(date +%s)} )) -lt 600 ]; then echo "loop ran under 10 minutes: not restarting, keep-alive will"; exit 0; fi
           for i in 1 2 3 4 5 6; do
             if gh workflow run heartbeat.yml --repo "$REPO" --ref main; then echo "restarted heartbeat"; exit 0; fi
             echo "restart attempt $i failed, waiting"; sleep 30

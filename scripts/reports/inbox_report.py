@@ -323,6 +323,14 @@ def prune_history(d, keep=80):
         os.remove(os.path.join(d, n))
 
 
+def oa_error_block(exc):
+    try:
+        import output_alarms as oa
+        return oa.error_block(exc)
+    except Exception:
+        return "> OUTPUT ALARM SECTION ERROR: not built this run (%s). The robot output table is missing; do not read this report as 'all ok'." % type(exc).__name__
+
+
 def at_put_on_top(report, block):
     import action_tracker as at
     return at.put_on_top(report, block)
@@ -366,14 +374,19 @@ def main():
             import output_alarms as oa
             tnow = c.now()
             snaps = (c.read_json(os.path.join(work, oa.SNAP_FILE), {}) or {}).get("snaps", [])
-            block, osum, new_snaps = oa.build(oa.read_inputs(), tnow, oa.run_ages(os.environ.get("GITHUB_TOKEN", ""), tnow), snaps)
+            tok = os.environ.get("GITHUB_TOKEN", "")
+            try:
+                offs = oa.switch_states(tok)
+            except Exception:
+                offs = {}
+            block, osum, new_snaps = oa.build(oa.read_inputs(), tnow, oa.run_ages(tok, tnow), snaps, offs)
             report = at_put_on_top(report, block)
             n["robots_red"] = n.get("robots_red", 0) + len(osum["broken48"])
             if not c.DRY:
                 c.write_json(os.path.join(work, oa.SNAP_FILE), {"snaps": new_snaps})
             print("output alarms: broken24=%d broken48=%d unknown=%d" % (len(osum["broken24"]), len(osum["broken48"]), len(osum["unknown"])))
         except Exception as e:
-            report = report.replace("\n", "\n\n> OUTPUT ALARM SECTION ERROR: not built this run (%s).\n" % type(e).__name__, 1)
+            report = at_put_on_top(report, oa_error_block(e))
             print("output alarms: FAILED %s" % type(e).__name__)
         save_ai_used(work, used_before, c.USAGE["calls"])
         c.write_text(latest, report)

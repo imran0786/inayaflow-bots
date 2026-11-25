@@ -182,6 +182,13 @@ class Slots(unittest.TestCase):
         self.assertEqual(k.flag(1440, [self.r(now, 1, 9, 45)], now, "platform-poster.yml"), "RED (missed slot)")
         self.assertEqual(k.flag(1440, [self.r(now, 0, 9, 50)], now, "platform-poster.yml"), "ok")
 
+    def test_fresh_busy_heartbeat_is_not_red(self):
+        now = self.at(10, 30)
+        busy = dict(self.r(now, 0, 8, 20), status="in_progress", conclusion=None)      # heartbeat started 08:20, slot 09:11 passed, still running (5h40m job)
+        self.assertEqual(k.flag(180, [busy, self.r(now, 1, 5, 0)], now, "heartbeat.yml"), "ok")
+        old = dict(self.r(now, 1, 0, 0), status="in_progress", conclusion=None)       # stuck for 34 h = RED
+        self.assertEqual(k.flag(180, [old], now, "heartbeat.yml"), "RED (stuck)")
+
     def test_new_robots_are_on_the_list_with_safe_inputs(self):
         inputs = {f: i for f, _, i in k.ROBOTS}
         self.assertEqual(inputs["list-builder-deepseek.yml"], {"dry_run": "false"})
@@ -248,6 +255,12 @@ class Heartbeat(unittest.TestCase):
         self.assertIn("shell: bash {0}", self.t)
         self.assertNotIn("shell: bash -e", self.t)
         self.assertIn("could not start", self.t)
+
+    def test_no_tight_restart_cycle(self):
+        self.assertIn("LOOP_START=", self.t)
+        i = self.t.index("Restart the heartbeat (always")
+        self.assertIn("-lt 600", self.t[i:])
+        self.assertIn("not restarting", self.t[i:])
 
     def test_restart_is_its_own_always_step(self):
         i = self.t.index("Restart the heartbeat (always")

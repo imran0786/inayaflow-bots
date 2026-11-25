@@ -6,12 +6,14 @@ top of the 3-hourly ops report: one row per robot, last run, output in the last 
 Reads only the robots' own log files (private repo ops-* branches, the public data/ files). No secrets, nothing sent, nothing written
 except the small snapshot file ops/output_snapshots.json on the report branch (used for the hunter, whose rows carry no date).
 Public output rule: counts only (this module prints nothing itself).
-Date-only log rows (platform / DEV / LIVE-link / candidate dates) count at 12:00 UTC of that day; rows with a time count at that time.
+Date-only log rows (platform / DEV / LIVE-link / candidate dates) count for their whole UTC day (12:00 UTC +-12 h, so the 24 h window is really 36 h for them); rows with a time count at that time.
+A robot that is OFF on purpose (switch variable not 'true', or no API key) shows OFF, never BROKEN, and is not counted in robots_red.
 """
 import datetime as _dt
 import json
 import os
 import re
+import urllib.error
 
 import common as c
 
@@ -61,7 +63,8 @@ def within(events, now, hours):
             continue
         if t.microsecond == 1 and t > now and t.date() == now.date():
             t = now                                    # a date-only row of TODAY counts at once (it cannot be older than now)
-        if lim <= t <= now + _dt.timedelta(minutes=5):
+        floor = lim - _dt.timedelta(hours=12) if t.microsecond == 1 else lim     # date-only rows count for their whole UTC day (36 h / 60 h windows)
+        if floor <= t <= now + _dt.timedelta(minutes=5):
             tot += n
     return tot
 
@@ -175,10 +178,11 @@ def _status(o24, o48):
     return "BROKEN (0 output for 24 hours)"
 
 
-def build(inputs, now, ages=None, snaps=None):
+def build(inputs, now, ages=None, snaps=None, off=None):
     """-> (markdown, summary dict, new snapshots list). `ages` = {workflow file: minutes since newest run or None}."""
     ages = ages or {}
     snaps = snaps or []
+    off = off or {}
     sent = inputs.get("outbox_sent") or {}
     ev = {
         0: outreach_events(inputs.get("batch_log", ""), sent) if (inputs.get("batch_log") or sent) else None,
@@ -208,13 +212,15 @@ def build(inputs, now, ages=None, snaps=None):
         elif ev[i] is not None:
             o24, o48 = within(ev[i], now, H24), within(ev[i], now, H48)
         st = _status(o24, o48)
+        if off.get(label) and not (o24 or 0) > 0:
+            st = "OFF (%s)" % off[label]
         if st.startswith("BROKEN 48h"):
             broken48.append(label)
         if st.startswith("BROKEN"):
             broken24.append(label)
         if st.startswith("UNKNOWN"):
             unknown.append(label)
-        rows.append((label, ages, wfs, "UNKNOWN" if o24 is None else str(o24), unit + (" (48 h: %d)" % o48 if o48 is not None else "") + ("; " + note if note else ""), st))
+        rows.append((label, ages, wfs, "UNKNOWN" if o24 is None and not off.get(label) else str(o24 or 0), unit + (" (48 h: %d)" % o48 if o48 is not None else "") + ("; " + note if note else ""), st))
     L = []
     if broken24:
         L.append("## ROBOT OUTPUT ALARM: %d robot(s) BROKEN (0 output in 24 h): %s" % (len(broken24), "; ".join(broken24)))
@@ -222,7 +228,7 @@ def build(inputs, now, ages=None, snaps=None):
         L.append("## ROBOT OUTPUT: every robot produced something in the last 24 h" + (" (not readable: %s)" % "; ".join(unknown) if unknown else ""))
     if broken48:
         L += ["", "ROBOT HEALTH RED: %d robot(s) with 0 output for 48 hours: %s" % (len(broken48), "; ".join(broken48))]
-    L += ["", "Judged by OUTPUT, not by a green run. 'Last 24 h' = real units below. Date-only logs count at 12:00 UTC.", "",
+    L += ["", "Judged by OUTPUT, not by a green run. 'Last 24 h' = real units below. Date-only logs count for their whole UTC day (36 h window). OFF = switched off on purpose, not broken.", "",
           "| Robot | Last run | Output, last 24 h | What is counted | Status |", "|---|---|---|---|---|"]
     for label, a, wfs, out, unit, st in rows:
         m = a.get(wfs[0])
@@ -230,6 +236,87 @@ def build(inputs, now, ages=None, snaps=None):
         L.append("| %s | %s | %s | %s | %s |" % (label, last, out, unit, st if st == "ok" else "**%s**" % st))
     L.append("")
     return "\n".join(L), {"broken24": broken24, "broken48": broken48, "unknown": unknown}, new_snaps
+
+
+OFF_RULES = {      # label -> ("var", repo variable) or ("log", workflow file, text in its newest run log)
+    "DEV poster": ("var", "DEV_POSTER_LIVE"),
+    "Platform poster": ("var", "PLATFORM_POSTER_LIVE"),
+    "List builder (DeepSeek)": ("log", "list-builder-deepseek.yml", "no key, skipped"),
+}
+
+
+def _ka():
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "keepalive"))
+    import keepalive
+    return keepalive
+
+
+def _repo():
+    return _ka().REPO
+
+
+def _api_get(path, token):
+    return _ka().api("GET", path, token)
+
+
+def _newest_log_text(wf, token):
+    """Log text of the newest run's first job ('' when unreadable). The log URL answers 302 to a pre-signed address; that second request is made WITHOUT the token."""
+    import urllib.request
+    ka = _ka()
+    runs = ka.fetch_runs(token, wf)
+    run = ka.newest_run(runs)
+    if not run:
+        return ""
+    jobs = ka.api("GET", "/repos/%s/actions/runs/%s/jobs" % (ka.REPO, run["id"]), token).get("jobs", [])
+    if not jobs:
+        return ""
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+    req = urllib.request.Request(ka.API + "/repos/%s/actions/jobs/%s/logs" % (ka.REPO, jobs[0]["id"]), headers={
+        "Authorization": "Bearer " + token, "Accept": "application/vnd.github+json", "User-Agent": "inayaflow-report"})
+    try:
+        urllib.request.build_opener(NoRedirect).open(req, timeout=30)
+        return ""
+    except urllib.error.HTTPError as e:
+        loc = e.headers.get("Location") if e.code in (301, 302, 307) else None
+        if not loc:
+            return ""
+    with urllib.request.urlopen(urllib.request.Request(loc, headers={"User-Agent": "inayaflow-report"}), timeout=30) as r:
+        return r.read(400000).decode("utf-8", "replace")
+
+
+def switch_states(token, api_get=None, log_text=None):
+    """{label: reason text} for robots that are OFF on purpose. Variable value != 'true' (or not set = 404) = off. When the token cannot read
+    variables (403) the state is unknown and the robot is NOT called off. `log_text(workflow)` returns the newest run's log text ('' unknown)."""
+    import urllib.error
+    api_get = api_get or _api_get
+    log_text = log_text or _newest_log_text
+    out = {}
+    for label, rule in OFF_RULES.items():
+        try:
+            if rule[0] == "var":
+                try:
+                    v = api_get("/repos/%s/actions/variables/%s" % (_repo(), rule[1]), token).get("value", "")
+                except urllib.error.HTTPError as e:
+                    if e.code != 404:
+                        continue
+                    v = ""
+                if str(v).strip().lower() != "true":
+                    out[label] = "switch %s not true" % rule[1]
+            else:
+                if rule[2] in (log_text(rule[1], token) or ""):
+                    out[label] = "key not set"
+        except Exception:
+            continue
+    return out
+
+
+def error_block(exc):
+    """Goes on top of the report when the alarm section itself could not be built."""
+    return "> OUTPUT ALARM SECTION ERROR: not built this run (%s). The robot output table is missing; do not read this report as 'all ok'." % type(exc).__name__
 
 
 def _fmt(m):
