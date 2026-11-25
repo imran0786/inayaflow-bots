@@ -95,7 +95,7 @@ class Main(unittest.TestCase):
         import contextlib, io
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            code = k.main()
+            code = k.main(NOW)
         return code, buf.getvalue()
 
     def test_one_robot_error_does_not_stop_the_others(self):
@@ -135,6 +135,137 @@ class Main(unittest.TestCase):
         self.assertEqual(calls[1][2], {"ref": "main"})
         inputs = {f: i for f, _, i in k.ROBOTS}
         self.assertEqual(inputs["directory-agent.yml"], {"dry_run": "false"})   # its default is TRUE: a bare dispatch would be a dry run
+
+
+class Slots(unittest.TestCase):
+    """25 Nov 2026 clock fix: robots that run a few times a day are judged by their real UTC slots, not 1.5 x interval."""
+
+    def at(self, hh, mm):
+        return datetime.datetime(2026, 11, 25, hh, mm, 0, tzinfo=UTC)
+
+    def r(self, now, y, hh, mm, event="schedule", conclusion="success"):
+        t = datetime.datetime(2026, 11, 25 - y, hh, mm, 0, tzinfo=UTC)
+        return {"created_at": t.strftime("%Y-%m-%dT%H:%M:%SZ"), "status": "completed", "conclusion": conclusion, "event": event}
+
+    def test_daily_robot_is_not_36_hours_late(self):
+        now = self.at(10, 5)                      # platform poster slot 09:41 passed 24 min ago, last run was yesterday 09:45 (24 h 20 min ago: the old rule says "on time")
+        self.assertEqual(k.decide(1440, [self.r(now, 1, 9, 45)], now, "platform-poster.yml")[0], "dispatch")
+
+    def test_grace_period(self):
+        now = self.at(9, 55)                      # 14 min after the slot: GitHub may still be on its way
+        self.assertEqual(k.decide(1440, [self.r(now, 1, 9, 45)], now, "platform-poster.yml")[0], "skip")
+
+    def test_served_slot_is_not_dispatched_again(self):
+        now = self.at(10, 30)
+        self.assertEqual(k.decide(1440, [self.r(now, 0, 9, 50)], now, "platform-poster.yml")[0], "skip")
+        self.assertEqual(k.decide(1440, [self.r(now, 0, 9, 50, conclusion="failure")], now, "platform-poster.yml")[0], "skip")   # failed = ran, no storm
+        self.assertEqual(k.decide(1440, [self.r(now, 0, 9, 50, conclusion="cancelled"), self.r(now, 1, 9, 45)], now, "platform-poster.yml")[0], "dispatch")
+
+    def test_before_todays_slot_uses_yesterdays(self):
+        now = self.at(8, 0)                       # platform slot of today not yet reached; yesterday's was served
+        self.assertEqual(k.decide(1440, [self.r(now, 1, 9, 45)], now, "platform-poster.yml")[0], "skip")
+        self.assertEqual(k.decide(1440, [self.r(now, 3, 9, 45)], now, "platform-poster.yml")[0], "dispatch")   # nothing for 3 days
+
+    def test_three_hourly_robot_slots(self):
+        now = self.at(12, 45)                     # hunter slot 12:17 passed 28 min ago
+        self.assertEqual(k.decide(180, [self.r(now, 0, 9, 20)], now, "hunter.yml")[0], "dispatch")
+        self.assertEqual(k.decide(180, [self.r(now, 0, 12, 25)], now, "hunter.yml")[0], "skip")
+
+    def test_one_dispatch_per_hour_and_busy_still_apply(self):
+        now = self.at(10, 30)
+        self.assertEqual(k.decide(1440, [self.r(now, 0, 10, 5, event="workflow_dispatch", conclusion="cancelled"), self.r(now, 1, 9, 45)], now, "platform-poster.yml")[0], "skip")
+        busy = dict(self.r(now, 0, 10, 0), status="in_progress", conclusion=None)
+        self.assertEqual(k.decide(1440, [busy, self.r(now, 1, 9, 45)], now, "platform-poster.yml")[0], "skip")
+
+    def test_flag_missed_slot(self):
+        now = self.at(10, 30)
+        self.assertEqual(k.flag(1440, [self.r(now, 1, 9, 45)], now, "platform-poster.yml"), "RED (missed slot)")
+        self.assertEqual(k.flag(1440, [self.r(now, 0, 9, 50)], now, "platform-poster.yml"), "ok")
+
+    def test_fresh_busy_heartbeat_is_not_red(self):
+        now = self.at(10, 30)
+        busy = dict(self.r(now, 0, 8, 20), status="in_progress", conclusion=None)      # heartbeat started 08:20, slot 09:11 passed, still running (5h40m job)
+        self.assertEqual(k.flag(180, [busy, self.r(now, 1, 5, 0)], now, "heartbeat.yml"), "ok")
+        old = dict(self.r(now, 1, 0, 0), status="in_progress", conclusion=None)       # stuck for 34 h = RED
+        self.assertEqual(k.flag(180, [old], now, "heartbeat.yml"), "RED (stuck)")
+
+    def test_new_robots_are_on_the_list_with_safe_inputs(self):
+        inputs = {f: i for f, _, i in k.ROBOTS}
+        self.assertEqual(inputs["list-builder-deepseek.yml"], {"dry_run": "false"})
+        self.assertEqual(inputs["dev-poster.yml"], {"dry_run": "false"})        # its workflow keeps a dry run unless the repo variable DEV_POSTER_LIVE is "true"
+        wf = open(os.path.join(ROOT, ".github", "workflows", "dev-poster.yml"), encoding="utf8").read()
+        self.assertIn("vars.DEV_POSTER_LIVE == 'true' &&", wf)                  # the LIVE switch is still checked by the workflow itself
+        wf = open(os.path.join(ROOT, ".github", "workflows", "platform-poster.yml"), encoding="utf8").read()
+        self.assertIn("vars.PLATFORM_POSTER_LIVE == 'true' &&", wf)
+
+    def test_every_slow_robot_has_slots(self):
+        for f, interval, _ in k.ROBOTS:
+            if interval >= 180:
+                self.assertIn(f, k.SLOTS, f)
+
+    def test_slots_equal_the_workflow_crons(self):
+        wfdir = os.path.join(ROOT, ".github", "workflows")
+        for f, slots in k.SLOTS.items():
+            text = open(os.path.join(wfdir, f), encoding="utf8").read()
+            got = set()
+            for m, h in re.findall(r'^\s+- cron: "(\d+) ([^ ]+) \* \* \*"', text, re.M):
+                hours = range(0, 24, int(h[2:])) if h.startswith("*/") else ([24] if h == "*" else [int(x) for x in h.split(",")])
+                got |= {"%02d:%02d" % (hh, int(m)) for hh in hours}
+            self.assertEqual(set(slots), got, f)
+
+
+class ApiRetry(unittest.TestCase):
+    def test_transient_500_is_retried_then_succeeds(self):
+        import urllib.error, io
+        calls = []
+        real = k.urllib.request.urlopen
+
+        class Resp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return b"{}"
+
+        def fake(req, timeout=0):
+            calls.append(1)
+            if len(calls) < 3:
+                raise urllib.error.HTTPError("u", 500, "x", {}, io.BytesIO(b""))
+            return Resp()
+        k.urllib.request.urlopen = fake
+        try:
+            self.assertEqual(k.api("POST", "/x", "t", {"a": 1}, sleep=lambda s: None), {})
+            self.assertEqual(len(calls), 3)
+            calls.clear()
+
+            def always(req, timeout=0):
+                calls.append(1)
+                raise urllib.error.HTTPError("u", 404, "x", {}, io.BytesIO(b""))
+            k.urllib.request.urlopen = always
+            with self.assertRaises(urllib.error.HTTPError):
+                k.api("GET", "/x", "t", sleep=lambda s: None)
+            self.assertEqual(len(calls), 1)            # a 4xx is not retried
+        finally:
+            k.urllib.request.urlopen = real
+
+
+class Heartbeat(unittest.TestCase):
+    """The 23-25 Nov failures: one HTTP 500 from the dispatch API ended the 5h40m job (bash -e)."""
+    t = open(os.path.join(ROOT, ".github", "workflows", "heartbeat.yml"), encoding="utf8").read()
+
+    def test_loop_cannot_die_on_one_failed_call(self):
+        self.assertIn("shell: bash {0}", self.t)
+        self.assertNotIn("shell: bash -e", self.t)
+        self.assertIn("could not start", self.t)
+
+    def test_no_tight_restart_cycle(self):
+        self.assertIn("LOOP_START=", self.t)
+        i = self.t.index("Restart the heartbeat (always")
+        self.assertIn("-lt 600", self.t[i:])
+        self.assertIn("not restarting", self.t[i:])
+
+    def test_restart_is_its_own_always_step(self):
+        i = self.t.index("Restart the heartbeat (always")
+        self.assertIn("if: always()", self.t[i:i + 200])
+        self.assertIn("gh workflow run heartbeat.yml", self.t[i:])
 
 
 class WorstCase(unittest.TestCase):
@@ -212,8 +343,6 @@ class Config(unittest.TestCase):
         "keepalive-check.yml": "this check itself",
         "keepalive.yml": "monthly commit that keeps the schedules enabled; nothing to catch up",
         "app-scan.yml": "manual / long scan, not a timed robot",
-        "list-builder-deepseek.yml": "the DeepSeek twin of the list builder, optional (runs only when the DEEPSEEK_API_KEY secret exists); a missed run is simply missed",
-        "dev-poster.yml": "publishes to dev.to only when its own repository switch DEV_POSTER_LIVE is true; a keep-alive dispatch would run it dry (default dry_run) or bypass the switch, so a missed day is simply missed",
     }
 
     def test_readme_and_workflows_say_what_the_14_98_covers(self):
