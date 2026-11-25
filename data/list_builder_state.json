@@ -42,7 +42,7 @@
     "resource_pages": 13,
     "communities_profiles": 9
    },
-   "runs": 4,
+   "runs": 5,
    "calls": 20,
    "providers": {
     "claude": {
@@ -60,9 +60,9 @@
      "needs_signup": 94
     }
    },
-   "category_summary": "list-builder: +171 new (total 2217; by category github_awesome_lists 42, startup_directories_by_country 20, ai_saas_directories 17, tool_roundups 17, launch_sites 15, resource_pages 13, edu_library_guides 12, communities_profiles 9, guest_post_pages 8, journalist_platforms 8, podcasts_creators 6, saas_review_platforms 4)",
-   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +89 new (21 followed, $0.10)",
-   "total": 2217
+   "category_summary": "list-builder: +171 new (total 2281; by category github_awesome_lists 42, startup_directories_by_country 20, ai_saas_directories 17, tool_roundups 17, launch_sites 15, resource_pages 13, edu_library_guides 12, communities_profiles 9, guest_post_pages 8, journalist_platforms 8, podcasts_creators 6, saas_review_platforms 4)",
+   "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +153 new (35 followed, $0.12)",
+   "total": 2281
   }
  },
  "rejected": [
@@ -126,5 +126,5 @@
   "sdstate.edu",
   "startupsincanada.com"
  ],
- "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +89 new (21 followed, $0.10)"
+ "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +153 new (35 followed, $0.12)"
 }
