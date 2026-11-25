@@ -109,7 +109,7 @@ class ManualRuns(unittest.TestCase):
         saved = (ag.STATE_PATH, ag.SPEND_PATH, ag.LOG_PATH, ag.SUMMARY_PATH, ag.OLD_STATE_PATH, ag.VSTATE_PATH, ag.USD_CAP, ag.run_one, ag.WITH_TOOLS, ag.ROOT, ag.ATTEMPT_MAX_USD, ag.preflight_limits)
         calls = []
 
-        def fake(s, product=None):
+        def fake(s, product=None, lead=False):
             calls.append((s["name"], product["id"] if product else "homepage"))
             return {"status": "SUBMITTED", "note": "", "secs": 1, "cost": 0.4, "cost_estimated": False, "steps": 1, "usage": None, "flags": [], "model": "m"}
         ag.STATE_PATH, ag.SPEND_PATH = os.path.join(d, "ops", "state.json"), os.path.join(d, "ops", "spend.json")
@@ -344,7 +344,7 @@ class HardAttemptStop(unittest.TestCase):
         calls = []
         today = datetime.date.today().isoformat()
 
-        def fake(s, product=None):
+        def fake(s, product=None, lead=False):
             calls.append(s["name"])
             json.dump({today: 5.5}, open(ag.SPEND_PATH, "w"))             # "another process" spent the day's money meanwhile
             return {"status": "SUBMITTED", "note": "", "secs": 1, "cost": 0.0, "cost_estimated": False, "steps": 1, "usage": None, "flags": [], "model": "m"}
@@ -748,10 +748,10 @@ class Usability(unittest.TestCase):
         return [s["name"] for s in out], state, stats, calls
 
     def test_feed_drops_sure_losers_caches_the_verdict_and_never_rechecks_inside_the_window(self):
-        names, state, stats, calls = self._feed({"https://a.example/submit": ("CAPTCHA", "bot-check marker"), "https://b.example/submit": ("OK", "form")})
+        names, state, stats, calls = self._feed({"https://a.example/submit": ("PAID", "paid only"), "https://b.example/submit": ("OK", "form")})
         self.assertEqual(names, ["B"])
-        self.assertEqual(stats["use_CAPTCHA"], 1)
-        self.assertEqual(state[ag.USE_KEY]["a.example"]["verdict"], "CAPTCHA")
+        self.assertEqual(stats["use_PAID"], 1)
+        self.assertEqual(state[ag.USE_KEY]["a.example"]["verdict"], "PAID")
         names2 = [s["name"] for s in ag.build_feed(state, {}, "2026-11-26", {}, {})]
         self.assertEqual(names2, ["B"])
         self.assertEqual(len(calls), 2)
@@ -761,8 +761,24 @@ class Usability(unittest.TestCase):
         names, _, _, _ = self._feed({"https://a.example/submit": ("UNKNOWN", "JS app"), "https://b.example/submit": ("DEAD", "x")})
         self.assertEqual(names, ["A"])
 
-    def test_blocked_verdicts_cover_the_25_nov_failure_mix(self):
-        self.assertTrue({"NO_FORM", "CAPTCHA", "DEAD", "PAID", "SOCIAL_LOGIN_ONLY"} <= ag.USE_BLOCK)
+    def test_blocked_verdicts_are_only_the_sure_losers(self):
+        # 26 Nov 2026: raw HTML cannot judge a JS-drawn form or an invisible reCAPTCHA: those two are hints, the browser decides
+        self.assertEqual(ag.USE_BLOCK, {"DEAD", "PAID", "SOCIAL_LOGIN_ONLY"})
+        self.assertEqual(ag.USE_HINT, {"CAPTCHA", "NO_FORM"})
+        self.assertFalse(ag.USE_BLOCK & ag.USE_HINT)
+
+    def test_captcha_and_no_form_hints_still_reach_the_browser(self):
+        names, state, stats, _ = self._feed({"https://a.example/submit": ("CAPTCHA", "bot-check marker"), "https://b.example/submit": ("NO_FORM", "no form")})
+        self.assertEqual(names, ["A", "B"])
+        self.assertEqual((stats["hint_CAPTCHA"], stats["hint_NO_FORM"]), (1, 1))
+        self.assertFalse(any(k.startswith("use_") for k in stats))
+        self.assertEqual(state[ag.USE_KEY]["a.example"]["verdict"], "CAPTCHA")     # the hint is still cached and counted
+
+    def test_google_words_on_a_js_app_are_not_social_only(self):
+        js = "<div id='__next'></div><button>Continue with Google</button>" + "x " * 400
+        v = self.chk({"https://dir.example/submit": (200, "https://dir.example/submit", {}, js)})[0]
+        self.assertNotEqual(v, "SOCIAL_LOGIN_ONLY")
+        self.assertNotIn(v, ag.USE_BLOCK)                                          # so the browser still looks
 
     class _Res:
         def __init__(self, steps=3, errors=()):
@@ -1018,7 +1034,7 @@ class FailClosedAndCancel(unittest.TestCase):
         ag.STATE_PATH, ag.SPEND_PATH = os.path.join(d, "ops", "state.json"), os.path.join(d, "ops", "spend.json")
         ag.LOG_PATH, ag.SUMMARY_PATH = os.path.join(d, "ops", "log.md"), os.path.join(d, "ops", "sum.md")
         ag.OLD_STATE_PATH, ag.VSTATE_PATH = os.path.join(d, "ops", "old.json"), os.path.join(d, "ops", "v.json")
-        ag.run_one = lambda s, product=None: (calls.append(s["name"]), {"status": "SUBMITTED", "note": "", "secs": 1, "cost": 0.01, "cost_estimated": False, "steps": 1, "usage": None, "flags": [], "model": "m"})[1]
+        ag.run_one = lambda s, product=None, lead=False: (calls.append(s["name"]), {"status": "SUBMITTED", "note": "", "secs": 1, "cost": 0.01, "cost_estimated": False, "steps": 1, "usage": None, "flags": [], "model": "m"})[1]
         ag.WITH_TOOLS, ag.preflight_limits = False, (lambda: True)
         real_block = ag.domain_block
         ag.domain_block = lambda state, dom, today, known_path=None: "walled: test" if dom == "walled.example" else real_block(state, dom, today, known_path)
@@ -1105,6 +1121,177 @@ class FailClosedAndCancel(unittest.TestCase):
         r = ag.read_mail_from_domain("https://dir.example/submit", 5, threading.Event())
         self.assertTrue(r.startswith("MAIL FOUND"), r)
         self.assertEqual(len(FakeImap.stores), 1)
+
+
+class PushPagesAndBadges(unittest.TestCase):
+    """26 Nov 2026: every tool and guide page is promoted (push-priority rotation), the homepage only for root-domain-only sites;
+    a visible captcha = needs a person; a badge request = ops/needs_badge.md for the Director."""
+
+    def test_products_are_homepage_then_tools_then_guides_in_push_priority_order(self):
+        prods = ag.load_products()
+        kinds = [p["kind"] for p in prods]
+        self.assertEqual(kinds[0], "homepage")
+        self.assertEqual(kinds, sorted(kinds, key=lambda k: {"homepage": 0, "tool": 1, "guide": 2}[k]))   # tools before guides
+        ids = [p["id"] for p in prods]
+        self.assertIn("analyze", ids)                                       # tool page from the shared page list
+        self.assertTrue(any(k == "guide" for k in kinds))
+        prio = ag.load_priority()
+        tools = [p["id"] for p in prods if p["kind"] == "tool"]
+        self.assertEqual(tools[:4], [t for t in ("shadowban-checker", "analyze", "follower-count-checker", "hashtag-generator")])   # tiers 1 then 2
+        guides = [p["id"] for p in prods if p["kind"] == "guide"]
+        self.assertEqual(guides[0], "guide-no-views")
+        self.assertEqual([prio.get(g, 99) for g in guides], sorted(prio.get(g, 99) for g in guides))
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(len({p["url"] for p in prods}), len(prods))
+        for p in prods:
+            self.assertLessEqual(len(p["short_description"]), 50, p["id"])
+            self.assertLessEqual(len(p["long_description"]), 150, p["id"])
+            self.assertTrue(p["url"].startswith("https://inayaflow.ai"), p["id"])
+
+    def test_missing_priority_or_page_list_keeps_the_listings_file(self):
+        prods = ag.load_products(pages_path="no-such-file.py", priority_path="no-such-file.json")
+        self.assertEqual(prods[0]["id"], "homepage")
+        self.assertEqual({p["kind"] for p in prods}, {"homepage", "tool"})
+
+    def test_lead_rotation_spreads_over_tools_and_skips_tools_done_on_the_site(self):
+        prods = [{"id": "homepage", "kind": "homepage"}, {"id": "t1", "kind": "tool"}, {"id": "t2", "kind": "tool"}, {"id": "g1", "kind": "guide"}]
+        self.assertEqual(ag.pick_lead({}, prods)["id"], "t1")
+        st = {"x.example": {"name": "X", "status": "SUBMITTED", "products": {"t1": {"status": "SUBMITTED"}}}}
+        self.assertEqual(ag.pick_lead(st, prods)["id"], "t2")                           # t1 already has a listing elsewhere
+        self.assertEqual(ag.pick_lead({}, prods, {"t1": 1})["id"], "t2")                 # this run's count too (dry runs record nothing)
+        site = {"name": "Y", "url": "https://y.example/submit"}
+        st2 = {"y.example": {"name": "Y", "status": "OTHER", "products": {"t1": {"status": "ONE_PER_DOMAIN"}}}}
+        self.assertEqual(ag.pick_lead(st2, prods, None, site)["id"], "t2")
+        self.assertIsNone(ag.pick_lead({}, [{"id": "homepage", "kind": "homepage"}]))
+
+    def test_task_texts(self):
+        site = {"name": "Dir", "url": "https://dir.example/submit"}
+        prods = ag.load_products()
+        tool = [p for p in prods if p["id"] == "shadowban-checker"][0]
+        guide = [p for p in prods if p["kind"] == "guide"][0]
+        lead = ag.build_task(site, tool, lead=True)
+        self.assertIn("ROOT DOMAIN RULE", lead)
+        self.assertIn("used_homepage", lead)
+        self.assertIn("tiktok-shadowban-checker", lead)
+        self.assertNotIn("ADDITIONAL listing", lead)
+        g = ag.build_task(site, guide)
+        self.assertIn("WRONG_KIND", g)
+        self.assertIn("ADDITIONAL listing", g)
+        self.assertIn(guide["url"], g)
+        for t in (lead, g, ag.build_task(site)):
+            self.assertIn("NOT a stop", t)                    # an invisible reCAPTCHA is not a reason to stop
+            self.assertIn("VISIBLE", t)
+            self.assertIn("Never solve", t)
+            self.assertIn("'badge' field", t)
+            self.assertIn("Never pay", t)
+        self.assertIn("WRONG_KIND", ag.RESULT_CODES)
+        self.assertIn("WRONG_KIND", ag.PRODUCT_DONE)
+
+    def _badges_file(self, domains):
+        import tempfile
+        f = os.path.join(tempfile.mkdtemp(), "badges_added.json")
+        json.dump({"domains": domains}, open(f, "w"))
+        saved = ag.BADGES_ADDED_PATH
+        ag.BADGES_ADDED_PATH = f
+        self.addCleanup(lambda: setattr(ag, "BADGES_ADDED_PATH", saved))
+
+    def test_needs_badge_is_closed_until_the_director_adds_the_badge_then_tried_once(self):
+        self._badges_file({})
+        site = {"name": "B", "url": "https://b.example/submit"}
+        st = {"b.example": {"name": "B", "status": "NEEDS_BADGE", "date": "2026-11-26", "tries": 1, "url": site["url"]}}
+        ag.update_walls(st, "2026-11-26")
+        self.assertTrue(ag.domain_block(st, "b.example", "2026-11-27", known_path="none.json"))
+        self.assertFalse(ag.eligible(site, st, {}, "2026-11-27"))
+        self._badges_file({"b.example": {"date": "2026-11-27", "where": "https://inayaflow.ai/featured"}})
+        self.assertIsNone(ag.domain_block(st, "b.example", "2026-11-27", known_path="none.json"))
+        self.assertTrue(ag.eligible(site, st, {}, "2026-11-27"))
+        self.assertIn("https://inayaflow.ai/featured", ag.build_task(site))
+        st["b.example"]["date"] = "2026-11-27"                                # it asked for the badge AGAIN after we added it: closed
+        self.assertFalse(ag.eligible(site, st, {}, "2026-11-28"))
+        st["c.example"] = {"name": "C", "status": "NEEDS_BADGE", "date": "2026-11-26", "url": "https://c.example/s"}
+        st[ag.WALLS_KEY]["c.example"] = {"status": "WALLED", "reason": "CAPTCHA"}
+        self._badges_file({"c.example": {"date": "2026-11-27"}})
+        self.assertTrue(ag.domain_block(st, "c.example", "2026-11-28", known_path="none.json"))   # another wall still blocks
+
+    def _run_main(self, outcomes, products):
+        """FEED mode, live (DRY off), every file in a temp folder. outcomes: {(domain, product id): result dict}."""
+        import tempfile, io, contextlib
+        d = tempfile.mkdtemp()
+        names = ("STATE_PATH", "SPEND_PATH", "LOG_PATH", "SUMMARY_PATH", "OLD_STATE_PATH", "VSTATE_PATH", "CLICK_PATH", "NOFOLLOW_LATER_PATH", "NEEDS_BADGE_PATH",
+                 "run_one", "preflight_limits", "build_feed", "load_products", "DRY", "BADGES_ADDED_PATH", "backfill_sites", "RESUME_FILE")
+        saved = {n: getattr(ag, n) for n in names}
+        for n in ("STATE_PATH", "SPEND_PATH", "OLD_STATE_PATH", "VSTATE_PATH", "BADGES_ADDED_PATH", "RESUME_FILE"):
+            setattr(ag, n, os.path.join(d, "ops", n.lower() + ".json"))
+        for n in ("LOG_PATH", "SUMMARY_PATH", "CLICK_PATH", "NOFOLLOW_LATER_PATH", "NEEDS_BADGE_PATH"):
+            setattr(ag, n, os.path.join(d, "ops", n.lower() + ".md"))
+        calls = []
+        sites = sorted({k[0] for k in outcomes})
+
+        def fake(s, product=None, lead=False):
+            pid = product["id"] if product else "homepage"
+            calls.append((ag.dom_of(s), pid, lead))
+            r = {"status": "OTHER", "note": "unexpected", "secs": 1, "cost": 0.01, "cost_estimated": False, "steps": 1, "usage": None, "flags": [], "model": "m"}
+            r.update(outcomes.get((ag.dom_of(s), pid), {}))
+            return r
+        ag.run_one, ag.preflight_limits, ag.DRY = fake, (lambda: True), False
+        ag.build_feed = lambda *a, **k: [{"name": x, "url": "https://%s/submit" % x, "group": "candidates"} for x in sites]
+        ag.load_products = lambda: products
+        ag.backfill_sites = lambda *a, **k: []
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                ag.main()
+            state = json.load(open(ag.STATE_PATH, encoding="utf8"))
+            badge_md = open(ag.NEEDS_BADGE_PATH, encoding="utf8").read()
+            click_md = open(ag.CLICK_PATH, encoding="utf8").read()
+        finally:
+            for n, v in saved.items():
+                setattr(ag, n, v)
+        return calls, state, badge_md, click_md, buf.getvalue()
+
+    PRODS = [{"id": "homepage", "kind": "homepage", "name": "InayaFlow", "url": "https://inayaflow.ai/"},
+             {"id": "t1", "kind": "tool", "name": "T1", "url": "https://inayaflow.ai/tools/t1"},
+             {"id": "t2", "kind": "tool", "name": "T2", "url": "https://inayaflow.ai/tools/t2"},
+             {"id": "g1", "kind": "guide", "name": "G1", "url": "https://inayaflow.ai/blog/g1"},
+             {"id": "g2", "kind": "guide", "name": "G2", "url": "https://inayaflow.ai/blog/g2"}]
+
+    def test_multi_listing_site_gets_each_tool_then_guides_until_guides_are_refused(self):
+        ok = {"status": "SUBMITTED", "note": ""}
+        calls, state, _, _, out = self._run_main({("multi.example", "t1"): ok, ("multi.example", "t2"): ok,
+                                                  ("multi.example", "g1"): {"status": "WRONG_KIND", "note": "tools only"}}, self.PRODS)
+        self.assertEqual(calls, [("multi.example", "t1", True), ("multi.example", "t2", False), ("multi.example", "g1", False)])
+        pr = state["multi.example"]["products"]
+        self.assertEqual(state["multi.example"]["lead"], "t1")
+        self.assertEqual((pr["t1"]["status"], pr["t2"]["status"], pr["g1"]["status"], pr["g2"]["status"]), ("SUBMITTED", "SUBMITTED", "WRONG_KIND", "WRONG_KIND"))
+        self.assertNotIn("homepage", pr)                                     # the homepage is not used where tool pages are accepted
+        self.assertIsNone(state.get(ag.FAILS_KEY, {}).get("multi.example"))   # the lead attempt is not counted twice
+
+    def test_root_domain_only_site_lists_the_homepage_and_stops(self):
+        calls, state, _, _, out = self._run_main({("root.example", "t1"): {"status": "SUBMITTED", "note": "root only", "used_homepage": True}}, self.PRODS)
+        self.assertEqual(calls, [("root.example", "t1", True)])
+        pr = state["root.example"]["products"]
+        self.assertEqual(pr["homepage"]["status"], "SUBMITTED")
+        self.assertEqual({pr[k]["status"] for k in ("t1", "t2", "g1", "g2")}, {"ONE_PER_DOMAIN"})
+        self.assertIn("homepage (root domain only)", out)
+
+    def test_badge_and_visible_captcha_go_to_their_lists_and_never_to_stdout(self):
+        snippet = '<a href="https://badge.example/?ref=inaya"><img src="https://badge.example/b.svg"></a>'
+        calls, state, badge_md, click_md, out = self._run_main({
+            ("badge.example", "t1"): {"status": "NEEDS_BADGE", "note": "badge required", "badge": snippet},
+            ("cap.example", "t1"): {"status": "CAPTCHA", "note": "image puzzle on submit"}}, self.PRODS)
+        self.assertEqual(state["badge.example"]["status"], "NEEDS_BADGE")
+        self.assertEqual(state["badge.example"]["badge"], snippet)
+        self.assertIn("badge.example", badge_md)
+        self.assertIn("badge.example/b.svg", badge_md)
+        self.assertIn("badges_added.json", badge_md)
+        self.assertNotIn("b.svg", out)                                       # public stdout: no snippet
+        self.assertIn("NEEDS_PERSON (visible captcha)", click_md)
+        self.assertIn("https://cap.example/submit", click_md)
+        self.assertEqual([c for c in calls if c[0] == "cap.example"], [("cap.example", "t1", True)])   # a wall: no more products there
+
+    def test_the_workflow_carries_needs_badge_to_the_private_repo(self):
+        w = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "workflows", "directory-agent.yml"), encoding="utf8").read()
+        self.assertGreaterEqual(w.count("needs_badge.md"), 2)                # restored before the run and pushed after it
 
 
 if __name__ == "__main__":
