@@ -279,28 +279,54 @@ def cell(s, limit=160):
 
 # ---------- Claude Haiku (raw HTTP like the other robots in this repo; capped) ----------
 
-def haiku(system, user, max_tokens=3000, post=None):
-    """One capped Haiku call. Returns the text. Raises BudgetExceeded past MAX_AI_CALLS."""
+# 26 Nov: claude-haiku-5-5 THINKS by default and the thinking counts toward max_tokens. Callers ask for 1000-1500 tokens, which often came
+# back with NO text (the JSON parse then saw nothing). Every call now gets at least HAIKU_MIN_TOKENS of room (effort stays low), an empty
+# or cut reply is logged (stop reason + token counts only) and asked ONCE more with twice the room. The retry is a normal call: it counts
+# against MAX_AI_CALLS and USD_LIMIT like any other, and when the caps are used up the empty answer is returned as before.
+HAIKU_MIN_TOKENS = int(os.environ.get("HAIKU_MIN_TOKENS", "4000"))     # 4000 out x $0.50/M = $0.002 at most per call
+HAIKU_EFFORT = os.environ.get("HAIKU_EFFORT", "low")
+
+
+def _haiku_guard():
     if USAGE["calls"] >= MAX_AI_CALLS:
         raise BudgetExceeded("AI call cap reached")
     if USD_LIMIT is not None and cost_usd() >= USD_LIMIT:
         raise BudgetExceeded("AI dollar cap reached")
+
+
+def haiku(system, user, max_tokens=3000, post=None):
+    """One capped Haiku call (one more with twice the room when the reply has no text). Returns the text. Raises BudgetExceeded past the caps."""
+    _haiku_guard()
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("no ANTHROPIC_API_KEY")
     if len(user) > MAX_AI_INPUT_CHARS:
         user = user[:MAX_AI_INPUT_CHARS] + "\n[INPUT CUT at %d characters]" % MAX_AI_INPUT_CHARS
-    body = {"model": MODEL, "max_tokens": max_tokens, "output_config": {"effort": "low"}, "system": system,
-            "messages": [{"role": "user", "content": user}]}
+    room = max(int(max_tokens or 0), HAIKU_MIN_TOKENS)
     headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
-    USAGE["calls"] += 1
-    data = (post or _post)("https://api.anthropic.com/v1/messages", body, headers)
-    u = data.get("usage") or {}
-    USAGE["in"] += int(u.get("input_tokens", 0) or 0) + int(u.get("cache_read_input_tokens", 0) or 0) + int(u.get("cache_creation_input_tokens", 0) or 0)
-    USAGE["out"] += int(u.get("output_tokens", 0) or 0)
-    if data.get("stop_reason") == "refusal":
-        raise RuntimeError("refusal")
-    return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    text = ""
+    for attempt in (1, 2):
+        if attempt == 2:
+            try:
+                _haiku_guard()
+            except BudgetExceeded:
+                return text                         # no room left for the retry: the (empty) first answer, as before 26 Nov
+        body = {"model": MODEL, "max_tokens": room * attempt, "output_config": {"effort": HAIKU_EFFORT}, "system": system,
+                "messages": [{"role": "user", "content": user}]}
+        USAGE["calls"] += 1
+        data = (post or _post)("https://api.anthropic.com/v1/messages", body, headers)
+        u = data.get("usage") or {}
+        USAGE["in"] += int(u.get("input_tokens", 0) or 0) + int(u.get("cache_read_input_tokens", 0) or 0) + int(u.get("cache_creation_input_tokens", 0) or 0)
+        USAGE["out"] += int(u.get("output_tokens", 0) or 0)
+        if data.get("stop_reason") == "refusal":
+            raise RuntimeError("refusal")
+        text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text") or text
+        if text.strip() and data.get("stop_reason") != "max_tokens":
+            return text
+        print("haiku: reply %s (stop=%s, in=%s, out=%s tokens), %s" % (
+            "cut" if text.strip() else "had no text", data.get("stop_reason"), u.get("input_tokens"), u.get("output_tokens"),
+            "asking once more with %d tokens" % (room * 2) if attempt == 1 else "giving up"))
+    return text
 
 
 def _post(url, body, headers):

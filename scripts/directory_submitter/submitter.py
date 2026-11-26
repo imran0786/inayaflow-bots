@@ -355,18 +355,33 @@ def _post_json(url, body, headers):
         return json.load(r)
 
 
-def call_anthropic(user):
+class EmptyReply(RuntimeError):
+    """26 Nov: Haiku 5.5 thinks by default and the thinking counts toward max_tokens: a reply can stop before any text.
+    The message carries only the stop reason and token counts (never content), for the log."""
+
+
+def _empty_reply(data):
+    u = data.get("usage") or {}
+    return EmptyReply("no text (stop=%s, in=%s, out=%s tokens)" % (data.get("stop_reason"), u.get("input_tokens"), u.get("output_tokens")))
+
+
+HAIKU_MAX_TOKENS = 4000      # the 2nd (retry) ask gets twice this: 8000 out x $0.50/M = $0.004 at most
+
+
+def call_anthropic(user, max_tokens=HAIKU_MAX_TOKENS):
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("no Anthropic key")
     # Haiku 5.5: no temperature (HTTP 400); thinking is on by default, so low effort and read only the text blocks.
     data = _post_json("https://api.anthropic.com/v1/messages",
-                      {"model": ANTHROPIC_MODEL, "max_tokens": 4000, "output_config": {"effort": "low"}, "system": LLM_SYSTEM,
+                      {"model": ANTHROPIC_MODEL, "max_tokens": max_tokens, "output_config": {"effort": "low"}, "system": LLM_SYSTEM,
                        "messages": [{"role": "user", "content": user}]},
                       {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    if data.get("stop_reason") == "refusal":
+        raise RuntimeError("anthropic refusal")
     text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
     if not text.strip():
-        raise RuntimeError("anthropic empty text")
+        raise _empty_reply(data)
     return text
 
 
@@ -386,13 +401,13 @@ def llm_map(fields):
     """The ONE model call. Primary Claude Haiku (one retry), then DeepSeek if its key exists. Same prompt, same guards after."""
     user = build_prompt(fields)
     if os.environ.get("ANTHROPIC_API_KEY"):
-        for _ in range(2):
+        for attempt in (1, 2):                       # the 2nd ask gets twice the room (a reply cut by thinking is the usual failure)
             try:
-                out = parse_mapping(call_anthropic(user))
+                out = parse_mapping(call_anthropic(user, max_tokens=HAIKU_MAX_TOKENS * attempt))
                 MODEL_USED["haiku"] += 1
                 return out
             except Exception as e:
-                print("  model: haiku call failed:", type(e).__name__, clean_out(getattr(e, "code", ""), 20))
+                print("  model: haiku call failed:", type(e).__name__, clean_out(getattr(e, "code", ""), 20), str(e) if isinstance(e, EmptyReply) else "")
     if os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("LLM_API_KEY"):
         out = parse_mapping(call_deepseek(user))
         MODEL_USED["deepseek"] += 1

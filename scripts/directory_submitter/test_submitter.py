@@ -235,5 +235,20 @@ class T(unittest.TestCase):
         self.assertEqual([r["name"] for r in build_list.build(md)], ["FutureTools"])
 
 
+class HaikuRoom26Nov(unittest.TestCase):
+    def test_empty_first_reply_retries_with_twice_the_room_and_is_logged(self):
+        import unittest.mock as mock, io, contextlib
+        sent = []
+        replies = [{"content": [{"type": "thinking", "thinking": ""}], "stop_reason": "max_tokens", "usage": {"input_tokens": 800, "output_tokens": 4000}},
+                   {"content": [{"type": "text", "text": '{"0": "InayaFlow"}'}], "stop_reason": "end_turn"}]
+        fake = lambda url, body, headers: sent.append(body) or replies[len(sent) - 1]
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k"}), mock.patch.object(s, "_post_json", fake), \
+                mock.patch.object(s, "build_prompt", lambda f: "u"), contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(s.llm_map([]), {"0": "InayaFlow"})
+        self.assertEqual([b["max_tokens"] for b in sent], [4000, 8000])
+        self.assertEqual(sent[0]["output_config"], {"effort": "low"})
+        self.assertIn("stop=max_tokens", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

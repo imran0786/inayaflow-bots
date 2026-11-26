@@ -673,7 +673,7 @@ class WriterAndGateFixes(unittest.TestCase):
             self.assertIn(must, s)
 
     def test_a_writer_run_is_cheaper_and_a_retry_fits_the_day(self):
-        self.assertEqual((P.MAX_SEARCHES, P.MAX_FETCHES, P.FETCH_TOKENS, P.WRITER_MAX_TOKENS), (3, 3, 6000, 3500))
+        self.assertEqual((P.MAX_SEARCHES, P.MAX_FETCHES, P.FETCH_TOKENS, P.WRITER_MAX_TOKENS), (3, 3, 6000, 8000))   # 26 Nov: 3500 -> 8000 (room to think)
         sent = []
 
         def post(url, b, h):
@@ -683,7 +683,7 @@ class WriterAndGateFixes(unittest.TestCase):
         P.run_writer("s", "u", m, post=post)
         tools = {t["name"]: t for t in sent[0]["tools"]}
         self.assertEqual((tools["web_search"]["max_uses"], tools["web_fetch"]["max_uses"], tools["web_fetch"]["max_content_tokens"]), (3, 3, 6000))
-        self.assertEqual(sent[0]["max_tokens"], 3500)
+        self.assertEqual(sent[0]["max_tokens"], 8000)
         self.assertLessEqual(m.cost, 0.30)                                         # a realistic big attempt: 40k in, 2.5k out, 3 searches = $0.135
         self.assertLessEqual(P.WRITER_RESERVE, 0.20)
         # two such attempts and the QA call fit inside the $0.60 day
@@ -894,6 +894,69 @@ class AnchorMix(unittest.TestCase):
     def test_prompt_has_the_link_text_line(self):
         self.assertIn("[LINK TEXT](URL)", P.WRITER_SYSTEM)
         self.assertNotIn("Never write the bare text inayaflow.ai.", P.WRITER_SYSTEM)
+
+
+class HaikuRoom26Nov(unittest.TestCase):
+    """26 Nov: claude-haiku-5-5 thinks by default and the thinking counts toward max_tokens (700 gave empty QA replies)."""
+
+    def _qa(self, replies):
+        sent = []
+
+        def post(url, b, h):
+            sent.append(b)
+            return replies[len(sent) - 1]
+        m = P.Meter()
+        art = {"title": "T", "body": "B"}
+        with _cl.redirect_stdout(_io.StringIO()) as out:
+            res = P.qa_gate(art, "https://inayaflow.ai/x", {}, "page", m, post=post)
+        return res, sent, out.getvalue(), m
+
+    def test_qa_call_sets_effort_and_room(self):
+        ok = {"content": [{"type": "text", "text": '{"verdict":"PASS","reasons":[]}'}], "stop_reason": "end_turn", "usage": {"input_tokens": 900, "output_tokens": 300}}
+        (passed, _), sent, _, _ = self._qa([ok])
+        self.assertTrue(passed)
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]["output_config"], {"effort": P.QA_EFFORT})
+        self.assertEqual(sent[0]["max_tokens"], P.QA_MAX_TOKENS)
+        self.assertGreaterEqual(P.QA_MAX_TOKENS, 4000)
+        self.assertNotIn("thinking", sent[0])
+        self.assertNotIn("temperature", sent[0])
+
+    def test_empty_qa_reply_is_logged_and_asked_again_with_twice_the_room(self):
+        empty = json.loads('{"content": [{"type": "thinking", "thinking": ""}], "stop_reason": "max_tokens", "usage": {"input_tokens": 900, "output_tokens": 6000}}')
+        ok = {"content": [{"type": "text", "text": '{"verdict":"FAIL","reasons":["x"]}'}], "stop_reason": "end_turn", "usage": {"input_tokens": 900, "output_tokens": 300}}
+        (passed, reasons), sent, log, _ = self._qa([empty, ok])
+        self.assertFalse(passed)
+        self.assertEqual(reasons, ["x"])
+        self.assertEqual([b["max_tokens"] for b in sent], [P.QA_MAX_TOKENS, 2 * P.QA_MAX_TOKENS])
+        self.assertIn("stop=max_tokens", log)
+        self.assertIn("out=6000", log)
+
+    def test_qa_reserve_still_covers_the_biggest_retry(self):
+        worst = 20000 * 0.10 / 1e6 + 2 * P.QA_MAX_TOKENS * 0.50 / 1e6
+        self.assertLessEqual(worst, P.QA_RESERVE)
+
+    def test_writer_sets_effort_and_its_reserve_covers_the_room(self):
+        sent = []
+
+        def post(url, b, h):
+            sent.append(b)
+            return {"content": [{"type": "text", "text": "x"}], "stop_reason": "end_turn", "usage": {"input_tokens": 1000, "output_tokens": 100}}
+        P.run_writer("s", "u", P.Meter(), post=post)
+        self.assertEqual(sent[0]["output_config"], {"effort": P.WRITER_EFFORT})
+        self.assertLessEqual(45000 * 2.00 / 1e6 + P.WRITER_MAX_TOKENS * 10.00 / 1e6 + P.MAX_SEARCHES * P.SEARCH_PRICE, P.WRITER_RESERVE + 1e-9)
+
+    def test_writer_cut_reply_is_logged(self):
+        def post(url, b, h):
+            return {"content": [{"type": "thinking", "thinking": ""}], "stop_reason": "max_tokens", "usage": {"input_tokens": 1000, "output_tokens": 8000}}
+        with _cl.redirect_stdout(_io.StringIO()) as out:
+            P.run_writer("s", "u", P.Meter(), post=post)
+        self.assertIn("writer reply cut or empty (stop=max_tokens", out.getvalue())
+
+    def test_anthropic_extra_matches_the_platform_poster_helper(self):
+        sent = []
+        P.anthropic(P.QA_MODEL, "s", "u", P.Meter(), post=lambda u, b, h: sent.append(b) or {"usage": {}}, extra={"output_config": {"effort": "low"}})
+        self.assertEqual(sent[0]["output_config"], {"effort": "low"})
 
 
 if __name__ == "__main__":

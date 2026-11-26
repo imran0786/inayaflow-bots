@@ -262,13 +262,26 @@ def _user_prompt(sent_text, reply_text):
     return "OUR ORIGINAL MESSAGE (truncated):\n%s\n\nTHEIR REPLY:\n%s" % (sent_text[:1500], reply_text[:REPLY_MAX_CHARS])
 
 
-def call_anthropic(user):
+class EmptyReply(RuntimeError):
+    """26 Nov: Haiku 5.5 thinks by default and the thinking counts toward max_tokens: a reply can stop before any text.
+    The message carries only the stop reason and token counts (never content), for the log."""
+
+
+def _empty_reply(data):
+    u = data.get("usage") or {}
+    return EmptyReply("no text (stop=%s, in=%s, out=%s tokens)" % (data.get("stop_reason"), u.get("input_tokens"), u.get("output_tokens")))
+
+
+HAIKU_MAX_TOKENS = 4000      # the 2nd (retry) ask gets twice this: 8000 out x $0.50/M = $0.004 at most
+
+
+def call_anthropic(user, max_tokens=HAIKU_MAX_TOKENS):
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("no Anthropic key in env")
     # Haiku 5.5: no temperature (non-default sampling = HTTP 400); thinking is on by default,
     # so keep effort low and read only the text blocks (a thinking block can come first).
-    body = {"model": ANTHROPIC_MODEL, "max_tokens": 4000, "output_config": {"effort": "low"},
+    body = {"model": ANTHROPIC_MODEL, "max_tokens": max_tokens, "output_config": {"effort": "low"},
             "system": SYSTEM, "messages": [{"role": "user", "content": user}]}
     headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
     data = _post_json("https://api.anthropic.com/v1/messages", body, headers)
@@ -276,7 +289,7 @@ def call_anthropic(user):
         raise RuntimeError("anthropic refusal")
     text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
     if not text.strip():
-        raise RuntimeError("anthropic empty text")
+        raise _empty_reply(data)
     return text
 
 
@@ -299,10 +312,11 @@ def llm_call(sent_text, reply_text):
             if not ai_take_call():
                 raise RuntimeError("daily model-call cap reached")      # the mail is skipped and retried tomorrow
             try:
-                out = call_anthropic(user)
+                out = call_anthropic(user, max_tokens=HAIKU_MAX_TOKENS * attempt)     # the 2nd ask gets twice the room
                 MODEL_USED["haiku"] += 1
                 return out
-            except Exception:
+            except Exception as e:
+                print("replier: haiku call %d failed: %s %s" % (attempt, type(e).__name__, str(e) if isinstance(e, EmptyReply) else ""))
                 if attempt == 1:
                     time.sleep(2)
     if not ai_take_call():

@@ -175,19 +175,42 @@ SYSTEM = ("You sort emails for a small SaaS (InayaFlow) mailbox. Pick exactly ON
           '{"bucket": "...", "reason": "max 12 words", "action": "max 12 words"}')
 
 
-def ai_call(user):
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        raise RuntimeError("no key")
-    body = {"model": MODEL, "max_tokens": 2000, "output_config": {"effort": "low"}, "system": SYSTEM,
-            "messages": [{"role": "user", "content": user}]}
+# 26 Nov: claude-haiku-5-5 thinks by default and the thinking counts toward max_tokens: 2000 could stop before any text, and the mail
+# then fell to OTHER_NEEDS_IMRAN. Now 4000 of room, an empty reply is logged (stop reason + token counts only) and asked ONCE more with
+# twice the room (8000 out x $0.50/M = $0.004 at most).
+AI_MAX_TOKENS = 4000
+
+
+def _ai_post(body, key):
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(),
                                  headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     with urllib.request.urlopen(req, timeout=60) as r:
-        data = json.load(r)
-    if data.get("stop_reason") == "refusal":
-        raise RuntimeError("refusal")
-    return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+        return json.load(r)
+
+
+def ai_call(user, post=None, take=None):
+    """The caller has already taken ONE call from the daily counter; the retry takes its own (no call past AI_CALLS_PER_DAY)."""
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        raise RuntimeError("no key")
+    text = ""
+    for attempt in (1, 2):
+        if attempt == 2 and not (take or ai_take_call)():
+            print("mail_router: no retry, daily AI call cap reached")
+            return text
+        body = {"model": MODEL, "max_tokens": AI_MAX_TOKENS * attempt, "output_config": {"effort": "low"}, "system": SYSTEM,
+                "messages": [{"role": "user", "content": user}]}
+        data = (post or _ai_post)(body, key)
+        if data.get("stop_reason") == "refusal":
+            raise RuntimeError("refusal")
+        text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text") or text
+        if text.strip() and data.get("stop_reason") != "max_tokens":
+            return text
+        u = data.get("usage") or {}
+        print("mail_router: AI reply %s (stop=%s, in=%s, out=%s tokens), %s" % (
+            "cut" if text.strip() else "had no text", data.get("stop_reason"), u.get("input_tokens"), u.get("output_tokens"),
+            "asking once more" if attempt == 1 else "giving up"))
+    return text
 
 
 def parse_ai(raw):

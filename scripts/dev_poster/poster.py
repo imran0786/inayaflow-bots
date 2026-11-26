@@ -36,7 +36,7 @@ QA_MODEL = os.environ.get("DEV_QA_MODEL", "claude-haiku-5-5")
 DAY_CAP = float(os.environ.get("DEV_DAY_USD_CAP", "0.60"))        # HARD cap per UTC day over ALL runs (dry and live), writer + QA + retry
 USD_CAP = DAY_CAP                                                  # (older name, same value)
 WRITER_RESERVE = 0.20   # most one Sonnet request can cost: <= ~45k tokens in x $2/M (prompt + 3 searches + 3 pages of <= 6000 tokens) + 3500 out x $10/M + 3 searches x $0.01 = ~$0.16
-QA_RESERVE = 0.02       # most the Haiku QA request can cost: <= 20k tokens in x $0.10/M + 700 out x $0.50/M = ~$0.003, rounded up
+QA_RESERVE = 0.02       # most the Haiku QA request can cost: <= 20k tokens in x $0.10/M + 12000 out (the retry) x $0.50/M = ~$0.008, rounded up
 RETRY_BELOW = DAY_CAP - WRITER_RESERVE - QA_RESERVE                # a 2nd writer try only when it can still be paid AND still be QA-checked
 MAX_DRY_PER_DAY = 2
 MIN_SOURCE_CHARS = 300      # a fetched page with less text than this (e.g. only "TikTok Support") is "unreadable": it cannot back a number
@@ -44,7 +44,13 @@ PAST_ARTICLES_KEPT = 30                                            # bodies whos
 MAX_SEARCHES = int(os.environ.get("DEV_MAX_SEARCHES", "3"))        # was 5 (23 Nov dry run 2 cost $0.433)
 MAX_FETCHES = 3                                                    # was 4
 FETCH_TOKENS = 6000                                                # per fetched page, was 10000
-WRITER_MAX_TOKENS = 3500                                           # 700-950 words are ~1,300 tokens; was 6000
+WRITER_MAX_TOKENS = 8000                                           # 700-950 words are ~1,300 tokens + Sonnet's thinking (26 Nov: 3500 -> 8000; 45k in x $2/M + 8000 x $10/M + 3 searches = $0.20 = WRITER_RESERVE)
+WRITER_EFFORT = os.environ.get("DEV_WRITER_EFFORT", "medium")      # 26 Nov: set explicitly (Sonnet 5.5 default is high); same as the platform poster writer
+# 26 Nov: claude-haiku-5-5 THINKS by default and the thinking counts toward max_tokens: the old QA max_tokens=700 often came back with
+# NO text ("QA answer not understood"). Effort is now explicit and the QA call has room to think; an empty reply is logged and asked
+# ONCE more with twice the room (12000 x $0.50/M = $0.006, inside QA_RESERVE).
+QA_MAX_TOKENS = int(os.environ.get("DEV_QA_MAX_TOKENS", "6000"))
+QA_EFFORT = os.environ.get("DEV_QA_EFFORT", "medium")              # same as the platform poster QA
 REST_DAYS = 14
 MIN_WORDS, MAX_WORDS = 600, 1050
 # USD per million tokens (official pricing, same table as scripts/job_runner/runner.py); web search $10 per 1,000
@@ -383,7 +389,7 @@ def _post_json(url, body, headers):
         return json.load(r)
 
 
-def anthropic(model, system, user, meter, post=None, tools=None, max_tokens=6000, messages=None):
+def anthropic(model, system, user, meter, post=None, tools=None, max_tokens=6000, messages=None, extra=None):
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key and post is None:
         raise RuntimeError("no ANTHROPIC_API_KEY")
@@ -394,6 +400,8 @@ def anthropic(model, system, user, meter, post=None, tools=None, max_tokens=6000
             "messages": messages or [{"role": "user", "content": user}]}
     if tools:
         body["tools"] = tools
+    if extra:                                     # e.g. {"output_config": {...}} (platform poster, 26 Nov): effort and a JSON schema for the reply
+        body.update(extra)
     headers = {"x-api-key": key or "", "anthropic-version": "2023-06-01", "content-type": "application/json"}
     # BOOK the call's full reserve and SAVE it BEFORE the request goes out: a run that is killed or times out during the call still has it on record.
     own = WRITER_RESERVE if model == WRITER else QA_RESERVE
@@ -434,7 +442,8 @@ def run_writer(system, user, meter, post=None, fetched=None):
     messages = [{"role": "user", "content": user}]
     text = ""
     for _ in range(6):
-        data = anthropic(WRITER, system, None, meter, post=post, tools=tools, max_tokens=WRITER_MAX_TOKENS, messages=messages)
+        data = anthropic(WRITER, system, None, meter, post=post, tools=tools, max_tokens=WRITER_MAX_TOKENS, messages=messages,
+                         extra={"output_config": {"effort": WRITER_EFFORT}})
         content = data.get("content") or []
         if fetched is not None:
             harvest_fetched(content, fetched)
@@ -444,8 +453,16 @@ def run_writer(system, user, meter, post=None, fetched=None):
         if data.get("stop_reason") == "pause_turn":
             messages.append({"role": "assistant", "content": content})
             continue
+        if data.get("stop_reason") == "max_tokens" or not text.strip():
+            print("dev_poster: writer reply %s" % no_text_note(data))
         return text
     raise RuntimeError("writer did not finish")
+
+
+def no_text_note(data):
+    """One log line for a reply that was cut or had no text: stop reason + token counts only (never the content)."""
+    u = data.get("usage") or {}
+    return "cut or empty (stop=%s, in=%s, out=%s tokens)" % (data.get("stop_reason"), u.get("input_tokens"), u.get("output_tokens"))
 
 
 WRITER_SYSTEM = """You write one article for DEV (dev.to) for the company InayaFlow. Voice: "we" (never I, me, my, mine, myself). Plain, friendly, specific English.
@@ -520,12 +537,14 @@ def qa_gate(art, target_url, source_texts, page_text, meter, post=None):
     user = "TARGET PAGE %s (our own page):\n%s\n\n%s\n\nARTICLE TITLE: %s\n\n%s" % (target_url, page_text[:2500], srcs, art["title"], art["body"])
     j = None
     raw = ""
-    for _try in (1, 2):                              # an unreadable QA reply gets ONE more ask before it fails
-        data = anthropic(QA_MODEL, QA_SYSTEM, user[:60000], meter, post=post, max_tokens=700)
+    for _try in (1, 2):                              # an unreadable QA reply gets ONE more ask (with twice the room) before it fails
+        data = anthropic(QA_MODEL, QA_SYSTEM, user[:60000], meter, post=post, max_tokens=QA_MAX_TOKENS * _try,
+                         extra={"output_config": {"effort": QA_EFFORT}})
         raw = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
         j = qa_json(raw)
         if j and j.get("verdict") in ("PASS", "FAIL"):
             break
+        print("dev_poster: QA reply unreadable, %s, %s" % (no_text_note(data), "asking once more" if _try == 1 else "giving up"))
     if not (j and j.get("verdict") in ("PASS", "FAIL")):
         j = qa_lenient(raw) or j
     if not j or j.get("verdict") not in ("PASS", "FAIL"):
