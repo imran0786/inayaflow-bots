@@ -163,6 +163,17 @@ def load_products(listings_path=None, pages_path=None, priority_path=None):
 
 
 LISTED_STATUSES = ("SUBMITTED", "READY_TO_SUBMIT", "ALREADY_LISTED")
+MAX_EXTRA_PER_SITE_PER_DAY = int(os.environ.get("MAX_EXTRA_PER_SITE_PER_DAY", "3"))   # extra tool/guide listings per domain per UTC day (new domains come first)
+_TOOLS_WORDS = {"tool", "tools", "saas", "startup", "startups", "app", "apps", "ai"}
+
+
+def tools_only_site(site):
+    """True when the directory's name or URL says it lists software (tool / saas / startup / app / ai): guides are not tried there."""
+    u = urlparse(site.get("url") or "")
+    for t in re.split(r"[^a-z0-9]+", ("%s %s %s" % (site.get("name", ""), u.hostname or "", u.path)).lower()):
+        if t in _TOOLS_WORDS or t.startswith(("ai", "tool", "saas", "startup", "apps")) or t.endswith(("ai", "tool", "tools", "saas", "startup", "startups", "app", "apps")):
+            return True
+    return False
 
 
 def pick_lead(state, products, run_counts=None, site=None):
@@ -213,10 +224,26 @@ def badge_added(dom, path=None):
     return e if isinstance(e, dict) and e.get("date") else None
 
 
-def badge_unlocked(dom, rec_date, path=None):
-    """True when a NEEDS_BADGE result is older than the day the badge was added: one more try is allowed (a NEEDS_BADGE on or after that day stays closed)."""
+def _iso(d):
+    try:
+        return datetime.date.fromisoformat(str(d))
+    except Exception:
+        return None
+
+
+def badge_live(dom, today, path=None):
+    """The badge entry when its date is a valid ISO date on or before today (a future or badly written date = not added yet), else None."""
     b = badge_added(dom, path)
-    return bool(b) and str(rec_date or "") < str(b["date"])
+    bd, td = _iso((b or {}).get("date")), _iso(today)
+    return b if (b and bd and td and bd <= td) else None
+
+
+def badge_unlocked(dom, rec_date, today, path=None):
+    """True only when rec_date < badge date <= today, all valid ISO dates: one more try after the Director added the badge.
+    A NEEDS_BADGE on or after the badge date stays closed; a future or bad date unlocks nothing."""
+    b = badge_live(dom, today, path)
+    rd = _iso(rec_date)
+    return bool(b) and rd is not None and rd < _iso(b["date"])
 
 
 def clean_badge(s):
@@ -372,10 +399,13 @@ def build_task(site, product=None, lead=False):
     if is_page and product.get("kind") == "guide":
         extra += ("- This page is a free GUIDE (an article), not software. Submit it only where the directory accepts articles, guides, resources or any useful link. "
                   "If it lists only software / tools / apps / startups, do not force it: report WRONG_KIND.\n")
-    b = badge_added(dom_of(site))
+    b = badge_live(dom_of(site), datetime.date.today().isoformat())
     if b:
         extra += ("- We have now put this directory's badge on our site at %s. If the form asks where the badge or backlink is, give that page.\n" % b.get("where", FACTS["url"]))
-    return f"""Submit our product to the directory '{site['name']}' (start at {site['url']}). Find the page where a tool/product/startup is submitted.
+    opening = (f"Submit our free guide to the directory '{site['name']}' (start at {site['url']}). Find the page where an article, resource or link is submitted."
+               if is_page and product.get("kind") == "guide" else
+               f"Submit our product to the directory '{site['name']}' (start at {site['url']}). Find the page where a tool/product/startup is submitted.")
+    return f"""{opening}
 
 TRUE FACTS about our product (use only these; never invent anything):
 {json.dumps(facts_for(product), indent=1)}
@@ -384,7 +414,7 @@ Contact e-mail: {CONTACT}
 RULES:
 - {dry}
 - {signup}
-- CAPTCHA: a reCAPTCHA / hCaptcha / Turnstile script, an invisible captcha or a small 'protected by reCAPTCHA' badge is NOT a stop: carry on and submit normally. Only when a challenge is actually VISIBLE at a step you must pass (an 'I'm not a robot' box, an image or puzzle task, a 'verify you are human' page that does not clear by itself) stop and report CAPTCHA. Never solve or try to get past a challenge.
+- CAPTCHA: ANY challenge you can SEE (an 'I'm not a robot' box, an image or puzzle task, any 'verify you are human' / 'checking your browser' / 'are you a robot' text or page) means CAPTCHA: stop this site at once and report CAPTCHA. Never click, solve, wait out or try to get past a challenge. A reCAPTCHA / hCaptcha / Turnstile script on its own, with nothing visible, or the small 'protected by reCAPTCHA' badge, is NOT a stop: carry on.
 - Never pay and never choose a paid plan, 'featured', 'fast track' or sponsored option; choose the free option. If only paid listing exists, report PAID.
 - Never give a phone number. If one is required, report PHONE_REQUIRED.
 - Never use Google, GitHub, Twitter/X or any social sign-in. If the site offers BOTH a social button and an e-mail + password form (or an e-mail link / code), always use the e-mail option. If a social button is the only way in, report SOCIAL_LOGIN_ONLY.
@@ -709,7 +739,7 @@ def domain_block(state, dom, today, known_path=None):
         return "known site: " + str(k)[:60]
     w = (state.get(WALLS_KEY) or {}).get(dom)
     why = (w or {}).get("reason") or derive_wall(state, dom)
-    if why in BADGE_STATUSES and badge_added(dom):
+    if why in BADGE_STATUSES and badge_live(dom, today):
         why = derive_wall(state, dom, ignore=BADGE_STATUSES)   # the Director put the badge up: only a NON-badge wall still blocks (eligible() allows one more try)
     if why:
         return "walled: " + str(why)
@@ -1050,9 +1080,10 @@ def write_click_list(state, today, path=None):
 NEEDS_BADGE_PATH = os.path.join(ROOT, "ops", "needs_badge.md")   # PRIVATE (pushed to the genie repo branch ops-directory-logs with the other logs)
 
 
-def badge_rows(state):
+def badge_rows(state, today=None):
     """[(domain, submit url, product, date, badge snippet, added?)] for every free site that asks for a badge, site level and per product. NOFOLLOW / NOINDEX sites left out."""
     rows, seen = [], set()
+    today = today or datetime.date.today().isoformat()
     for k, e in state.items():
         if not _is_entry(k, e) or "." not in k:
             continue
@@ -1064,7 +1095,7 @@ def badge_rows(state):
             if rec.get("status") not in BADGE_STATUSES or (k, pid) in seen:
                 continue
             seen.add((k, pid))
-            rows.append((k, e.get("url", "https://" + k), pid, rec.get("date", ""), rec.get("badge") or e.get("badge") or "", "yes" if badge_added(k) else "no",
+            rows.append((k, e.get("url", "https://" + k), pid, rec.get("date", ""), rec.get("badge") or e.get("badge") or "", "yes" if badge_live(k, today) else "no",
                          "followed" if pr == "FOLLOWED" else pr.lower().replace("_", " ")))
     rows.sort(key=lambda r: (r[6] != "followed", r[0], r[2]))
     return rows
@@ -1073,7 +1104,7 @@ def badge_rows(state):
 def write_needs_badge(state, today, path=None):
     """ops/needs_badge.md: free directories that list us only with their badge on our site (Imran 26 Nov 2026: "The one that needs badges, we can put their badges")."""
     path = path or NEEDS_BADGE_PATH
-    rows = badge_rows(state)
+    rows = badge_rows(state, today)
     out = ["# NEEDS BADGE (updated %s)" % today, "",
            "Free directories that list us only when their badge / backlink is on our site. %d rows. Followed ones first." % len(rows), "",
            "Director: (1) check the snippet is a plain link / image to that directory only (no script), (2) put it on inayaflow.ai, "
@@ -1194,7 +1225,7 @@ def eligible(site, state, old_state, today, vstate=None):
         if not e:
             continue
         st = e.get("status")
-        if st in BADGE_STATUSES and badge_unlocked(dom_of(site), e.get("date")):
+        if st in BADGE_STATUSES and badge_unlocked(dom_of(site), e.get("date"), today):
             continue
         if st in NEVER_AGAIN:
             return False
@@ -1384,19 +1415,27 @@ def product_todo(state, site, products, today):
             out.append(p)
         elif d.get("status") in ("OTHER", "ERROR", "TIMEOUT", "EMAIL_CODE_NOT_RECEIVED") and d.get("tries", 1) < 2 and d.get("date") != today:
             out.append(p)
-        elif d.get("status") in BADGE_STATUSES and badge_unlocked(dom_of(site), d.get("date")):
+        elif d.get("status") in BADGE_STATUSES and badge_unlocked(dom_of(site), d.get("date"), today):
             out.append(p)
     return out
 
 
+def extra_today(e, today):
+    """EXTRA listing attempts made today at one site entry: product records dated today, minus the site's own first listing
+    (the lead product, or the homepage under the root domain rule) and minus records only written to skip a product (no attempt)."""
+    lead_today = e.get("lead") if e.get("date") == today else None
+    return sum(1 for pid, pr in (e.get("products") or {}).items()
+               if isinstance(pr, dict) and pr.get("date") == today and not pr.get("skipped") and pid != lead_today)
+
+
 def count_tool_today(state, today):
-    """Tool-listing attempts already made today (all runs), from the per-product results in the state."""
+    """Extra (per-tool / per-guide) listing attempts already made today (all runs), from the per-product results in the state."""
     n, seen = 0, set()
     for k, e in state.items():
         if not _is_entry(k, e) or e.get("name") in seen:
             continue
         seen.add(e.get("name"))
-        n += sum(1 for pr in (e.get("products") or {}).values() if pr.get("date") == today)
+        n += extra_today(e, today)
     return n
 
 
@@ -1410,12 +1449,14 @@ def record_product(state, site, product, r, today, soft=True):
         pr[product["id"]] = {"status": r["status"], "date": today, "tries": old.get("tries", 0) + 1, "note": scrub(r.get("note", ""))[:80]}
         if r.get("badge"):
             pr[product["id"]]["badge"] = clean_badge(r["badge"])
+        if r.get("skipped"):
+            pr[product["id"]]["skipped"] = True      # written to close a product, not an attempt
     update_walls(state, today)
 
 
 def skip_remaining_products(state, site, todo, today, why, status="ONE_PER_DOMAIN"):
     for p in todo:
-        record_product(state, site, p, {"status": status, "note": why}, today, soft=False)
+        record_product(state, site, p, {"status": status, "note": why, "skipped": True}, today, soft=False)
 
 
 def backfill_sites(state, products, today):
@@ -1512,6 +1553,9 @@ def main():
     tool_att = count_tool_today(state, today)   # per UTC day, shared by all runs
 
     run_counts = {}   # listings promoted in THIS run (dry runs record nothing, so the rotation still moves on)
+    extra_run = {}    # extra listings per domain in THIS run (used for the per-day cap when nothing is recorded: dry / manual)
+    recording = not manual and not DRY
+    listed_now = []   # (site, lead id) listed in this run: their extra listings wait until every new site was tried
     home = next((p for p in products if p.get("kind") == "homepage"), None)
 
     def do(s, product, lead=False):
@@ -1543,14 +1587,26 @@ def main():
     def tool_listings(s, done_ids=()):
         """Each free tool page, then each guide page, as its OWN listing on this directory (push-priority order). Stops for the site when it allows one
         listing per company / root domain only, at a wall, after 2 failures in a row, or when the day's dollar cap is reached. A guide refused as the
-        wrong kind (tools-only directory) ends the guides on that site."""
+        wrong kind (tools-only directory) ends the guides on that site. At most MAX_EXTRA_PER_SITE_PER_DAY extra listings per domain per day;
+        guides are never tried where the directory's name / URL says tool / saas / startup / app / ai."""
         nonlocal tool_att
+        dom = dom_of(s)
         todo = [p for p in product_todo(state, s, products, today) if p["id"] not in done_ids]
+        if tools_only_site(s):
+            guides = [p for p in todo if p.get("kind") == "guide"]
+            if guides and recording:
+                skip_remaining_products(state, s, guides, today, "software directory (name/URL): no guides", status="WRONG_KIND")
+                save()
+            todo = [p for p in todo if p.get("kind") != "guide"]
         fails = 0
         for i, p in enumerate(todo):
             if tool_att >= TOOL_ATTEMPT_CAP or stop_now():
                 break
+            e = state.get(dom) or {}
+            if (extra_today(e, today) if recording else extra_run.get(dom, 0)) >= MAX_EXTRA_PER_SITE_PER_DAY:
+                break   # the rest waits for a later day: new domains come first
             tool_att += 1
+            extra_run[dom] = extra_run.get(dom, 0) + 1
             r = do(s, p)
             if not manual and not DRY:
                 record_product(state, s, p, r, today)
@@ -1593,7 +1649,12 @@ def main():
                 skip_remaining_products(state, s, [p for p in products if p.get("kind") != "homepage"], today, "root domain only")
             save()
         if r["status"] in LISTED_STATUSES and not r.get("used_homepage") and products and (not manual or WITH_TOOLS):
-            tool_listings(s, done_ids=(used["id"],))
+            listed_now.append((s, used["id"]))
+    # extra listings (other tool pages, then guides) only AFTER every new site of the feed was tried: new domains first (Imran: 10 new unique sites a day)
+    for s, lead_id in listed_now:
+        if tool_att >= TOOL_ATTEMPT_CAP or stop_now():
+            break
+        tool_listings(s, done_ids=(lead_id,))
     # backfill: sites listed earlier that still miss tool listings (only sites whose URL is known)
     if products and not manual:
         for s in backfill_sites(state, products, today):

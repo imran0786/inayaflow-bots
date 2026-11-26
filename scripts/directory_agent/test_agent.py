@@ -1177,11 +1177,16 @@ class PushPagesAndBadges(unittest.TestCase):
         g = ag.build_task(site, guide)
         self.assertIn("WRONG_KIND", g)
         self.assertIn("ADDITIONAL listing", g)
+        self.assertTrue(g.startswith("Submit our free guide"))
+        self.assertIn("where an article, resource or link is submitted", g)
+        self.assertIn("where a tool/product/startup is submitted", lead)
         self.assertIn(guide["url"], g)
         for t in (lead, g, ag.build_task(site)):
-            self.assertIn("NOT a stop", t)                    # an invisible reCAPTCHA is not a reason to stop
-            self.assertIn("VISIBLE", t)
-            self.assertIn("Never solve", t)
+            self.assertIn("NOT a stop", t)                    # an invisible reCAPTCHA script alone is not a reason to stop
+            self.assertIn("ANY challenge you can SEE", t)     # any visible challenge / 'verify you are human' text = stop that site
+            self.assertIn("'verify you are human'", t)
+            self.assertIn("stop this site at once", t)
+            self.assertIn("Never click, solve", t)
             self.assertIn("'badge' field", t)
             self.assertIn("Never pay", t)
         self.assertIn("WRONG_KIND", ag.RESULT_CODES)
@@ -1196,22 +1201,66 @@ class PushPagesAndBadges(unittest.TestCase):
         self.addCleanup(lambda: setattr(ag, "BADGES_ADDED_PATH", saved))
 
     def test_needs_badge_is_closed_until_the_director_adds_the_badge_then_tried_once(self):
+        import datetime
+        D = lambda n: (datetime.date.today() + datetime.timedelta(days=n)).isoformat()
+        today = D(0)
         self._badges_file({})
         site = {"name": "B", "url": "https://b.example/submit"}
-        st = {"b.example": {"name": "B", "status": "NEEDS_BADGE", "date": "2026-11-26", "tries": 1, "url": site["url"]}}
-        ag.update_walls(st, "2026-11-26")
-        self.assertTrue(ag.domain_block(st, "b.example", "2026-11-27", known_path="none.json"))
-        self.assertFalse(ag.eligible(site, st, {}, "2026-11-27"))
-        self._badges_file({"b.example": {"date": "2026-11-27", "where": "https://inayaflow.ai/featured"}})
-        self.assertIsNone(ag.domain_block(st, "b.example", "2026-11-27", known_path="none.json"))
-        self.assertTrue(ag.eligible(site, st, {}, "2026-11-27"))
+        st = {"b.example": {"name": "B", "status": "NEEDS_BADGE", "date": D(-2), "tries": 1, "url": site["url"]}}
+        ag.update_walls(st, D(-2))
+        self.assertTrue(ag.domain_block(st, "b.example", today, known_path="none.json"))
+        self.assertFalse(ag.eligible(site, st, {}, today))
+        self._badges_file({"b.example": {"date": D(-1), "where": "https://inayaflow.ai/featured"}})
+        self.assertIsNone(ag.domain_block(st, "b.example", today, known_path="none.json"))
+        self.assertTrue(ag.eligible(site, st, {}, today))
         self.assertIn("https://inayaflow.ai/featured", ag.build_task(site))
-        st["b.example"]["date"] = "2026-11-27"                                # it asked for the badge AGAIN after we added it: closed
-        self.assertFalse(ag.eligible(site, st, {}, "2026-11-28"))
-        st["c.example"] = {"name": "C", "status": "NEEDS_BADGE", "date": "2026-11-26", "url": "https://c.example/s"}
+        st["b.example"]["date"] = D(-1)                                     # it asked for the badge AGAIN on/after the badge day: closed
+        self.assertFalse(ag.eligible(site, st, {}, today))
+        st["c.example"] = {"name": "C", "status": "NEEDS_BADGE", "date": D(-2), "url": "https://c.example/s"}
         st[ag.WALLS_KEY]["c.example"] = {"status": "WALLED", "reason": "CAPTCHA"}
-        self._badges_file({"c.example": {"date": "2026-11-27"}})
-        self.assertTrue(ag.domain_block(st, "c.example", "2026-11-28", known_path="none.json"))   # another wall still blocks
+        self._badges_file({"c.example": {"date": D(-1)}})
+        self.assertTrue(ag.domain_block(st, "c.example", today, known_path="none.json"))   # another wall still blocks
+
+    def test_badge_date_in_the_future_or_badly_written_unlocks_nothing(self):
+        import datetime
+        D = lambda n: (datetime.date.today() + datetime.timedelta(days=n)).isoformat()
+        today = D(0)
+        site = {"name": "B", "url": "https://b.example/submit"}
+        st = {"b.example": {"name": "B", "status": "NEEDS_BADGE", "date": D(-3), "tries": 1, "url": site["url"]}}
+        ag.update_walls(st, D(-3))
+        for bad in (D(1), "27/11/2026", "2026-13-40", "", "soon", None, 20261127):
+            self._badges_file({"b.example": {"date": bad, "where": "https://inayaflow.ai/featured"}})
+            self.assertFalse(ag.badge_unlocked("b.example", D(-3), today), bad)
+            self.assertFalse(ag.eligible(site, st, {}, today), bad)
+            self.assertTrue(ag.domain_block(st, "b.example", today, known_path="none.json"), bad)
+            self.assertNotIn("https://inayaflow.ai/featured", ag.build_task(site), bad)
+        self._badges_file({"b.example": {"date": D(-1)}})
+        self.assertTrue(ag.badge_unlocked("b.example", D(-3), today))
+        self.assertFalse(ag.badge_unlocked("b.example", "not-a-date", today))          # a bad record date unlocks nothing
+        self.assertFalse(ag.badge_unlocked("b.example", D(-3), "bad-today"))
+        self.assertFalse(ag.badge_unlocked("b.example", D(-3), D(-2)))                 # badge day later than "today"
+
+    def test_tools_only_directories_by_name_or_url(self):
+        for name, url in (("AI Tools Directory", "https://aitoolsdirectory.com/submit"), ("Toolify", "https://www.toolify.ai/submit"),
+                          ("SaaSHub", "https://www.saashub.com/submit"), ("Startup Stash", "https://startupstash.com/add"),
+                          ("X", "https://dir.example/submit-tool"), ("Apps list", "https://dir.example/"), ("There", "https://there.ai/")):
+            self.assertTrue(ag.tools_only_site({"name": name, "url": url}), name)
+        for name, url in (("Creator Resources", "https://creatorlinks.example/submit"), ("Marketing Blog List", "https://marketing.example/suggest"),
+                          ("Domain Mail", "https://domainmail.example/add")):
+            self.assertFalse(ag.tools_only_site({"name": name, "url": url}), name)
+
+    def test_extra_count_leaves_out_the_lead_the_homepage_fallback_and_skip_records(self):
+        t = "2026-11-26"
+        e = {"name": "M", "status": "SUBMITTED", "date": t, "lead": "t1",
+             "products": {"t1": {"status": "SUBMITTED", "date": t}, "t2": {"status": "SUBMITTED", "date": t},
+                          "g1": {"status": "WRONG_KIND", "date": t}, "g2": {"status": "WRONG_KIND", "date": t, "skipped": True},
+                          "t3": {"status": "SUBMITTED", "date": "2026-11-25"}}}
+        self.assertEqual(ag.extra_today(e, t), 2)                                    # t2 + g1 only
+        root = {"name": "R", "status": "SUBMITTED", "date": t, "lead": "homepage",
+                "products": {"homepage": {"status": "SUBMITTED", "date": t}, "t1": {"status": "ONE_PER_DOMAIN", "date": t, "skipped": True}}}
+        self.assertEqual(ag.count_tool_today({"m.example": e, "r.example": root}, t), 2)
+        old_lead = dict(e, date="2026-11-25")                                        # lead from another day: t1 today is an extra
+        self.assertEqual(ag.extra_today(old_lead, t), 3)
 
     def _run_main(self, outcomes, products):
         """FEED mode, live (DRY off), every file in a temp folder. outcomes: {(domain, product id): result dict}."""
@@ -1288,6 +1337,31 @@ class PushPagesAndBadges(unittest.TestCase):
         self.assertIn("NEEDS_PERSON (visible captcha)", click_md)
         self.assertIn("https://cap.example/submit", click_md)
         self.assertEqual([c for c in calls if c[0] == "cap.example"], [("cap.example", "t1", True)])   # a wall: no more products there
+
+    def test_extras_wait_until_every_new_site_was_tried_and_stop_at_3_per_domain(self):
+        ok = {"status": "SUBMITTED", "note": ""}
+        prods = [{"id": "homepage", "kind": "homepage", "name": "InayaFlow", "url": "https://inayaflow.ai/"}] + \
+                [{"id": "t%d" % i, "kind": "tool", "name": "T%d" % i, "url": "https://inayaflow.ai/tools/t%d" % i} for i in range(1, 7)]
+        outcomes = {}
+        for d in ("a.example", "b.example"):
+            for i in range(1, 7):
+                outcomes[(d, "t%d" % i)] = ok
+        calls, state, _, _, _ = self._run_main(outcomes, prods)
+        leads = [c for c in calls if c[2]]
+        self.assertEqual(calls[:2], leads)                                    # both NEW sites first, then any extra listing
+        self.assertEqual(len(leads), 2)
+        for d in ("a.example", "b.example"):
+            extras = [c for c in calls if c[0] == d and not c[2]]
+            self.assertEqual(len(extras), ag.MAX_EXTRA_PER_SITE_PER_DAY)       # 3 extra listings per domain per day, the rest wait
+            self.assertEqual(ag.extra_today(state[d], ag.datetime.date.today().isoformat()), 3)
+        self.assertEqual(ag.MAX_EXTRA_PER_SITE_PER_DAY, 3)
+
+    def test_guides_are_not_tried_on_a_software_directory(self):
+        ok = {"status": "SUBMITTED", "note": ""}
+        calls, state, _, _, _ = self._run_main({("aitools.example", "t1"): ok, ("aitools.example", "t2"): ok}, self.PRODS)
+        self.assertEqual([c[1] for c in calls], ["t1", "t2"])                  # g1 / g2 never attempted
+        pr = state["aitools.example"]["products"]
+        self.assertEqual((pr["g1"]["status"], pr["g1"].get("skipped")), ("WRONG_KIND", True))
 
     def test_the_workflow_carries_needs_badge_to_the_private_repo(self):
         w = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "workflows", "directory-agent.yml"), encoding="utf8").read()
