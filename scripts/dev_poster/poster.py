@@ -383,7 +383,7 @@ def _post_json(url, body, headers):
         return json.load(r)
 
 
-def anthropic(model, system, user, meter, post=None, tools=None, max_tokens=6000, messages=None):
+def anthropic(model, system, user, meter, post=None, tools=None, max_tokens=6000, messages=None, extra=None):
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key and post is None:
         raise RuntimeError("no ANTHROPIC_API_KEY")
@@ -394,6 +394,8 @@ def anthropic(model, system, user, meter, post=None, tools=None, max_tokens=6000
             "messages": messages or [{"role": "user", "content": user}]}
     if tools:
         body["tools"] = tools
+    if extra:                                     # e.g. {"output_config": {...}} (platform poster, 26 Nov): effort and a JSON schema for the reply
+        body.update(extra)
     headers = {"x-api-key": key or "", "anthropic-version": "2023-06-01", "content-type": "application/json"}
     # BOOK the call's full reserve and SAVE it BEFORE the request goes out: a run that is killed or times out during the call still has it on record.
     own = WRITER_RESERVE if model == WRITER else QA_RESERVE

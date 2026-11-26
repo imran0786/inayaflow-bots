@@ -2,7 +2,7 @@ name: Platform poster (one article a day each on WordPress.com, Blogger, Notion)
 
 # 24 Nov 2026. Publishes ONE short, unique article a day to EACH of WordPress.com (inayaflow.wordpress.com), Blogger (inayaflow.blogspot.com) and
 # Notion (child page of the public page; published at breezy-split-a72.notion.site), each with one plain link to a rotating inayaflow.ai page.
-# Writer: Claude Sonnet 5.5 + web search (reuses scripts/dev_poster). QA: Haiku + offline checks. HARD daily cap PLATFORM_DAY_USD_CAP over ALL runs
+# Writer: Claude Sonnet 5.5 with ONLY the target page's facts (no web tools unless the variable PLATFORM_WRITER_WEB is true; 26 Nov r3). QA: Haiku (JSON schema) + offline checks. HARD daily cap PLATFORM_DAY_USD_CAP over ALL runs
 # (checked before each model call, kept in the state); at most 2 dry runs a day; one article per platform per day.
 # Any FAIL = nothing is published for that platform, the draft goes to the PRIVATE repo (imran0786/genie, branch ops-platform-poster).
 # SWITCH: NOTHING is published (scheduled OR manual run, dry_run input or not) unless the repository variable PLATFORM_POSTER_LIVE is "true"; the poster
@@ -75,6 +75,7 @@ jobs:
           BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           PLATFORM_POSTER_LIVE: ${{ vars.PLATFORM_POSTER_LIVE }}
+          PLATFORM_WRITER_WEB: ${{ vars.PLATFORM_WRITER_WEB }}   # unset = writer without web tools (26 Nov r3)
           DRY_RUN: ${{ vars.PLATFORM_POSTER_LIVE == 'true' && ((github.event_name == 'schedule' && 'false') || github.event.inputs.dry_run || 'true') || 'true' }}
           PLATFORM_DAY_USD_CAP: "0.90"   # 24 Nov: directory agent trimmed 6.00 -> 5.10 to fund this; sum stays $14.98
         run: |
