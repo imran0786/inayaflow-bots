@@ -482,6 +482,12 @@ def run_claude(job, post=post_json, clock=time.time, meter=None):
             messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": b["id"],
                                                           "content": run_tool(job, b.get("name"), b.get("input") or {})} for b in uses]})
             continue
+        if not text:
+            # 26 Nov: Claude 5.5 models think by default and the thinking counts toward max_tokens: log a turn that gave no text and no tool
+            # call (stop reason + token counts only, never content). A max_tokens stop is asked again below; the next turn gets the room again.
+            u = data.get("usage") or {}
+            print("job_runner: turn gave no text (stop=%s, max_tokens=%s, in=%s, out=%s tokens)" % (
+                stop, body["max_tokens"], u.get("input_tokens"), u.get("output_tokens")))
         if stop == "max_tokens":
             messages.append({"role": "user", "content": "Your answer was cut off. Call submit_result now with the complete, shorter result."})
             continue

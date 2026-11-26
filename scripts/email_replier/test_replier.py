@@ -298,5 +298,34 @@ class MarksEveryDecision(unittest.TestCase):
         self.assertEqual(stores, [])
 
 
+class HaikuRoom26Nov(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self._count, self._ok = r.AI_COUNT_PATH, os.environ.get("AI_COUNTER_OK")
+        r.AI_COUNT_PATH = os.path.join(tempfile.mkdtemp(), "ops", "ai_calls_replier.json")
+        os.environ["AI_COUNTER_OK"] = "true"
+
+    def tearDown(self):
+        r.AI_COUNT_PATH = self._count
+        if self._ok is None:
+            os.environ.pop("AI_COUNTER_OK", None)
+        else:
+            os.environ["AI_COUNTER_OK"] = self._ok
+
+    def test_empty_first_reply_retries_with_twice_the_room_and_is_logged(self):
+        import unittest.mock as mock, io, contextlib
+        sent = []
+        replies = [{"content": [{"type": "thinking", "thinking": ""}], "stop_reason": "max_tokens", "usage": {"input_tokens": 800, "output_tokens": 4000}},
+                   {"content": [{"type": "text", "text": "OK"}], "stop_reason": "end_turn"}]
+        fake = lambda url, body, headers: sent.append(body) or replies[len(sent) - 1]
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k"}), mock.patch.object(r, "_post_json", fake), \
+                mock.patch.object(r.time, "sleep"), contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(r.llm_call("a", "b"), "OK")
+        self.assertEqual([b["max_tokens"] for b in sent], [4000, 8000])
+        self.assertEqual(sent[0]["output_config"], {"effort": "low"})
+        self.assertEqual(r.ai_calls_today(), 2)          # both asks counted against the daily cap
+        self.assertIn("stop=max_tokens", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -909,5 +909,27 @@ class KnownSites(unittest.TestCase):
             self.assertIn(dom, keys)
 
 
+class SonnetRoom26Nov(Base):
+    def test_effort_room_and_reserve(self):
+        sent = []
+
+        def post(url, body, headers):
+            sent.append(body)
+            return {"content": [{"type": "text", "text": "LIST DONE"}], "stop_reason": "end_turn", "usage": usage()}
+        b.ask_model("s", "u", b.Meter(b.load_state(), TODAY), post=post)
+        self.assertEqual(sent[0]["output_config"], {"effort": b.CLAUDE_EFFORT})
+        self.assertEqual(sent[0]["max_tokens"], b.CLAUDE_MAX_TOKENS)
+        self.assertGreater(b.CLAUDE_MAX_TOKENS, 4000)
+        # one request can still never cost more than its booked reserve
+        self.assertLessEqual(45000 * 2.00 / 1e6 + b.CLAUDE_MAX_TOKENS * 10.00 / 1e6 + b.MAX_SEARCHES * b.SEARCH_PRICE, b.RESERVE + 1e-9)
+
+    def test_cut_answer_is_logged(self):
+        def post(url, body, headers):
+            return {"content": [{"type": "thinking", "thinking": ""}], "stop_reason": "max_tokens", "usage": usage(out=7000)}
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            b.ask_model("s", "u", b.Meter(b.load_state(), TODAY), post=post)
+        self.assertIn("list-builder: answer cut or empty (stop=max_tokens", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

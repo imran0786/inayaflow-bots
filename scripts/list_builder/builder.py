@@ -88,7 +88,12 @@ DS_RESERVE = 0.02       # most one DeepSeek request can cost: ~12k tokens in x $
 PROOF_MAX_FETCHES = int(os.environ.get("LIST_BUILDER_PROOF_FETCHES", "120"))    # follow_proof checks per run (each makes up to 4 page fetches)
 PROOF_SECONDS = int(os.environ.get("LIST_BUILDER_PROOF_SECONDS", "480"))       # time limit for all proof checks of one run
 RESERVE = 0.20          # most one request can cost: <= ~45k tokens in x $2/M + 4000 out x $10/M + 4 searches x $0.01 = ~$0.17
-MAX_TOKENS = 4000
+MAX_TOKENS = 4000            # the DeepSeek twin (thinking disabled there)
+# 26 Nov: Sonnet 5.5 thinks by default (effort high) and the thinking counts toward max_tokens: up to 40 JSON lines (~2,500 tokens)
+# plus thinking did not fit in 4000. Effort is now explicit (medium, as the platform poster writer) with 7000 of room:
+# 45k in x $2/M + 7000 x $10/M + 4 searches x $0.01 = $0.20 = RESERVE, so one request still cannot pass its booking.
+CLAUDE_MAX_TOKENS = int(os.environ.get("LIST_BUILDER_MAX_TOKENS", "7000"))
+CLAUDE_EFFORT = os.environ.get("LIST_BUILDER_EFFORT", "medium")
 MAX_SEARCHES = int(os.environ.get("LIST_BUILDER_MAX_SEARCHES", "4"))
 TARGET_NEW = int(os.environ.get("LIST_BUILDER_TARGET", "450"))        # stop for the day once this many rows were added
 MAX_NEW_PER_DAY = int(os.environ.get("LIST_BUILDER_MAX_NEW", "550"))  # never add more than this in one UTC day
@@ -471,7 +476,8 @@ def ask_model(system, user, meter, post=None):
     for _ in range(3):
         meter.book()                                                   # reserve booked and SAVED before the request goes out
         data = (post or _post_json)("https://api.anthropic.com/v1/messages",
-                                    {"model": MODEL, "max_tokens": MAX_TOKENS, "system": system, "messages": messages, "tools": tools}, headers)
+                                    {"model": MODEL, "max_tokens": CLAUDE_MAX_TOKENS, "output_config": {"effort": CLAUDE_EFFORT},
+                                     "system": system, "messages": messages, "tools": tools}, headers)
         meter.settle(data.get("usage"))
         content = data.get("content") or []
         text = "".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text") or text
@@ -480,6 +486,9 @@ def ask_model(system, user, meter, post=None):
         if data.get("stop_reason") == "pause_turn":
             messages.append({"role": "assistant", "content": content})
             continue
+        if data.get("stop_reason") == "max_tokens" or not text.strip():
+            u = data.get("usage") or {}       # count-only line, no content: a cut answer must never look like "the model found nothing"
+            print("list-builder: answer cut or empty (stop=%s, in=%s, out=%s tokens)" % (data.get("stop_reason"), u.get("input_tokens"), u.get("output_tokens")))
         return text
     return text
 

@@ -1,6 +1,7 @@
 import io, os, sys, unittest, contextlib, datetime
 sys.path.insert(0, os.path.dirname(__file__))
 import router as R
+import unittest.mock
 
 DIRS = {"agenthunter.io", "aidirs.best", "indiehunt.io", "earlyhunt.com", "buildlist.io", "launchingnext.com",
         "tinylaunch.com", "sideprojectors.com"}
@@ -182,6 +183,26 @@ class DailyAiCap(unittest.TestCase):
     def test_workflow_saves_the_counter(self):
         w = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".github", "workflows", "mail-router.yml"), encoding="utf8").read()
         self.assertIn("ops/ai_calls_router.json", w)
+
+
+class HaikuRoom26Nov(unittest.TestCase):
+    def test_room_effort_and_one_retry_that_takes_its_own_counted_call(self):
+        sent, took = [], []
+        replies = [{"content": [], "stop_reason": "max_tokens", "usage": {"input_tokens": 500, "output_tokens": 4000}},
+                   {"content": [{"type": "text", "text": '{"bucket": "OTHER_NEEDS_IMRAN"}'}], "stop_reason": "end_turn", "usage": {}}]
+        with unittest.mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k"}), contextlib.redirect_stdout(io.StringIO()) as out:
+            t = R.ai_call("u", post=lambda b, k: sent.append(b) or replies[len(sent) - 1], take=lambda: took.append(1) or True)
+        self.assertIn("OTHER_NEEDS_IMRAN", t)
+        self.assertEqual([b["max_tokens"] for b in sent], [4000, 8000])
+        self.assertEqual(sent[0]["output_config"], {"effort": "low"})
+        self.assertEqual(len(took), 1)                    # the retry took one call from the daily counter
+        self.assertIn("stop=max_tokens", out.getvalue())
+
+    def test_no_retry_when_the_daily_cap_is_used_up(self):
+        sent = []
+        with unittest.mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k"}), contextlib.redirect_stdout(io.StringIO()):
+            t = R.ai_call("u", post=lambda b, k: sent.append(b) or {"content": [], "stop_reason": "max_tokens"}, take=lambda: False)
+        self.assertEqual((t, len(sent)), ("", 1))
 
 
 if __name__ == "__main__":

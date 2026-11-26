@@ -439,6 +439,63 @@ class ReportDailyCap(unittest.TestCase):
         self.assertLess(src.index("used_before = ai_used_today(work)"), src.index("fetch_journalist_digests(set("))
 
 
+class HaikuRoom26Nov(unittest.TestCase):
+    """26 Nov: Haiku 5.5 thinks by default; callers asking 1000-1500 tokens got empty replies."""
+
+    def setUp(self):
+        self.saved = (dict(c.USAGE), c.MAX_AI_CALLS, c.USD_LIMIT, os.environ.get("ANTHROPIC_API_KEY"))
+        c.USAGE.update({"calls": 0, "in": 0, "out": 0})
+        os.environ["ANTHROPIC_API_KEY"] = "test"
+
+    def tearDown(self):
+        c.USAGE.clear()
+        c.USAGE.update(self.saved[0])
+        c.MAX_AI_CALLS, c.USD_LIMIT = self.saved[1], self.saved[2]
+        if self.saved[3] is None:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    def test_small_asks_get_room_and_explicit_low_effort(self):
+        sent = []
+        post = lambda u, b, h: sent.append(b) or {"content": [{"type": "text", "text": "{}"}], "stop_reason": "end_turn", "usage": {"input_tokens": 1, "output_tokens": 1}}
+        c.haiku("s", "u", 1200, post=post)
+        self.assertEqual(sent[0]["max_tokens"], c.HAIKU_MIN_TOKENS)
+        self.assertGreaterEqual(c.HAIKU_MIN_TOKENS, 4000)
+        self.assertEqual(sent[0]["output_config"], {"effort": "low"})
+        self.assertNotIn("thinking", sent[0])
+
+    def test_empty_reply_is_logged_and_asked_once_more_counting_as_a_call(self):
+        import io, contextlib
+        replies = [json.loads('{"content": [{"type": "thinking", "thinking": ""}], "stop_reason": "max_tokens", "usage": {"input_tokens": 900, "output_tokens": 4000}}'),
+                   {"content": [{"type": "text", "text": '{"ok": 1}'}], "stop_reason": "end_turn", "usage": {"input_tokens": 900, "output_tokens": 500}}]
+        sent = []
+        post = lambda u, b, h: sent.append(b) or replies[len(sent) - 1]
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(c.haiku("s", "u", 1000, post=post), '{"ok": 1}')
+        self.assertEqual([b["max_tokens"] for b in sent], [4000, 8000])
+        self.assertEqual(c.USAGE["calls"], 2)
+        self.assertEqual(c.USAGE["out"], 4500)
+        self.assertIn("stop=max_tokens", out.getvalue())
+
+    def test_no_retry_past_the_call_cap(self):
+        import io, contextlib
+        c.MAX_AI_CALLS = 1
+        sent = []
+        post = lambda u, b, h: sent.append(b) or json.loads('{"content": [{"type": "thinking", "thinking": ""}], "stop_reason": "max_tokens", "usage": {"input_tokens": 900, "output_tokens": 4000}}')
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(c.haiku("s", "u", post=post), "")
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(c.USAGE["calls"], 1)
+
+    def test_no_retry_past_the_dollar_cap(self):
+        import io, contextlib
+        c.USD_LIMIT = 0.0001
+        sent = []
+        post = lambda u, b, h: sent.append(b) or {"content": [], "stop_reason": "max_tokens", "usage": {"input_tokens": 1000, "output_tokens": 4000}}
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(c.haiku("s", "u", post=post), "")
+        self.assertEqual(len(sent), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
 
