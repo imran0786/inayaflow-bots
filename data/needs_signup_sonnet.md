@@ -4,6 +4,57 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| RadarMakers: 48 GitHub lists and 44 PRs | https://dev.to/radarmakers/what-we-learned-from-48-github-lists-and-44-pull-requests-1npa | github_awesome_lists | sonnet | UNKNOWN | 2026-11-26 |
+| Awesome Creator Economy LATAM (hxkenneth) | https://github.com/hxkenneth/awesome-creator-economy-latam | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Creator Economy (michael0127) | https://github.com/michael0127/awesome-creator-economy | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Indie Web Tools (MrMikeAde) | https://github.com/MrMikeAde/Indie-Web-Tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Indie Hackers Tools (Alex0x47) | https://github.com/Alex0x47/awesome-indie-hackers-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Ultimate List of Startup Resources (GitCodeCareer) | https://github.com/GitCodeCareer/The-Ultimate-List-of-Startup-Resources | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Free Startup Resources (jasonnoahchoi) | https://github.com/jasonnoahchoi/awesome-free-startup-resources | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Startup Resources (ahmadnassri) | https://github.com/ahmadnassri/awesome-startup-resources | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Indie Hacker Right Tools (Mr-JoE1) | https://github.com/Mr-JoE1/Indie-Hacker-Right-Tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Newsletters (yuxiaoy1) | https://github.com/yuxiaoy1/awesome-newsletters | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Bootstrapped Software (preetmishra) | https://github.com/preetmishra/awesome-bootstrapped-software | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Indiehackers SaaS Books (dongyubin) | https://github.com/dongyubin/Awesome-Indiehackers-SaaS-Books | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Launch Platforms (DirectorySurf) | https://github.com/DirectorySurf/awesome-launch-platforms | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Indie Hacker Tools Plus (XiaomingX) | https://github.com/XiaomingX/indie-hacker-tools-plus | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Indie Dev Toolkit (thedaviddias) | https://github.com/thedaviddias/indie-dev-toolkit | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Indie Hacker Tools (iAmCorey) | https://github.com/iAmCorey/awesome-indie-hacker-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Independent Tools (yaolifeng0629) | https://github.com/yaolifeng0629/Awesome-independent-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Indiehackers (johackim) | https://github.com/johackim/awesome-indiehackers | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Indie Hacking (okendoken) | https://github.com/okendoken/awesome-indie-hacking | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| Awesome Indies (PancheI) | https://github.com/PancheI/awesome-indies | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
+| OutlierKit – YouTube Analytics Tools | https://outlierkit.com/resources/best-youtube-analytics-tools/ | tool_roundups | sonnet | UNKNOWN | 2026-11-26 |
+| AllyHub – TikTok Analytics Tools | https://allyhub.com/blog/best-tiktok-analytics-tools | tool_roundups | sonnet | UNKNOWN | 2026-11-26 |
+| Product Launch Sites list (AIIDEList) | https://aiidelist.com/product-launch-sites | launch_sites | sonnet | UNKNOWN | 2026-11-26 |
+| Open Launch | https://openlaunch.co/ | launch_sites | sonnet | FOLLOWED | 2026-11-26 |
+| Toolaunch | https://toolaunch.app/ | launch_sites | sonnet | FOLLOWED | 2026-11-26 |
+| Ignlab Launch | https://launch.ignlab.net/submit.html | launch_sites | sonnet | UNKNOWN | 2026-11-26 |
+| NoCode.mba Tools | https://nocode.mba/tools | ai_saas_directories | sonnet | UNKNOWN | 2026-11-26 |
+| listing.sh | https://listing.sh/categories/no-code | ai_saas_directories | sonnet | FOLLOWED | 2026-11-26 |
+| QLD Business Directory | https://qldbusinessdirectory.com.au/add-business-listing/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| Word of Mouth | https://www.wordofmouth.com.au/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| Aussieweb MyListing | https://mylisting.aussieweb.com.au/add-listing.aspx | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| StartLocal | https://www.startlocal.com.au/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| CitiInfo | https://citiinfo.com.au/add-listing | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| FreeListingAustralia | https://www.freelistingaustralia.com/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| The Local List | https://thelocallist.com.au/add-business | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| Overnight Success | https://www.overnightsuccess.vc/ | startup_directories_by_country | sonnet | FOLLOWED | 2026-11-26 |
+| Startup Australia wiki list | https://startup-australia.wikidot.com/startups | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| UNC Wilmington – Teaching Info & Media Literacy K-12 | https://libguides.uncw.edu/k12infolit | edu_library_guides | sonnet | UNKNOWN | 2026-11-26 |
+| AnchorGuest | https://anchorguest.com/guests-directory/ | journalist_platforms | sonnet | UNKNOWN | 2026-11-26 |
+| Talks.co | https://talks.co/ | journalist_platforms | sonnet | FOLLOWED | 2026-11-26 |
+| BookAGuest | https://bookaguest.com/ | journalist_platforms | sonnet | UNKNOWN | 2026-11-26 |
+| AIHosts.fm | https://www.aihosts.fm/ | podcasts_creators | sonnet | UNKNOWN | 2026-11-26 |
+| AI Universe Explorer - AI Communities | https://aiuniverseexplorer.com/ai-communities/ | communities_profiles | sonnet | UNKNOWN | 2026-11-26 |
+| Noloco - Top No-Code Communities | https://noloco.io/blog/top-11-no-code-communities-slack-groups | communities_profiles | sonnet | FOLLOWED | 2026-11-26 |
+| AI Builders Hub (Discord listing) | https://discord.me/aibuildershub | communities_profiles | sonnet | UNKNOWN | 2026-11-26 |
+| AI Forum X | https://www.aiforumx.com/ | communities_profiles | sonnet | UNKNOWN | 2026-11-26 |
+| AI Forums | https://aiforums.co/ | communities_profiles | sonnet | UNKNOWN | 2026-11-26 |
+| Target Internet free marketing toolkit | https://targetinternet.com/resources/free-digital-marketing-toolkit/ | resource_pages | sonnet | UNKNOWN | 2026-11-26 |
+| Marketing Tool Online | https://www.marketingtool.online/en/tools/ | resource_pages | sonnet | FOLLOWED | 2026-11-26 |
+| Socialfix | https://www.socialfix.com/write-for-us/ | guest_post_pages | sonnet | FOLLOWED | 2026-11-26 |
+| SoftwareReviews (Info-Tech) | https://www.softwarereviews.com/ | saas_review_platforms | sonnet | UNKNOWN | 2026-11-26 |
 | tankvn/awesome-ai-tools | https://github.com/tankvn/awesome-ai-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-25 |
 | DivJangid/AI-tools | https://github.com/DivJangid/AI-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-25 |
 | ProductivityDirectory/awesome-ai-productivity-tools | https://github.com/ProductivityDirectory/awesome-ai-productivity-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-25 |

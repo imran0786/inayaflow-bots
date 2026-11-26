@@ -1,8 +1,9 @@
 {
- "cursor": 40,
+ "cursor": 52,
  "spent": {
   "2026-11-24": 2.9261,
-  "2026-11-25": 2.9326
+  "2026-11-25": 2.9326,
+  "2026-11-26": 1.7906
  },
  "days": {
   "2026-11-24": {
@@ -63,6 +64,44 @@
    "category_summary": "list-builder: +171 new (total 2281; by category github_awesome_lists 42, startup_directories_by_country 20, ai_saas_directories 17, tool_roundups 17, launch_sites 15, resource_pages 13, edu_library_guides 12, communities_profiles 9, guest_post_pages 8, journalist_platforms 8, podcasts_creators 6, saas_review_platforms 4)",
    "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +153 new (35 followed, $0.12)",
    "total": 2281
+  },
+  "2026-11-26": {
+   "added": 94,
+   "by_category": {
+    "saas_review_platforms": 3,
+    "guest_post_pages": 10,
+    "resource_pages": 5,
+    "communities_profiles": 7,
+    "podcasts_creators": 4,
+    "journalist_platforms": 4,
+    "edu_library_guides": 10,
+    "startup_directories_by_country": 12,
+    "ai_saas_directories": 5,
+    "launch_sites": 8,
+    "tool_roundups": 6,
+    "github_awesome_lists": 20
+   },
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "claude": {
+     "calls": 12,
+     "cost": 1.7906,
+     "proposed": 228,
+     "spam": 11,
+     "dup": 112,
+     "dead": 11,
+     "added": 94,
+     "followed": 35,
+     "nofollow": 6,
+     "noindex": 0,
+     "unknown": 53,
+     "needs_signup": 55
+    }
+   },
+   "category_summary": "list-builder: +94 new (total 2432; by category github_awesome_lists 20, startup_directories_by_country 12, edu_library_guides 10, guest_post_pages 10, launch_sites 8, communities_profiles 7, tool_roundups 6, ai_saas_directories 5, resource_pages 5, journalist_platforms 4, podcasts_creators 4, saas_review_platforms 3)",
+   "summary": "list-builder: sonnet +94 new (35 followed, $1.79)",
+   "total": 2432
   }
  },
  "rejected": [
@@ -124,7 +163,28 @@
   "hull.ac.uk",
   "lr.edu",
   "sdstate.edu",
-  "startupsincanada.com"
+  "startupsincanada.com",
+  "logicinbound.com",
+  "speak-up.pro",
+  "interviewguestsdirectory.com",
+  "podcastguestopportunities.substack.com",
+  "wpunj.edu",
+  "mcdaniel.edu",
+  "nova.edu",
+  "trinity.edu",
+  "psu.edu",
+  "buildinaus.com",
+  "businessexperiment.com.au",
+  "startupscaleup.com.au",
+  "truebluesearch.com.au",
+  "purelocal.com.au",
+  "localsearch.com.au",
+  "goguide.com.au",
+  "sunshinebusiness.com.au",
+  "nocodetoolshub.com",
+  "onlynocode.com",
+  "saaschoice.co",
+  "viralvault.studio"
  ],
- "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +153 new (35 followed, $0.12)"
+ "last_summary": "list-builder: sonnet +94 new (35 followed, $1.79)"
 }
