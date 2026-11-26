@@ -959,5 +959,134 @@ class HaikuRoom26Nov(unittest.TestCase):
         self.assertEqual(sent[0]["output_config"], {"effort": "low"})
 
 
+class Repair26Nov(unittest.TestCase):
+    """26 Nov: a draft that fails only sentence-level checks (I/me, unsourced figure, copied run) is repaired by one cheap rewrite, not thrown away."""
+    BAD1 = "Am I shadowbanned or is it just a slow week for views?"
+    BAD2 = "Suppose an account usually lands near 600 views per video."
+    COPY = "Type a topic and get up to 5 hashtags. No account needed. Free TikTok hashtag generator. Type a topic and get up to 5 hashtags."
+
+    def bad_body(self):
+        return good_body() + "\n\n" + self.BAD1 + " " + self.BAD2 + "\n\n" + FILLER
+
+    def factory(self, body, rewrite_json=None, qa_verdict="PASS"):
+        text = "TITLE: How to plan TikTok captions\nDESCRIPTION: d\nTAGS: tiktok,socialmedia,webdev,productivity\nSOURCES: %s | %s\n===BODY===\n%s" % (SRC1, SRC2, body)
+        seen = []
+
+        def post(url, b, h):
+            seen.append(b)
+            if b["model"] == P.QA_MODEL and "copy editor" in b["system"]:
+                return {"content": [{"type": "text", "text": rewrite_json(b) if rewrite_json else "{}"}], "stop_reason": "end_turn", "usage": {"input_tokens": 500, "output_tokens": 300}}
+            if b["model"] == P.QA_MODEL:
+                return {"content": [{"type": "text", "text": json.dumps({"verdict": qa_verdict, "reasons": []})}], "usage": {"input_tokens": 4000, "output_tokens": 50}}
+            return {"content": [{"type": "text", "text": text}], "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 20000, "output_tokens": 2000, "server_tool_use": {"web_search_requests": 3}}}
+        return post, seen
+
+    def fix_all(self, b):
+        lines = [l for l in b["messages"][0]["content"].splitlines() if l[:1].isdigit()]
+        out = []
+        for l in lines:
+            n = int(l.split(".", 1)[0])
+            if "I / me / my" in l:
+                out.append({"n": n, "text": "Is the account shadowbanned or is it just a slow week for views?"})
+            else:
+                out.append({"n": n, "text": "Suppose an account usually lands at a steady level per video."})
+        return json.dumps({"rewrites": out})
+
+    def setUp(self):
+        for f in (P.STATE_PATH,):
+            if os.path.exists(f):
+                os.remove(f)
+        os.environ.update({"DEV_STATE_OK": "true", "DEV_FIRST_RUN": "true", "DEV_POSTER_LIVE": "true"})
+        P.pick_page = lambda s, d, pages=P.PAGES: P.PAGES[3]
+        P.DRY = True
+
+    def tearDown(self):
+        P.pick_page = REAL_PICK
+        P.DRY = True
+
+    def test_the_unrepaired_draft_really_fails_these_checks(self):
+        p = probs(art(body=self.bad_body()))
+        self.assertTrue(any("first person" in x for x in p) and any("number '600 views'" in x for x in p), p)
+        self.assertTrue(P.repairable(p))
+
+    def test_structural_problems_are_not_repairable(self):
+        self.assertFalse(P.repairable(["target link missing or repeated (0)", "first person singular (use 'we')"]))
+        self.assertFalse(P.repairable([]))
+
+    def test_offending_sentences_found(self):
+        bad = P.offending_sentences(self.bad_body(), PAGE, ["number '600 views' in a paragraph with no source link"])
+        why = " | ".join(w for _, w in bad)
+        self.assertIn("I / me / my", why)
+        self.assertIn("'600 views'", why)
+
+    def test_a_copied_run_is_found_and_neighbours_are_checked(self):
+        body = "Intro line here.\n\n" + self.COPY + "\n\nEnd line."
+        bad = P.offending_sentences(body, PAGE)
+        self.assertTrue(bad and any("shared run" in w for _, w in bad))
+
+    def test_repair_makes_a_failing_draft_pass_and_costs_cents(self):
+        post_ai, seen = self.factory(self.bad_body(), rewrite_json=self.fix_all)
+        res = run_quiet(post_ai=post_ai)
+        self.assertEqual(res, "DRY_OK")
+        spent = P.read_json(P.STATE_PATH, {})["spent"][P.utc_today()]
+        self.assertLess(spent, P.DAY_CAP)
+        rep = [b for b in seen if b["model"] == P.QA_MODEL and "copy editor" in b["system"]]
+        self.assertEqual(len(rep), 1)
+        self.assertEqual(rep[0]["output_config"]["effort"], P.REPAIR_EFFORT)
+        self.assertGreaterEqual(rep[0]["max_tokens"], 4000)
+        self.assertIn("json_schema", json.dumps(rep[0]["output_config"]))
+        drafts = [f for f in os.listdir(P.DRAFT_DIR) if f.endswith("_DRYRUN.md")]
+        self.assertTrue(drafts)
+        body = open(os.path.join(P.DRAFT_DIR, drafts[-1]), encoding="utf8").read()
+        self.assertNotIn("Am I shadowbanned", body)
+        self.assertNotIn("600 views", body)
+
+    def test_a_rewrite_that_drops_a_link_is_not_applied(self):
+        body = "A line with [a source](%s) in it that is long enough." % SRC1
+        spans = P.sentence_spans(body)
+        self.assertEqual(P._splice(body, spans, {0: "A line without any link."}), body)
+        self.assertIn("[a source](%s)" % SRC1, P._splice(body, spans, {0: "New wording keeps [a source](%s) here." % SRC1}))
+
+    def test_unreadable_repair_reply_fails_cleanly_with_the_old_reasons(self):
+        post_ai, _ = self.factory(self.bad_body(), rewrite_json=lambda b: "")
+        self.assertEqual(run_quiet(post_ai=post_ai), "FAIL")
+        log = open(P.LOG_PATH, encoding="utf8").read()
+        self.assertIn("first person singular", log)
+
+    def test_repair_never_breaks_the_day_cap(self):
+        post_ai, _ = self.factory(self.bad_body(), rewrite_json=self.fix_all)
+        run_quiet(post_ai=post_ai)
+        self.assertLessEqual(P.read_json(P.STATE_PATH, {})["spent"][P.utc_today()], P.DAY_CAP + 1e-9)
+
+    def test_qa_named_claim_is_rewritten_then_passes(self):
+        claim = "Reports say TikTok will notify creators within a day when a restriction applies."
+        body = good_body() + "\n\n" + claim + " " + FILLER
+        text = "TITLE: How to plan TikTok captions\nDESCRIPTION: d\nTAGS: tiktok,socialmedia,webdev,productivity\nSOURCES: %s | %s\n===BODY===\n%s" % (SRC1, SRC2, body)
+        seen = []
+
+        def post(url, b, h):
+            seen.append(b)
+            if b["model"] == P.QA_MODEL and "copy editor" in b["system"]:
+                n = [l for l in b["messages"][0]["content"].splitlines() if l.startswith("THE CHECKER")][0].split(": ")[1]
+                return {"content": [{"type": "text", "text": json.dumps({"rewrites": [{"n": int(n), "text": "TikTok says it tells creators when a restriction applies."}]})}], "usage": {"input_tokens": 500, "output_tokens": 100}}
+            if b["model"] == P.QA_MODEL:
+                has = "within a day" in b["messages"][0]["content"]
+                v = {"verdict": "FAIL", "reasons": ['"Reports say TikTok will notify creators within a day when a restriction applies." | no source says within a day']} if has else {"verdict": "PASS", "reasons": []}
+                return {"content": [{"type": "text", "text": json.dumps(v)}], "usage": {"input_tokens": 4000, "output_tokens": 50}}
+            return {"content": [{"type": "text", "text": text}], "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 20000, "output_tokens": 2000, "server_tool_use": {"web_search_requests": 3}}}
+        self.assertEqual(run_quiet(post_ai=post), "DRY_OK")
+        self.assertEqual(len([b for b in seen if "copy editor" in b.get("system", "")]), 1)
+        self.assertLessEqual(P.read_json(P.STATE_PATH, {})["spent"][P.utc_today()], P.DAY_CAP)
+
+    def test_quote_to_sentence_and_reason_format(self):
+        sents = ["First sentence here.", "Reports say TikTok will notify creators within a day when a restriction applies."]
+        self.assertEqual(P.quote_to_sentence("Reports say TikTok will notify creators within a day", sents), 1)
+        self.assertIsNone(P.quote_to_sentence("unrelated words about something else entirely", sents))
+        self.assertEqual(P._quoted('"abc def ghi" | why'), "abc def ghi")
+        self.assertIn("exact", P.QA_SYSTEM)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

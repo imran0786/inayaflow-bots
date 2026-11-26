@@ -498,7 +498,8 @@ def parse_writer(text):
 
 
 QA_SYSTEM = """You are a strict fact-check editor. You get an article and the text of the pages it links to. Answer ONLY a JSON object:
-{"verdict":"PASS" or "FAIL","reasons":["..."]}
+{"verdict":"PASS" or "FAIL","reasons":["\"exact sentence or phrase quoted from the article\" | why it is unsupported"]}
+Write every reason in that form: the exact words from the article in double quotes, then a bar, then the reason (short).
 FAIL if ANY of: a number, percent, date or factual claim is not supported by the linked page text given; a claim sounds invented or is attributed to a source that does not say it;
 it names another creator, brand-new product claim or @handle; it promises results the tool cannot give; the InayaFlow link is pushy or off-topic; it reads as an advert instead of a useful article; it makes a legal, medical or financial claim without a source.
 PASS only when every checkable claim is supported."""
@@ -534,7 +535,7 @@ def qa_lenient(raw):
 
 def qa_gate(art, target_url, source_texts, page_text, meter, post=None):
     srcs = "\n\n".join("SOURCE %s:\n%s" % (u, (t or "")[:3500]) for u, t in source_texts.items())
-    user = "TARGET PAGE %s (our own page):\n%s\n\n%s\n\nARTICLE TITLE: %s\n\n%s" % (target_url, page_text[:2500], srcs, art["title"], art["body"])
+    user = "TARGET PAGE %s (our own page):\n%s\n\n%s\n\nARTICLE TITLE: %s\n\n%s" % (target_url, page_text[:6000], srcs, art["title"], art["body"])
     j = None
     raw = ""
     for _try in (1, 2):                              # an unreadable QA reply gets ONE more ask (with twice the room) before it fails
@@ -549,10 +550,214 @@ def qa_gate(art, target_url, source_texts, page_text, meter, post=None):
         j = qa_lenient(raw) or j
     if not j or j.get("verdict") not in ("PASS", "FAIL"):
         return False, ["QA answer not understood"]
-    return j["verdict"] == "PASS", [str(r)[:160] for r in (j.get("reasons") or [])][:5]
+    return j["verdict"] == "PASS", [str(r)[:400] for r in (j.get("reasons") or [])][:5]
 
 
 # ---------- DEV ----------
+
+# ---------- repair (26 Nov): fix ONLY the offending sentences instead of throwing the whole draft away ----------
+# WHY: 23-26 Nov every daily draft read fine but failed one or two offline checks (an 'I', an example number with no source link, a 7-word run
+# copied from our page). A full second writer try costs ~$0.45 and the day cap is $0.60, so it never happened and nothing was published.
+# One cheap Haiku rewrite (no tools, ~$0.003, inside QA_RESERVE) of only the named sentences, then EVERY check runs again from scratch.
+REPAIRABLE = ("7-word overlap", "first person singular", "banned phrase", "number '")
+REPAIR_ROUNDS = 2
+MAX_REPAIR_SENTENCES = 12
+REPAIR_MAX_TOKENS = int(os.environ.get("DEV_REPAIR_MAX_TOKENS", "4000"))
+REPAIR_EFFORT = os.environ.get("DEV_REPAIR_EFFORT", "low")
+FIRST_PERSON_RE = re.compile(r"\b(I|I'm|I've|I'll|I'd|my|me|mine|myself)\b")
+QUOTE_RE = re.compile(r'"[^"\n]*"|“[^”]*”')
+REWRITE_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["rewrites"], "properties": {
+    "rewrites": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["n", "text"],
+                                            "properties": {"n": {"type": "integer"}, "text": {"type": "string"}}}}}}
+REPAIR_SYSTEM = ("You are a copy editor. Rewrite ONLY the numbered sentences. Each line says in [brackets] what is wrong with that sentence; fix exactly that:\n"
+                 "- a shared run of words: change the structure and vocabulary so that run (and any 4 or more of its words in a row) no longer appears; keep the meaning;\n"
+                 "- I / me / my: speak as 'we' / 'our' for the company (a question like 'am I shadowbanned?' becomes 'is an account shadowbanned?');\n"
+                 "- a banned phrase: say the same thing without those words;\n- a figure with no source: drop the figure and make the point without any number.\n"
+                 "Never add a number, a name, a feature or a claim. Keep every other number as it is. Keep every Markdown link [text](url) EXACTLY as it is "
+                 "(same text, same url); a list item keeps its '- ' or '1. ' start; one sentence stays one sentence. "
+                 'Answer ONLY the JSON object {"rewrites":[{"n":1,"text":"new sentence"}]} with one entry per numbered line.')
+
+
+def repairable(problems):
+    """True when EVERY problem is one a sentence rewrite can fix."""
+    return bool(problems) and all(any(k in x for k in REPAIRABLE) for x in problems)
+
+
+def sentence_spans(body):
+    """[(start, end)] of every sentence (headings, blank lines and code fences skipped). A sentence never crosses a line."""
+    spans, pos, fence = [], 0, False
+    for line in body.split("\n"):
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        elif not fence and line.strip() and not line.lstrip().startswith("#"):
+            start = 0
+            for m in re.finditer(r"(?<=[.!?])\s+", line):
+                if m.start() > start:
+                    spans.append((pos + start, pos + m.start()))
+                start = m.end()
+            if len(line) > start:
+                spans.append((pos + start, pos + len(line)))
+        pos += len(line) + 1
+    return spans
+
+
+def _toks(t):
+    return [w.lower() for w in re.findall(r"[A-Za-z0-9']+", re.sub(r"https?://\S+", " ", t))]
+
+
+def offending_sentences(body, page_full, problems=()):
+    """-> [(span index, reason)] for sentences with a shared run from our page, an I/me/my, a banned phrase or a figure the gate named."""
+    spans = sentence_spans(body)
+    sents = [body[a:b] for a, b in spans]
+    plain = [re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", x) for x in sents]
+    bad = {}
+    r = _toks(page_full or "")
+    grams = {" ".join(r[i:i + 7]) for i in range(len(r) - 6)}
+    for i, x in enumerate(plain):
+        t = _toks(x)
+        run = next((" ".join(t[k:k + 7]) for k in range(len(t) - 6) if " ".join(t[k:k + 7]) in grams), None)
+        if run:
+            bad.setdefault(i, "copies 7 or more words in a row from our own page, the shared run is '%s'" % run)
+    for i in range(len(plain) - 1):                    # a run that straddles two neighbouring sentences: rewrite both
+        t = _toks(plain[i] + " " + plain[i + 1])
+        if any(" ".join(t[k:k + 7]) in grams for k in range(len(t) - 6)):
+            bad.setdefault(i, "copies 7 or more words in a row from our own page (with the next sentence)")
+            bad.setdefault(i + 1, "copies 7 or more words in a row from our own page (with the previous sentence)")
+    for i, x in enumerate(sents):
+        if FIRST_PERSON_RE.search(QUOTE_RE.sub(" ", x)):
+            bad.setdefault(i, "uses I / me / my (must speak as 'we' / 'our')")
+        bb = [b for b in BANNED if b in x.lower()]
+        if bb:
+            bad.setdefault(i, "uses the banned phrase '%s': say it without those words" % bb[0])
+    for pr in problems or ():
+        m = re.match(r"number '([^']+)'", pr)
+        if m:
+            for i, x in enumerate(plain):
+                if m.group(1) in x:
+                    bad.setdefault(i, "contains the figure '%s' that has no source: drop the figure and make the point without any number" % m.group(1))
+    return sorted(bad.items())
+
+
+def _rewrites(raw):
+    j = qa_json(raw)
+    if not isinstance(j, dict) or not isinstance(j.get("rewrites"), list):
+        return None
+    out = {}
+    for r in j["rewrites"]:
+        if not (isinstance(r, dict) and isinstance(r.get("text"), str) and str(r.get("n", "")).strip().isdigit()):
+            return None
+        out[int(str(r["n"]).strip())] = r["text"]
+    return out
+
+
+def _keeps_links(old, new):
+    return all(("[%s](%s)" % (t, u)) in new for t, u in LINK_RE.findall(old))
+
+
+def _splice(body, spans, picks):
+    new = body
+    for i in sorted(picks, reverse=True):
+        a, b = spans[i]
+        rep, old = picks[i].strip(), body[a:b]
+        if not _keeps_links(old, rep):
+            continue                                   # a rewrite that drops or changes a link is NOT applied
+        m = re.match(r"\s*([-*]|\d+[.)])\s", old)
+        if rep and m and not re.match(r"([-*]|\d+[.)])\s", rep):
+            rep = m.group(0) + rep
+        new = new[:a] + rep + new[b:]
+    return new
+
+
+def ask_rewrites(system, user, meter, post=None):
+    """One Haiku call (no tools, JSON schema, room to think) -> {sentence number: new text} or None. An unreadable reply is asked ONCE more with twice the room."""
+    for attempt in (1, 2):
+        data = anthropic(QA_MODEL, system, user, meter, post=post, max_tokens=REPAIR_MAX_TOKENS * attempt,
+                         extra={"output_config": {"effort": REPAIR_EFFORT, "format": {"type": "json_schema", "schema": REWRITE_SCHEMA}}})
+        rw = _rewrites("".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"))
+        if rw:
+            return rw
+        print("dev_poster: repair reply unreadable, %s" % no_text_note(data))
+    return None
+
+
+def repair_article(art, page_full, meter, post=None, problems=()):
+    """ONE cheap Haiku rewrite (no tools) of ONLY the offending sentences -> repaired art dict, or None when nothing could be repaired."""
+    body = art["body"]
+    spans = sentence_spans(body)
+    bad = offending_sentences(body, page_full, problems)
+    if not bad or len(bad) > MAX_REPAIR_SENTENCES:
+        return None
+    lines = "\n".join("%d. [%s] %s" % (n + 1, why, body[spans[i][0]:spans[i][1]]) for n, (i, why) in enumerate(bad))
+    rw = ask_rewrites(REPAIR_SYSTEM, "SENTENCES TO REWRITE:\n" + lines, meter, post)
+    if not rw:
+        return None
+    picks = {}
+    for n, (i, _) in enumerate(bad):
+        rep = rw.get(n + 1)
+        if not isinstance(rep, str) or not rep.strip() or "\n" in rep.strip():
+            return None
+        picks[i] = rep
+    return dict(art, body=_splice(body, spans, picks))
+
+
+QA_REPAIR_SYSTEM = ("You are a copy editor. A fact-checker found unsupported claims in an article; each is listed with the checker's exact quote and reason. "
+                    "For each sentence that carries such a claim give a replacement that drops the unsupported claim and says something general and true that needs no source, "
+                    "or an empty string to delete the sentence. Never add numbers, names, statistics or claims about what our tool does. "
+                    "Keep every Markdown link [text](url) that sits in a sentence you keep or replace EXACTLY as it is. "
+                    'Answer ONLY the JSON object {"rewrites":[{"n":4,"text":"new sentence"},{"n":9,"text":""}]} with at most 6 entries.')
+QA_REPAIR_ROUNDS = 2
+
+
+def _quoted(reason):
+    m = re.match(r'\s*["“](.+?)["”]\s*\|', reason or "")
+    return m.group(1) if m else ""
+
+
+def quote_to_sentence(quote, sents):
+    """Index of the sentence the checker quoted (most of the quote's words appear in it), or None."""
+    q = set(_toks(quote))
+    if len(q) < 3:
+        return None
+    best, bi = 0.0, None
+    for i, x in enumerate(sents):
+        sc = len(q & set(_toks(x))) / len(q)
+        if sc > best:
+            best, bi = sc, i
+    return bi if best >= 0.6 else None
+
+
+def qa_repair_article(art, reasons, meter, post=None):
+    """ONE cheap rewrite (Haiku, no tools) of ONLY the sentences the fact-check QUOTED: general true wording, or delete. -> art dict or None."""
+    body = art["body"]
+    spans = sentence_spans(body)
+    if not spans or not reasons:
+        return None
+    sents = [body[a:b] for a, b in spans]
+    flagged = {}
+    for r in reasons[:6]:
+        i = quote_to_sentence(_quoted(r), sents)
+        if i is not None:
+            flagged.setdefault(i, r)
+    numbered = "\n".join("%d. %s" % (i + 1, x) for i, x in enumerate(sents))
+    hint = ("\n\nTHE CHECKER QUOTED THESE SENTENCES (change only these): " + ", ".join(str(i + 1) for i in sorted(flagged))) if flagged else ""
+    rw = ask_rewrites(QA_REPAIR_SYSTEM, "FACT-CHECKER REASONS:\n- " + "\n- ".join(reasons[:6]) + hint + "\n\nSENTENCES:\n" + numbered[:12000], meter, post)
+    if not rw or len(rw) > 6:
+        return None
+    picks = {}
+    for k, v in rw.items():
+        if not (1 <= k <= len(spans)) or "\n" in v.strip():
+            return None
+        if flagged and (k - 1) not in flagged:
+            continue                                  # a sentence the checker did not quote stays exactly as it is
+        picks[k - 1] = v
+    if not picks:
+        return None
+    new = _splice(body, spans, picks)
+    new = re.sub(r"(?m)^[ \t]*([-*]|\d+[.)])[ \t]*$\n?", "", new)          # a deleted list item leaves no empty bullet
+    new = re.sub(r"[ \t]{2,}", " ", new)
+    new = re.sub(r"\n{3,}", "\n\n", new).strip()
+    return dict(art, body=new) if new != body else None
+
 
 def publish(art, api_key, post=None):
     """POST https://dev.to/api/articles. canonical_url is NOT sent. Returns the response dict."""
@@ -753,6 +958,21 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
             source_texts[u] = theirs if len(theirs) > len(ours) else ours
         unreadable = [u for u in ext if len(source_texts.get(u, "")) < MIN_SOURCE_CHARS]
         problems = check_article(art, url, page_text, source_texts, past_shingles=past_sh, page_full=page_full, anchor=anchor)
+        rounds = REPAIR_ROUNDS
+        while problems and repairable(problems) and rounds > 0:
+            rounds -= 1
+            try:
+                fixed = repair_article(art, page_full, meter, post=post_ai, problems=problems)
+            except CapReached:
+                break
+            except Exception as e:
+                print("dev_poster: repair skipped (%s)" % type(e).__name__)
+                break
+            if not fixed or fixed["body"] == art["body"]:
+                break
+            p2 = check_article(fixed, url, page_text, source_texts, past_shingles=past_sh, page_full=page_full, anchor=anchor)
+            print("dev_poster: repair problems %d -> %d" % (len(problems), len(p2)))
+            art, problems = fixed, p2
         sl, _, _ = getter(url)
         if sl != 200:
             problems.append("target link not live (HTTP %s)" % sl)
@@ -761,10 +981,30 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
     ok = not problems
     reasons = problems
     if ok:
-        try:
-            ok, reasons = qa_gate(art, url, source_texts, page_text, meter, post=post_ai)
-        except Exception as e:
-            ok, reasons = False, ["QA error %s" % type(e).__name__]
+        qa_rounds = 0
+        while True:
+            try:
+                ok, reasons = qa_gate(art, url, source_texts, page_text, meter, post=post_ai)
+            except Exception as e:
+                ok, reasons = False, ["QA error %s" % type(e).__name__]
+                break
+            if ok or qa_rounds >= QA_REPAIR_ROUNDS or reasons == ["QA answer not understood"]:
+                break
+            if meter.cost + 3 * QA_RESERVE > meter.cap + 1e-9:        # a rewrite, the offline checks and one more QA must still fit the day
+                break
+            qa_rounds += 1                          # the fact-check named unsupported claims: ONE rewrite of just those sentences, then every gate again
+            try:
+                fixed = qa_repair_article(art, reasons, meter, post=post_ai)
+            except Exception as e:
+                print("dev_poster: QA repair skipped (%s)" % type(e).__name__)
+                break
+            if not fixed:
+                break
+            p2 = check_article(fixed, url, page_text, source_texts, past_shingles=past_sh, page_full=page_full, anchor=anchor)
+            print("dev_poster: QA repair problems 0 -> %d" % len(p2))
+            if p2:
+                break                               # the rewrite broke an offline gate: keep the original FAIL reasons
+            art = fixed
     cost = "$%.3f" % meter.cost
     if not ok:
         if art:
