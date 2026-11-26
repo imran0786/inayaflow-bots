@@ -1,35 +1,11 @@
 {
- "cursor": 72,
+ "cursor": 84,
  "spent": {
   "2026-11-24": 0.0586,
-  "2026-11-25": 0.1457
+  "2026-11-25": 0.1457,
+  "2026-11-26": 0.0253
  },
  "days": {
-  "2026-11-24": {
-   "added": 0,
-   "by_category": {},
-   "runs": 1,
-   "calls": 12,
-   "providers": {
-    "deepseek": {
-     "calls": 12,
-     "cost": 0.0586,
-     "proposed": 0,
-     "spam": 0,
-     "dup": 0,
-     "dead": 0,
-     "added": 0,
-     "followed": 0,
-     "nofollow": 0,
-     "noindex": 0,
-     "unknown": 0,
-     "needs_signup": 0
-    }
-   },
-   "category_summary": "list-builder: +0 new (total 1956; by category none)",
-   "summary": "list-builder: sonnet +0 new (0 followed, $0.00) | deepseek +0 new (0 followed, $0.06) [dry run: nothing saved]",
-   "total": 1956
-  },
   "2026-11-25": {
    "added": 208,
    "by_category": {
@@ -67,6 +43,67 @@
    "category_summary": "list-builder: +208 new (total 2336; by category edu_library_guides 36, podcasts_creators 36, startup_directories_by_country 34, guest_post_pages 19, github_awesome_lists 18, communities_profiles 15, journalist_platforms 12, resource_pages 10, saas_review_platforms 10, tool_roundups 10, ai_saas_directories 4, launch_sites 4)",
    "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +208 new (37 followed, $0.15)",
    "total": 2336
+  },
+  "2026-11-24": {
+   "added": 0,
+   "by_category": {},
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "deepseek": {
+     "calls": 12,
+     "cost": 0.0586,
+     "proposed": 0,
+     "spam": 0,
+     "dup": 0,
+     "dead": 0,
+     "added": 0,
+     "followed": 0,
+     "nofollow": 0,
+     "noindex": 0,
+     "unknown": 0,
+     "needs_signup": 0
+    }
+   },
+   "category_summary": "list-builder: +0 new (total 1956; by category none)",
+   "summary": "list-builder: sonnet +0 new (0 followed, $0.00) | deepseek +0 new (0 followed, $0.06) [dry run: nothing saved]",
+   "total": 1956
+  },
+  "2026-11-26": {
+   "added": 54,
+   "by_category": {
+    "ai_saas_directories": 2,
+    "launch_sites": 1,
+    "tool_roundups": 2,
+    "guest_post_pages": 8,
+    "resource_pages": 5,
+    "communities_profiles": 2,
+    "podcasts_creators": 9,
+    "journalist_platforms": 3,
+    "edu_library_guides": 13,
+    "startup_directories_by_country": 9
+   },
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "deepseek": {
+     "calls": 12,
+     "cost": 0.0253,
+     "proposed": 371,
+     "spam": 1,
+     "dup": 265,
+     "dead": 51,
+     "added": 54,
+     "followed": 3,
+     "nofollow": 0,
+     "noindex": 1,
+     "unknown": 50,
+     "needs_signup": 19
+    }
+   },
+   "category_summary": "list-builder: +54 new (total 2486; by category edu_library_guides 13, podcasts_creators 9, startup_directories_by_country 9, guest_post_pages 8, resource_pages 5, journalist_platforms 3, ai_saas_directories 2, communities_profiles 2, tool_roundups 2, launch_sites 1)",
+   "summary": "list-builder: sonnet +94 new (35 followed, $1.79) | deepseek +54 new (3 followed, $0.03)",
+   "total": 2486
   }
  },
  "rejected": [
@@ -271,7 +308,63 @@
   "omgitt.com",
   "firmenverzeichnis.de",
   "meinestadt.de",
-  "cylex.de"
+  "cylex.de",
+  "toolsforcreators.io",
+  "github.com/zmr/awesome-browser-extensions",
+  "github.com/bidhan-a/awesome-growth-hacking",
+  "github.com/onurakpolat/awesome-digital-marketing",
+  "github.com/devwulf/awesome-saas",
+  "github.com/onurakpolat/awesome-social-media",
+  "github.com/onurakpolat/awesome-content-marketing",
+  "github.com/ai-for-marketing/awesome-ai-marketing",
+  "github.com/kraken-crypto/awesome-startups",
+  "github.com/rajasegar/awesome-productivity",
+  "github.com/jefersondaniel/awesome-marketing",
+  "github.com/jhyan/awesome-saas-tools",
+  "github.com/ynh/awesome-no-code-tools",
+  "github.com/leonardochang36/awesome-video-tools",
+  "github.com/kikoano/awesome-creator-tools",
+  "github.com/mmccaff/awesome-startup-directories",
+  "github.com/andreid/awesome-solopreneur",
+  "github.com/kanjitalk755/awesome-saas",
+  "github.com/mattcrail/awesome-growth",
+  "grabaseat.co",
+  "singlegrain.com",
+  "thesocialmediahat.com",
+  "mavrck.co",
+  "izea.com",
+  "mediakix.com",
+  "socialbee.com",
+  "reddit.com/r/tiktokcreators",
+  "reddit.com/r/tiktokhelp",
+  "reddit.com/r/socialmedia",
+  "reddit.com/r/content_marketing",
+  "reddit.com/r/newtubers",
+  "reddit.com/r/indiedev",
+  "reddit.com/r/podcasting",
+  "nichepursuits.com",
+  "blackhatworld.com",
+  "nickmilo.com",
+  "marketingagainstthegrain.com",
+  "creatorlab.fm",
+  "rickmulready.com",
+  "digitalmarketingpodcast.com",
+  "thecreatorshow.tv",
+  "podcastguestlist.com",
+  "prfree.org",
+  "sourcewire.com",
+  "unl.edu",
+  "uvm.edu",
+  "olemiss.edu",
+  "lafrenchtech.com",
+  "usine-digitale.fr",
+  "reseau-entreprendre.org",
+  "cci.fr",
+  "service-public.fr",
+  "villagebyca.com",
+  "chefdentreprise.com",
+  "independant.io",
+  "capterra.fr"
  ],
- "last_summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +208 new (37 followed, $0.15)"
+ "last_summary": "list-builder: sonnet +94 new (35 followed, $1.79) | deepseek +54 new (3 followed, $0.03)"
 }

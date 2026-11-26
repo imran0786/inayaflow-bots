@@ -4,6 +4,25 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| Legalstart resources | https://www.legalstart.fr/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
+| Alternatives Economiques | https://www.alternatives-economiques.fr/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
+| Journal du Net | https://www.journaldunet.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
+| West Virginia University Libraries Guides | https://libguides.wvu.edu/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-26 |
+| University of Delaware Library Guides | https://guides.lib.udel.edu/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-26 |
+| Utah State University Libraries Guides | https://libguides.usu.edu/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-26 |
+| PRLeap | https://www.prleap.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-26 |
+| Anewstip | https://anewstip.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-26 |
+| PressFriendly | https://www.pressfriendly.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-26 |
+| Build Your Tribe | https://www.chalenejohnson.com/podcast | podcasts_creators | deepseek | UNKNOWN | 2026-11-26 |
+| BitsDuJour | https://www.bitsdujour.com/ | communities_profiles | deepseek | FOLLOWED | 2026-11-26 |
+| Warrior Forum | https://www.warriorforum.com/ | communities_profiles | deepseek | UNKNOWN | 2026-11-26 |
+| CoSchedule Blog | https://coschedule.com/blog | resource_pages | deepseek | UNKNOWN | 2026-11-26 |
+| Missinglettr Blog | https://missinglettr.com/blog | resource_pages | deepseek | UNKNOWN | 2026-11-26 |
+| Skedsocial Blog | https://skedsocial.com/blog | resource_pages | deepseek | UNKNOWN | 2026-11-26 |
+| BlogHer | https://www.blogher.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-26 |
+| MicroSaaS.substack | https://microsaas.substack.com/ | launch_sites | deepseek | UNKNOWN | 2026-11-26 |
+| Awesome Chrome Extensions (GitHub) | https://github.com/learn-anything/chrome-extensions | ai_saas_directories | deepseek | FOLLOWED | 2026-11-26 |
+| Chrome Web Store Developer Dashboard | https://chrome.google.com/webstore/devconsole | ai_saas_directories | deepseek | UNKNOWN | 2026-11-26 |
 | Handelsregister | https://www.handelsregister.de/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-25 |
 | 11880 | https://www.11880.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-25 |
 | Gelbe Seiten | https://www.gelbeseiten.de/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-25 |
