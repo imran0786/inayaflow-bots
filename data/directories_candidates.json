@@ -4618,7 +4618,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "AI agent directory with submissions, but no free listing stated; sign-up required.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "6 followed / 16 not",
    "needs": [
     "account"
@@ -5579,7 +5579,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "AI tools directory with a Submit Tool link, but no submit or pricing details found.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -6901,7 +6901,7 @@
    "followed": "nofollow",
    "checked": "2026-11-23",
    "judge_reason": "SaaS/AI company database with a submission form; listing cost not stated; work email needed.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "0 followed / 8 not",
    "needs": []
   },
@@ -7615,7 +7615,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Lists indie tools and AI products; 'Join Free' shown, but no explicit free listing or pricing.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "4 followed / 0 not",
    "needs": [
     "account"
@@ -7987,7 +7987,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Curated showcase with Submit link, but no free listing terms; sponsor option shown.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "followed_sample": "9 followed / 0 not",
    "needs": []
   },
@@ -8552,7 +8552,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Accepts startup submissions and tech/AI coverage; free listing never stated, only paid ads.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "24 followed / 0 not",
    "needs": []
   },
@@ -9715,7 +9715,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Directory of marketing tools; submission requires registration. Free listing not stated; listing appears under paid ad o",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "31 followed / 0 not",
    "needs": [
     "account"
@@ -10327,7 +10327,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "Lists AI/SaaS tools; FAQ mentions free submissions but pricing is not stated.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "9 followed / 3 not",
    "needs": [
     "account"
@@ -10617,7 +10617,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "Curated AI/SaaS directory with submit form; free listing mentioned only in an FAQ heading, not confirmed.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "9 followed / 3 not",
    "needs": [
     "account"
@@ -16581,7 +16581,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "Lists apps and extensions; basic listing cost is never stated, only paid add-ons from $159.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "126 followed / 13 not",
    "needs": []
   },
@@ -16696,7 +16696,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Accepts startup and AI projects via Add project; no free listing or pricing stated.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "2 followed / 0 not",
    "needs": [
     "account"
@@ -16792,7 +16792,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Curated free-tool directory; listing fee not stated; tool must work without signup.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -17476,7 +17476,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Developer MCP registry with submissions; free listing terms not stated, only paid boosts and hosting.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -17662,7 +17662,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Has a Find Software & Services section, but no submit or pricing page; listing terms are unknown.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "8 followed / 0 not",
    "needs": []
   },
@@ -17706,7 +17706,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Curated one-page website gallery taking submissions; no listing fee is stated.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "followed_sample": "24 followed / 0 not",
    "needs": []
   },
@@ -17821,7 +17821,7 @@
    "followed": "followed",
    "checked": "2026-11-20",
    "judge_reason": "Slack is a commercial product vendor, not a directory accepting listing submissions.",
-   "status": "HOLD not a directory",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "followed_sample": "29 followed / 0 not",
    "needs": [
     "account"
@@ -23387,7 +23387,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Startup tracker with an 'Add startup' feature; listing terms and submit page not found.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -23621,7 +23621,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Australian startup directory; listing requires sign-up, no free listing stated.",
-   "status": "HOLD not relevant",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -24313,7 +24313,7 @@
    "followed": "nofollow",
    "checked": "2026-11-23",
    "judge_reason": "Lists free software and tools, but no submit page or listing terms were found.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED NO_FORM 2026-11-26",
    "followed_sample": "0 followed / 22 not",
    "needs": []
   },
@@ -25883,7 +25883,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Regular submission has a free queue (2 months); paid $50 review is faster.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "followed_sample": "6 followed / 0 not",
    "needs": []
   },
@@ -26472,7 +26472,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "",
-   "status": "HOLD dead or unreachable"
+   "status": "TRIED OTHER 2026-11-26"
   },
   {
    "name": "Cloudwards",
@@ -26759,7 +26759,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Lists SaaS by category; 'Advertise' page exists but no free listing is stated.",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "followed_sample": "6 followed / 0 not",
    "needs": [
     "account"
@@ -27836,7 +27836,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "",
-   "status": "HOLD dead or unreachable"
+   "status": "TRIED SUBMITTED 2026-11-26"
   },
   {
    "name": "Kyi AI Directory",
@@ -32732,7 +32732,7 @@
    "free_check": "free",
    "quality": "DR 82",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-25",
+   "status": "TRIED OTHER 2026-11-26",
    "their_notes": "link reported: unknown"
   },
   {
@@ -33712,7 +33712,7 @@
    "free_check": "free",
    "quality": "",
    "usable": false,
-   "status": "HOLD dead or unreachable",
+   "status": "TRIED DEAD 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35420,7 +35420,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35434,7 +35434,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35448,7 +35448,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35490,7 +35490,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35546,7 +35546,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35560,7 +35560,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35602,7 +35602,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35616,7 +35616,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35644,7 +35644,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35658,7 +35658,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35686,7 +35686,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35714,7 +35714,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35728,7 +35728,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35770,7 +35770,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35784,7 +35784,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35798,7 +35798,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35812,7 +35812,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35826,7 +35826,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35854,7 +35854,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35882,7 +35882,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35896,7 +35896,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35910,7 +35910,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35924,7 +35924,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35938,7 +35938,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35952,7 +35952,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35966,7 +35966,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -35994,7 +35994,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36008,7 +36008,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36022,7 +36022,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36036,7 +36036,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36050,7 +36050,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36064,7 +36064,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36078,7 +36078,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36092,7 +36092,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36106,7 +36106,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36120,7 +36120,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36148,7 +36148,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36162,7 +36162,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36176,7 +36176,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36190,7 +36190,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36204,7 +36204,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36218,7 +36218,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36246,7 +36246,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36260,7 +36260,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36274,7 +36274,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36288,7 +36288,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36302,7 +36302,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36330,7 +36330,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36400,7 +36400,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36442,7 +36442,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36456,7 +36456,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36470,7 +36470,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NEEDS_BADGE 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36498,7 +36498,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36512,7 +36512,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36526,7 +36526,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36554,7 +36554,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36582,7 +36582,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36610,7 +36610,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36624,7 +36624,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36638,7 +36638,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -36652,7 +36652,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "their_notes": ""
   },
   {
@@ -37058,7 +37058,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -37366,7 +37366,7 @@
    "free_check": "free",
    "quality": "DR 22",
    "usable": false,
-   "status": "HOLD dead or unreachable",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -37408,7 +37408,7 @@
    "free_check": "free",
    "quality": "DR 25",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-26",
    "their_notes": ""
   },
   {
@@ -37492,7 +37492,7 @@
    "free_check": "unknown",
    "quality": "DR 38",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": ""
   },
   {
@@ -37506,7 +37506,7 @@
    "free_check": "unknown",
    "quality": "DR 29",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-26",
    "their_notes": ""
   },
   {
@@ -37548,7 +37548,7 @@
    "free_check": "free / paid",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "their_notes": "Newly launched"
   },
   {
@@ -37562,7 +37562,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37576,7 +37576,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37660,7 +37660,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37674,7 +37674,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37688,7 +37688,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37730,7 +37730,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37744,7 +37744,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37772,7 +37772,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37814,7 +37814,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37870,7 +37870,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37926,7 +37926,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37940,7 +37940,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37982,7 +37982,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38010,7 +38010,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38024,7 +38024,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38066,7 +38066,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38080,7 +38080,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38164,7 +38164,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38178,7 +38178,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-26",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38850,7 +38850,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "type": "directory"
   },
   {
@@ -38994,7 +38994,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "roundup"
   },
   {
@@ -39018,7 +39018,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "type": "roundup"
   },
   {
@@ -39594,7 +39594,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-26",
    "type": "directory"
   },
   {
@@ -40242,7 +40242,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "type": "roundup"
   },
   {
@@ -42018,7 +42018,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TRIED OTHER 2026-11-25",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "review_platform",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -42072,7 +42072,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-26",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -43206,7 +43206,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43233,7 +43233,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43287,7 +43287,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43314,7 +43314,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43341,7 +43341,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -43368,7 +43368,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43395,7 +43395,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43449,7 +43449,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-26",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43476,7 +43476,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TRIED OTHER 2026-11-23",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43503,7 +43503,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -43530,7 +43530,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-26",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43557,7 +43557,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43638,7 +43638,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "type": "roundup",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -43746,7 +43746,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-26",
    "type": "launch_site",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43773,7 +43773,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43800,7 +43800,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "launch_site",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43827,7 +43827,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-26",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43854,7 +43854,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43881,7 +43881,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "review_platform",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -43908,7 +43908,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-25",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "community",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -45007,7 +45007,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -45034,7 +45034,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "type": "review_platform",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -45466,7 +45466,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -45574,7 +45574,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "type": "roundup",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -46168,7 +46168,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "guest_post",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -46195,7 +46195,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "type": "roundup",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -46222,7 +46222,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -46249,7 +46249,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -46276,7 +46276,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -46303,7 +46303,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -46330,7 +46330,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -46357,7 +46357,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -46384,7 +46384,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "review_platform",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -46411,7 +46411,7 @@
    "usable": false,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "HOLD paid",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "NOFOLLOW_ONLY",
@@ -46438,7 +46438,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-26",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -46465,7 +46465,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-26",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -46573,7 +46573,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-26",
    "type": "resource_page",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -46600,7 +46600,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "launch_site",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -46654,7 +46654,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "launch_site",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -46762,7 +46762,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-26",
    "type": "roundup",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
