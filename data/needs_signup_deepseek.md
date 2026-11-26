@@ -4,6 +4,14 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| Yelp Espana | https://www.yelp.es/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
+| Wikimedia Commons | https://commons.wikimedia.org/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-26 |
+| The Strategy Hour Podcast (Think Creative Collective) | https://thinkcreativecollective.com/podcast/ | podcasts_creators | deepseek | UNKNOWN | 2026-11-26 |
+| Meetup | https://www.meetup.com/ | communities_profiles | deepseek | UNKNOWN | 2026-11-26 |
+| Brandwatch Blog | https://www.brandwatch.com/blog | resource_pages | deepseek | FOLLOWED | 2026-11-26 |
+| ContentMender | https://contentmender.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-26 |
+| awesome-seo | https://github.com/marcobiedermann/search-engine-optimization | github_awesome_lists | deepseek | FOLLOWED | 2026-11-26 |
+| Awesome ChatGPT | https://github.com/f/awesome-chatgpt-prompts | ai_saas_directories | deepseek | FOLLOWED | 2026-11-26 |
 | Legalstart resources | https://www.legalstart.fr/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
 | Alternatives Economiques | https://www.alternatives-economiques.fr/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
 | Journal du Net | https://www.journaldunet.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |

@@ -1,11 +1,36 @@
 {
- "cursor": 84,
+ "cursor": 96,
  "spent": {
   "2026-11-24": 0.0586,
   "2026-11-25": 0.1457,
-  "2026-11-26": 0.0253
+  "2026-11-26": 0.0478
  },
  "days": {
+  "2026-11-24": {
+   "added": 0,
+   "by_category": {},
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "deepseek": {
+     "calls": 12,
+     "cost": 0.0586,
+     "proposed": 0,
+     "spam": 0,
+     "dup": 0,
+     "dead": 0,
+     "added": 0,
+     "followed": 0,
+     "nofollow": 0,
+     "noindex": 0,
+     "unknown": 0,
+     "needs_signup": 0
+    }
+   },
+   "category_summary": "list-builder: +0 new (total 1956; by category none)",
+   "summary": "list-builder: sonnet +0 new (0 followed, $0.00) | deepseek +0 new (0 followed, $0.06) [dry run: nothing saved]",
+   "total": 1956
+  },
   "2026-11-25": {
    "added": 208,
    "by_category": {
@@ -44,66 +69,43 @@
    "summary": "list-builder: sonnet +171 new (66 followed, $2.93) | deepseek +208 new (37 followed, $0.15)",
    "total": 2336
   },
-  "2026-11-24": {
-   "added": 0,
-   "by_category": {},
-   "runs": 1,
-   "calls": 12,
-   "providers": {
-    "deepseek": {
-     "calls": 12,
-     "cost": 0.0586,
-     "proposed": 0,
-     "spam": 0,
-     "dup": 0,
-     "dead": 0,
-     "added": 0,
-     "followed": 0,
-     "nofollow": 0,
-     "noindex": 0,
-     "unknown": 0,
-     "needs_signup": 0
-    }
-   },
-   "category_summary": "list-builder: +0 new (total 1956; by category none)",
-   "summary": "list-builder: sonnet +0 new (0 followed, $0.00) | deepseek +0 new (0 followed, $0.06) [dry run: nothing saved]",
-   "total": 1956
-  },
   "2026-11-26": {
-   "added": 54,
+   "added": 94,
    "by_category": {
-    "ai_saas_directories": 2,
+    "ai_saas_directories": 4,
     "launch_sites": 1,
-    "tool_roundups": 2,
-    "guest_post_pages": 8,
-    "resource_pages": 5,
-    "communities_profiles": 2,
-    "podcasts_creators": 9,
-    "journalist_platforms": 3,
-    "edu_library_guides": 13,
-    "startup_directories_by_country": 9
+    "tool_roundups": 6,
+    "guest_post_pages": 14,
+    "resource_pages": 8,
+    "communities_profiles": 3,
+    "podcasts_creators": 19,
+    "journalist_platforms": 5,
+    "edu_library_guides": 16,
+    "startup_directories_by_country": 15,
+    "github_awesome_lists": 1,
+    "saas_review_platforms": 2
    },
-   "runs": 1,
-   "calls": 12,
+   "runs": 2,
+   "calls": 24,
    "providers": {
     "deepseek": {
-     "calls": 12,
-     "cost": 0.0253,
-     "proposed": 371,
+     "calls": 24,
+     "cost": 0.0478,
+     "proposed": 697,
      "spam": 1,
-     "dup": 265,
-     "dead": 51,
-     "added": 54,
-     "followed": 3,
+     "dup": 509,
+     "dead": 93,
+     "added": 94,
+     "followed": 11,
      "nofollow": 0,
      "noindex": 1,
-     "unknown": 50,
-     "needs_signup": 19
+     "unknown": 82,
+     "needs_signup": 27
     }
    },
-   "category_summary": "list-builder: +54 new (total 2486; by category edu_library_guides 13, podcasts_creators 9, startup_directories_by_country 9, guest_post_pages 8, resource_pages 5, journalist_platforms 3, ai_saas_directories 2, communities_profiles 2, tool_roundups 2, launch_sites 1)",
-   "summary": "list-builder: sonnet +94 new (35 followed, $1.79) | deepseek +54 new (3 followed, $0.03)",
-   "total": 2486
+   "category_summary": "list-builder: +94 new (total 2573; by category podcasts_creators 19, edu_library_guides 16, startup_directories_by_country 15, guest_post_pages 14, resource_pages 8, tool_roundups 6, journalist_platforms 5, ai_saas_directories 4, communities_profiles 3, saas_review_platforms 2, github_awesome_lists 1, launch_sites 1)",
+   "summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +94 new (11 followed, $0.05)",
+   "total": 2573
   }
  },
  "rejected": [
@@ -364,7 +366,50 @@
   "villagebyca.com",
   "chefdentreprise.com",
   "independant.io",
-  "capterra.fr"
+  "capterra.fr",
+  "toolsdirectory.ai",
+  "aitoolmasterlist.com",
+  "ritekit.com",
+  "github.com/cyberboysumanjay/awesome-social-media",
+  "github.com/kultprok/awesome-marketing",
+  "github.com/digitalmarketinglist/awesome-digital-marketing",
+  "github.com/creatornodes/awesome-creator-tools",
+  "github.com/marketerguy/awesome-content-marketing",
+  "github.com/abhishekrana/awesome-influencer-marketing",
+  "github.com/ttscoff/awesome-social-media-marketing",
+  "github.com/ai-marketing-tools/awesome-ai-marketing",
+  "github.com/tiktok-tools/awesome-tiktok-tools",
+  "github.com/marketing-automation/awesome-marketing-automation",
+  "github.com/growthhacking/awesome-growth-hacking",
+  "github.com/advertising-tools/awesome-advertising",
+  "github.com/awesome-marketing/awesome-marketing-tools",
+  "github.com/promotion-tools/awesome-promotion",
+  "github.com/awesome-launch/awesome-launch-platforms",
+  "github.com/avaniklsjoshi/awesome-no-code",
+  "github.com/awesome-producthunt/awesome-product-hunt",
+  "github.com/themeselection/awesome-marketing",
+  "github.com/smm-tools/awesome-smm",
+  "github.com/startup-directories/awesome-startup-directories",
+  "capterra.ca",
+  "finsmes.com",
+  "alternativezip.com",
+  "searchengineland.com",
+  "thedrum.com",
+  "viraltag.com",
+  "socialmediasocialhour.com",
+  "juliesolomon.com",
+  "jameswedmore.com",
+  "rephonic.com",
+  "stitcher.com",
+  "marketingbookpodcast.com",
+  "profnet.com",
+  "empresasnnegocios.com",
+  "infoisinfo.es",
+  "paginasamarillas.es",
+  "cylex.es",
+  "loogic.com",
+  "novengahoy.es",
+  "spainstartup.es"
  ],
- "last_summary": "list-builder: sonnet +94 new (35 followed, $1.79) | deepseek +54 new (3 followed, $0.03)"
+ "last_summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +94 new (11 followed, $0.05)"
 }

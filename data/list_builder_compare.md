@@ -4,6 +4,6 @@ Each cell: calls / $ / proposed URLs / dropped dead, spam, duplicate / new rows 
 
 | Date | Sonnet (web search) | DeepSeek (no web search) |
 |---|---|---|
-| 2026-11-26 | calls 21 / $2.82 / proposed 381 / dead 19, spam 15, dup 206 / new 141 / followed 44 / signup 77 | calls 12 / $0.03 / proposed 371 / dead 51, spam 1, dup 265 / new 54 / followed 3 / signup 19 |
+| 2026-11-26 | calls 21 / $2.82 / proposed 381 / dead 19, spam 15, dup 206 / new 141 / followed 44 / signup 77 | calls 24 / $0.05 / proposed 697 / dead 93, spam 1, dup 509 / new 94 / followed 11 / signup 27 |
 | 2026-11-25 | calls 20 / $2.93 / proposed 322 / dead 12, spam 8, dup 131 / new 171 / followed 66 / signup 94 | calls 60 / $0.15 / proposed 1307 / dead 171, spam 36, dup 809 / new 208 / followed 37 / signup 97 |
 | 2026-11-24 | - | calls 12 / $0.06 / proposed 0 / dead 0, spam 0, dup 0 / new 0 / followed 0 / signup 0 |
