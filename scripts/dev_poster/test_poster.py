@@ -1087,6 +1087,35 @@ class Repair26Nov(unittest.TestCase):
         self.assertEqual(P._quoted('"abc def ghi" | why'), "abc def ghi")
         self.assertIn("exact", P.QA_SYSTEM)
 
+    def test_too_long_article_is_trimmed_by_one_cheap_pass(self):
+        extra = "\n\n".join("Extra point number %d keeps going with more plain words about planning captions before filming a video today." % i for i in range(60))
+        body = good_body() + "\n\n" + extra
+        self.assertGreater(P.article_words(body), P.MAX_WORDS)
+        text = "TITLE: How to plan TikTok captions\nDESCRIPTION: d\nTAGS: tiktok,socialmedia,webdev,productivity\nSOURCES: %s | %s\n===BODY===\n%s" % (SRC1, SRC2, body)
+        seen = []
+
+        def post(url, b, h):
+            seen.append(b)
+            if b["model"] == P.QA_MODEL and "shortening" in b["system"]:
+                lines = [l for l in b["messages"][0]["content"].splitlines() if l.startswith("Extra point") is False and l[:1].isdigit() and "Extra point" in l]
+                picks = [{"n": int(l.split(".", 1)[0]), "text": ""} for l in lines[:50]]
+                return {"content": [{"type": "text", "text": json.dumps({"rewrites": picks})}], "usage": {"input_tokens": 3000, "output_tokens": 300}}
+            if b["model"] == P.QA_MODEL:
+                return {"content": [{"type": "text", "text": json.dumps({"verdict": "PASS", "reasons": []})}], "usage": {"input_tokens": 4000, "output_tokens": 50}}
+            return {"content": [{"type": "text", "text": text}], "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 20000, "output_tokens": 2000, "server_tool_use": {"web_search_requests": 3}}}
+        self.assertEqual(run_quiet(post_ai=post), "DRY_OK")
+        self.assertEqual(len([b for b in seen if "shortening" in b.get("system", "")]), 1)
+        self.assertEqual(len([b for b in seen if b["model"] == P.WRITER]), 1)          # no second writer try
+
+    def test_trim_never_deletes_a_sentence_with_a_link_and_needs_an_excess(self):
+        self.assertIsNone(P.trim_article(art(), P.Meter(), post=lambda *a: 1 / 0))       # not over the limit: no call at all
+
+    def test_writer_prompt_states_the_structural_rules(self):
+        self.assertIn("1050", P.WRITER_SYSTEM)
+        self.assertIn("fewer than 2 is thrown away", P.WRITER_SYSTEM)
+        self.assertIn("never in the first or last paragraph", P.WRITER_SYSTEM)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

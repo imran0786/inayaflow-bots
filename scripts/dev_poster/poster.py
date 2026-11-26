@@ -467,10 +467,10 @@ def no_text_note(data):
 
 WRITER_SYSTEM = """You write one article for DEV (dev.to) for the company InayaFlow. Voice: "we" (never I, me, my, mine, myself). Plain, friendly, specific English.
 RULES (all are checked by code afterwards; a break means nothing is published):
-- 700 to 950 words in Markdown. A NEW angle: a practical question a creator or developer really has. Do not summarise or copy the InayaFlow page; add your own examples and reasoning.
+- 700 to 900 words in Markdown: a HARD limit, the checker stops anything over 1050 or under 600 words (code counts them), so aim for about 800 and stop there. A NEW angle: a practical question a creator or developer really has. Do not summarise or copy the InayaFlow page; add your own examples and reasoning.
 - Real numbers only: use web_search / web_fetch to find them in official or primary sources (research, platform docs, newsrooms). EVERY paragraph that contains a number, percent or dollar amount must contain a Markdown link to the page where that number is printed, and the number must appear on that page exactly as you write it. No invented, rounded-up or remembered statistics. If you cannot source a number, leave it out.
 - CITE ONLY WHAT YOU READ: a page may be cited only if you fetched it with web_fetch in THIS session and the text that came back visibly contains the number as you write it (never cite a page you only saw in search results). Pages on tiktok.com/support, support.tiktok.com and tiktok.com/creator-academy usually come back empty or with only a title: do NOT cite them and do not use a number whose only source is such a page. Our checker re-reads every cited page: a number it cannot find there stops the article.
-- At least 2 different external source links. Use only pages you opened.
+- At least 2 different external source links in the body, as Markdown links [text](url), each to a page you opened: an article with fewer than 2 is thrown away. Put exactly one link to the target InayaFlow page in the middle of the article, never in the first or last paragraph.
 - About OUR page: paraphrase it in your own words and never copy 7 or more words in a row from the PAGE TEXT (the checker compares). Facts about our tool (limits, hours, days, what it needs) may be stated ONLY if they are printed in the PAGE TEXT; the paragraph that links our page may use numbers from the PAGE TEXT without another source link.
 - Never use the words I, I'm, I've, I'll, I'd, me, my, mine or myself anywhere: not in questions, quotes or rhetorical lines ("am I shadowbanned?" is forbidden: write "is an account shadowbanned?" or "are your views down?").
 - Exactly ONE link to the target InayaFlow page (given below), placed where it truly helps the reader, written as [LINK TEXT](URL); the type of LINK TEXT is set per article in the user message and checked by code. No other inayaflow.ai link except at most one more if truly useful. Never write the web address inayaflow.ai as plain text outside that link (as the link text itself it is allowed when the type says so). Do not describe features of our page that are not in the PAGE TEXT below.
@@ -759,6 +759,44 @@ def qa_repair_article(art, reasons, meter, post=None):
     return dict(art, body=new) if new != body else None
 
 
+TRIM_SYSTEM = ("You are an editor shortening an article that is too long. You get its numbered sentences and the number of words to cut. "
+               "Choose sentences to DELETE: repeated points, filler, extra examples, the weakest detail. Never choose a sentence that contains a Markdown link, a heading, or the only sentence of a section. "
+               "Delete enough sentences to cut at least the requested number of words, but no more than that plus 60. "
+               'Answer ONLY the JSON object {"rewrites":[{"n":4,"text":""},{"n":9,"text":""}]}: every entry has an empty text (= delete).')
+
+
+def article_words(body):
+    return len(words(re.sub(r"```.*?```", " ", body, flags=re.S)))
+
+
+def trim_article(art, meter, post=None):
+    """ONE cheap Haiku call that names whole sentences to delete when the article is over MAX_WORDS. Never touches a sentence with a link. -> art or None."""
+    body = art["body"]
+    excess = article_words(body) - MAX_WORDS
+    if excess <= 0:
+        return None
+    spans = sentence_spans(body)
+    sents = [body[a:b] for a, b in spans]
+    numbered = "\n".join("%d. %s" % (i + 1, x) for i, x in enumerate(sents))
+    rw = ask_rewrites(TRIM_SYSTEM, "CUT AT LEAST %d WORDS.\n\nSENTENCES:\n%s" % (excess + 20, numbered[:30000]), meter, post)
+    if not rw:
+        return None
+    picks = {}
+    for k, v in rw.items():
+        if not (1 <= k <= len(spans)) or v.strip() or LINK_RE.search(sents[k - 1]):
+            continue
+        picks[k - 1] = ""
+    if not picks:
+        return None
+    new = _splice(body, spans, picks)
+    new = re.sub(r"(?m)^[ \t]*([-*]|\d+[.)])[ \t]*$\n?", "", new)
+    new = re.sub(r"[ \t]{2,}", " ", new)
+    new = re.sub(r"\n{3,}", "\n\n", new).strip()
+    if article_words(new) < MIN_WORDS:
+        return None
+    return dict(art, body=new)
+
+
 def publish(art, api_key, post=None):
     """POST https://dev.to/api/articles. canonical_url is NOT sent. Returns the response dict."""
     body = {"article": {"title": art["title"], "body_markdown": art["body"], "published": True,
@@ -958,6 +996,18 @@ def run(post_ai=None, post_dev=None, getter=None, sleeper=time.sleep, lister=Non
             source_texts[u] = theirs if len(theirs) > len(ours) else ours
         unreadable = [u for u in ext if len(source_texts.get(u, "")) < MIN_SOURCE_CHARS]
         problems = check_article(art, url, page_text, source_texts, past_shingles=past_sh, page_full=page_full, anchor=anchor)
+        if any(x.startswith("words ") for x in problems) and article_words(art["body"]) > MAX_WORDS:
+            try:                                    # too long: ONE cheap pass deletes whole low-value sentences (no second writer try)
+                cut = trim_article(art, meter, post=post_ai)
+            except CapReached:
+                cut = None
+            except Exception as e:
+                print("dev_poster: trim skipped (%s)" % type(e).__name__)
+                cut = None
+            if cut:
+                p2 = check_article(cut, url, page_text, source_texts, past_shingles=past_sh, page_full=page_full, anchor=anchor)
+                print("dev_poster: trim words %d -> %d, problems %d -> %d" % (article_words(art["body"]), article_words(cut["body"]), len(problems), len(p2)))
+                art, problems = cut, p2
         rounds = REPAIR_ROUNDS
         while problems and repairable(problems) and rounds > 0:
             rounds -= 1
