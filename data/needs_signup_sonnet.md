@@ -4,6 +4,28 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| AI Tool Curator | https://www.aitoolcurator.com/submit-a-tool/ | ai_saas_directories | sonnet | UNKNOWN | 2026-11-26 |
+| AiToolsObserver | https://aitoolsobserver.com/ | ai_saas_directories | sonnet | UNKNOWN | 2026-11-26 |
+| Guest Post India | https://guestpostindia.com/write-for-us/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| Super Directory India | https://superdirectoryindia.com/ | startup_directories_by_country | sonnet | FOLLOWED | 2026-11-26 |
+| ListMyBusinesses | https://www.listmybusinesses.com/ | startup_directories_by_country | sonnet | FOLLOWED | 2026-11-26 |
+| India Listing Portal | https://indialistingportal.com/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| FreeListingIndia | https://www.freelistingindia.in/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |
+| FreeFind Business Directory | https://www.efreefind.com/ | startup_directories_by_country | sonnet | FOLLOWED | 2026-11-26 |
+| St. Louis Community College – Careers & Career Development | https://guides.stlcc.edu/c.php?g=154442&p=7080865 | edu_library_guides | sonnet | UNKNOWN | 2026-11-26 |
+| Best Places to Post Your Startup (GitHub) | https://github.com/EM5813/best-places-to-post-your-startup | journalist_platforms | sonnet | FOLLOWED | 2026-11-26 |
+| Free Press Release | https://freepressrelease.io/ | journalist_platforms | sonnet | UNKNOWN | 2026-11-26 |
+| JournalistDB | https://journalistdb.com/best-free-journalist-database/ | journalist_platforms | sonnet | UNKNOWN | 2026-11-26 |
+| Ripoter | https://ripoter.com/ | journalist_platforms | sonnet | UNKNOWN | 2026-11-26 |
+| Feel the Boot | https://www.feeltheboot.com/podcast-guest-info | podcasts_creators | sonnet | UNKNOWN | 2026-11-26 |
+| Code Story | https://www.codestory.co/guest-intake/ | podcasts_creators | sonnet | FOLLOWED | 2026-11-26 |
+| Foundinity | https://www.foundinity.com/compare/best-founder-communities/ | communities_profiles | sonnet | UNKNOWN | 2026-11-26 |
+| Awesome TikTok Tools (GitHub) | https://github.com/tomaserben/awesome-tiktok-tools | resource_pages | sonnet | FOLLOWED | 2026-11-26 |
+| Heyo Blog | https://blog.heyo.com/guest-post-guidelines/ | guest_post_pages | sonnet | UNKNOWN | 2026-11-26 |
+| Stripe App Marketplace | https://marketplace.stripe.com/ | saas_review_platforms | sonnet | UNKNOWN | 2026-11-26 |
+| JetBrains Marketplace | https://plugins.jetbrains.com/docs/marketplace/freemium.html | saas_review_platforms | sonnet | UNKNOWN | 2026-11-26 |
+| BigCommerce App Marketplace | https://docs.bigcommerce.com/developer/docs/integrations/apps/guide/publishing-apps | saas_review_platforms | sonnet | FOLLOWED | 2026-11-26 |
+| OpenText Marketplace | https://marketplace.opentext.com/appdelivery/join | saas_review_platforms | sonnet | UNKNOWN | 2026-11-26 |
 | RadarMakers: 48 GitHub lists and 44 PRs | https://dev.to/radarmakers/what-we-learned-from-48-github-lists-and-44-pull-requests-1npa | github_awesome_lists | sonnet | UNKNOWN | 2026-11-26 |
 | Awesome Creator Economy LATAM (hxkenneth) | https://github.com/hxkenneth/awesome-creator-economy-latam | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
 | Awesome Creator Economy (michael0127) | https://github.com/michael0127/awesome-creator-economy | github_awesome_lists | sonnet | FOLLOWED | 2026-11-26 |
