@@ -81,7 +81,7 @@
     "tool_roundups": 6,
     "github_awesome_lists": 20
    },
-   "runs": 3,
+   "runs": 4,
    "calls": 21,
    "providers": {
     "claude": {
@@ -99,9 +99,9 @@
      "needs_signup": 77
     }
    },
-   "category_summary": "list-builder: +141 new (total 2573; by category startup_directories_by_country 24, github_awesome_lists 20, guest_post_pages 17, edu_library_guides 15, journalist_platforms 10, resource_pages 10, communities_profiles 8, launch_sites 8, podcasts_creators 8, saas_review_platforms 8, ai_saas_directories 7, tool_roundups 6)",
-   "summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +94 new (11 followed, $0.05)",
-   "total": 2573
+   "category_summary": "list-builder: +141 new (total 2601; by category startup_directories_by_country 24, github_awesome_lists 20, guest_post_pages 17, edu_library_guides 15, journalist_platforms 10, resource_pages 10, communities_profiles 8, launch_sites 8, podcasts_creators 8, saas_review_platforms 8, ai_saas_directories 7, tool_roundups 6)",
+   "summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +122 new (15 followed, $0.07)",
+   "total": 2601
   }
  },
  "rejected": [
@@ -197,5 +197,5 @@
   "daytonastate.edu",
   "quickstartupindia.com"
  ],
- "last_summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +94 new (11 followed, $0.05)"
+ "last_summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +122 new (15 followed, $0.07)"
 }
