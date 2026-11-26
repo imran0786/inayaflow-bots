@@ -4,6 +4,17 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| SGInnovate | https://www.sginnovate.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
+| Singapore Business Directory | https://www.singaporebusinessdirectory.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
+| The Prompt Warrior | https://thepromptwarrior.com/ | podcasts_creators | deepseek | FOLLOWED | 2026-11-26 |
+| AI Applied | https://www.youtube.com/@AIApplied | podcasts_creators | deepseek | UNKNOWN | 2026-11-26 |
+| Last Week in AI | https://lastweekin.ai/ | podcasts_creators | deepseek | UNKNOWN | 2026-11-26 |
+| Awesome Marketing (GitHub) | https://github.com/topics/marketing | resource_pages | deepseek | FOLLOWED | 2026-11-26 |
+| Awesome Social Media (GitHub) | https://github.com/topics/social-media | resource_pages | deepseek | FOLLOWED | 2026-11-26 |
+| ReelnReel | https://www.reelnreel.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-26 |
+| Contentrow Blog | https://www.contentrow.com/blog | guest_post_pages | deepseek | UNKNOWN | 2026-11-26 |
+| BizCommunity | https://www.bizcommunity.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-26 |
+| SelectSoftware Reviews | https://www.selectsoftwarereviews.com/ | saas_review_platforms | deepseek | UNKNOWN | 2026-11-26 |
 | InnovationQuarter | https://innovationquarter.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
 | PressPage | https://www.presspage.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-26 |
 | Newswise | https://www.newswise.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-26 |

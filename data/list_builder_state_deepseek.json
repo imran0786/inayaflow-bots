@@ -1,9 +1,9 @@
 {
- "cursor": 108,
+ "cursor": 120,
  "spent": {
   "2026-11-24": 0.0586,
   "2026-11-25": 0.1457,
-  "2026-11-26": 0.0717
+  "2026-11-26": 0.0952
  },
  "days": {
   "2026-11-24": {
@@ -70,42 +70,42 @@
    "total": 2336
   },
   "2026-11-26": {
-   "added": 122,
+   "added": 151,
    "by_category": {
-    "ai_saas_directories": 6,
+    "ai_saas_directories": 7,
     "launch_sites": 1,
     "tool_roundups": 6,
-    "guest_post_pages": 17,
-    "resource_pages": 9,
+    "guest_post_pages": 22,
+    "resource_pages": 11,
     "communities_profiles": 3,
-    "podcasts_creators": 24,
+    "podcasts_creators": 30,
     "journalist_platforms": 7,
-    "edu_library_guides": 17,
-    "startup_directories_by_country": 27,
+    "edu_library_guides": 21,
+    "startup_directories_by_country": 37,
     "github_awesome_lists": 3,
-    "saas_review_platforms": 2
+    "saas_review_platforms": 3
    },
-   "runs": 3,
-   "calls": 36,
+   "runs": 4,
+   "calls": 48,
    "providers": {
     "deepseek": {
-     "calls": 36,
-     "cost": 0.0717,
-     "proposed": 1046,
-     "spam": 8,
-     "dup": 771,
-     "dead": 145,
-     "added": 122,
-     "followed": 15,
+     "calls": 48,
+     "cost": 0.0952,
+     "proposed": 1392,
+     "spam": 17,
+     "dup": 1055,
+     "dead": 169,
+     "added": 151,
+     "followed": 22,
      "nofollow": 0,
      "noindex": 1,
-     "unknown": 106,
-     "needs_signup": 34
+     "unknown": 128,
+     "needs_signup": 45
     }
    },
-   "category_summary": "list-builder: +122 new (total 2601; by category startup_directories_by_country 27, podcasts_creators 24, edu_library_guides 17, guest_post_pages 17, resource_pages 9, journalist_platforms 7, ai_saas_directories 6, tool_roundups 6, communities_profiles 3, github_awesome_lists 3, saas_review_platforms 2, launch_sites 1)",
-   "summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +122 new (15 followed, $0.07)",
-   "total": 2601
+   "category_summary": "list-builder: +151 new (total 2630; by category startup_directories_by_country 37, podcasts_creators 30, guest_post_pages 22, edu_library_guides 21, resource_pages 11, ai_saas_directories 7, journalist_platforms 7, tool_roundups 6, communities_profiles 3, github_awesome_lists 3, saas_review_platforms 3, launch_sites 1)",
+   "summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +151 new (22 followed, $0.10)",
+   "total": 2630
   }
  },
  "rejected": [
@@ -468,7 +468,42 @@
   "startupnation.nl",
   "betafactory.nl",
   "startupjunction.nl",
-  "fonc.nl"
+  "fonc.nl",
+  "aitoolhunter.io",
+  "github.com/amarketingtools/awesome-digital-marketing",
+  "github.com/getgenie/awesome-saas",
+  "github.com/igglybuff/awesome-startup-tools",
+  "github.com/thenaturaldev/awesome-social-media",
+  "github.com/awesome-selfhosted/awesome-ai-tools",
+  "github.com/marketingautomation/awesome-marketing-automation",
+  "github.com/awesome-smm/awesome-smm",
+  "github.com/awesome-video-marketing/awesome-video-marketing",
+  "writersinthemaking.com",
+  "brafton.com",
+  "steamfeed.com",
+  "websitemagazine.com",
+  "notion.so/templates",
+  "reddit.com/r/saas",
+  "reddit.com/r/smallbusiness",
+  "reddit.com/r/webdev",
+  "reddit.com/r/design",
+  "thelongtail.com",
+  "podcasthawk.com",
+  "washington.edu",
+  "ua.edu",
+  "sc.edu",
+  "rochester.edu",
+  "northeastern.edu",
+  "gmu.edu",
+  "umass.edu",
+  "pdx.edu",
+  "smeportal.sg",
+  "thebestsingapore.com",
+  "sgbusinesshub.com",
+  "tisg.com.sg",
+  "yellowpages.sg",
+  "org.sg",
+  "foundr.sg"
  ],
- "last_summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +122 new (15 followed, $0.07)"
+ "last_summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +151 new (22 followed, $0.10)"
 }
