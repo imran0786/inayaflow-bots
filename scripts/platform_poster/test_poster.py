@@ -702,9 +702,12 @@ class Repair(unittest.TestCase):
         self.assertTrue(repairable(pr) if (repairable := P.repairable) else False)
         self.assertTrue(any("overlap with our site" in x for x in pr))
 
-    def test_repairable_only_for_copy_and_first_person(self):
+    def test_repairable_kinds(self):
         self.assertTrue(P.repairable(["10-word overlap with our site: 'x'", "first person singular (use 'we')"]))
-        self.assertFalse(P.repairable(["10-word overlap with our site: 'x'", "number '5%' not found in the fetched sources"]))
+        self.assertTrue(P.repairable(["10-word overlap with our site: 'x'", "number '5%' not found in the fetched sources"]))      # 26 Nov: an unsourced figure is dropped by a rewrite
+        self.assertTrue(P.repairable(["banned phrase: take your", "names a mode/plan/tier that is not on our page: 'Starter Mode'"]))
+        self.assertFalse(P.repairable(["10-word overlap with our site: 'x'", "words 34 outside 350-650"]))
+        self.assertFalse(P.repairable(["need exactly one inayaflow.ai link and it must be the target (0 found)"]))
         self.assertFalse(P.repairable([]))
 
     def test_sentence_spans_skip_headings(self):
@@ -745,16 +748,24 @@ class Repair(unittest.TestCase):
         self.assertIn("overlap with our site", log)
         self.assertTrue([d for d in os.listdir(P.DRAFT_DIR) if d.endswith("_FAILED.md")])
 
-    def test_repair_that_breaks_the_link_is_not_used(self):
-        calls, sent = [], []
-        bad = "Read [more here](https://elsewhere.example.com/x) about it."          # a stray external link: the gate must reject the repaired article
-        res, _ = quiet(post_ai=ai_with_repair(calls, COPY, "RAW:" + bad), publishers=fake_publishers(sent))
-        self.assertEqual(set(res.values()), {"FAIL"})
-        self.assertEqual(sent, [])
+    def test_repair_that_adds_a_stray_link_never_publishes_the_link(self):
+        calls, bodies = [], []
+        bad = "Read [more here](https://elsewhere.example.com/x) about it."          # a stray external link: code turns it into plain text (no source was opened)
+        pubs = {pl: (lambda pl: lambda a: (bodies.append(a["body"]), {"url": "https://live.example.net/%s/p" % pl, "id": 1})[1])(pl) for pl in P.PLATFORMS}
+        res, _ = quiet(post_ai=ai_with_repair(calls, COPY, "RAW:" + bad), publishers=pubs)
+        self.assertTrue(bodies)
+        self.assertTrue(all("elsewhere.example.com" not in b for b in bodies))
+
+    def test_banned_phrase_is_repaired_not_thrown_away(self):
+        calls = []
+        res, out = quiet(post_ai=ai_with_repair(calls, "\n\nWe say delve into it.", "x"), publishers=fake_publishers([]))
+        self.assertEqual(set(res.values()), {"PUBLISHED"})
+        self.assertEqual(calls.count("repair"), 3)
+        self.assertEqual(calls.count(D.WRITER), 3)
 
     def test_repair_not_tried_for_other_problems(self):
         calls = []
-        res, _ = quiet(post_ai=ai_with_repair(calls, "\n\nWe say delve into it.", "x"), publishers=fake_publishers([]))
+        res, _ = quiet(post_ai=ai_with_repair(calls, " " + filler("long", 400), "x"), publishers=fake_publishers([]))     # too long: only the writer can fix it
         self.assertEqual(set(res.values()), {"FAIL"})
         self.assertEqual(calls.count("repair"), 0)
 
@@ -1066,25 +1077,252 @@ class Round2(unittest.TestCase):
 
     def test_attempt_two_is_a_toolless_revision_not_a_second_research_run(self):
         calls = []
-        base = smart_ai(calls, extra="\n\nWe say delve into it.")          # a banned phrase: not repairable, so attempt 2 runs
+        base = smart_ai(calls, extra=" " + filler("long", 400))          # too long: not repairable, so attempt 2 (the revision) runs
         bodies = []
 
         def spy(url, b, h):
             if b["model"] == D.WRITER:
                 bodies.append(b)
             return base(url, b, h)
-        quiet(post_ai=spy, publishers=fake_publishers([]), getter=get2)
+        old = P.WRITER_WEB
+        P.WRITER_WEB = True                                # the older research writer, switched on by PLATFORM_WRITER_WEB=true
+        try:
+            quiet(post_ai=spy, publishers=fake_publishers([]), getter=get2)
+        finally:
+            P.WRITER_WEB = old
         with_tools = [b for b in bodies if b.get("tools")]
         without = [b for b in bodies if not b.get("tools")]
         self.assertEqual(len(with_tools), 3)               # one research run per platform
         self.assertEqual(len(without), 3)                  # the retry is a revision with no web tools
         self.assertIn("YOUR DRAFT", without[0]["messages"][0]["content"])
-        self.assertIn("delve", without[0]["messages"][0]["content"])
+        self.assertIn("outside", without[0]["messages"][0]["content"])
+
+    def test_default_writer_has_no_web_tools_and_gets_effort_and_room(self):
+        bodies = []
+        base = smart_ai([])
+
+        def spy(url, b, h):
+            bodies.append(b)
+            return base(url, b, h)
+        quiet(post_ai=spy, publishers=fake_publishers([]), getter=get2)
+        w = [b for b in bodies if b["model"] == D.WRITER]
+        self.assertTrue(w and all(not b.get("tools") for b in w))
+        self.assertTrue(all(b["output_config"]["effort"] == P.WRITER_EFFORT and b["max_tokens"] >= 6000 for b in w))
+        self.assertIn("NO web access", w[0]["system"])
+        h = [b for b in bodies if b["model"] == D.QA_MODEL]
+        self.assertTrue(h and all(b["max_tokens"] >= 3000 and b["output_config"].get("effort") for b in h))     # Haiku thinks: room + explicit effort
+        self.assertTrue(all(b["output_config"]["format"]["type"] == "json_schema" for b in h))
 
     def test_writer_prompt_forbids_comparisons_and_invented_features(self):
         s = P.writer_system("notion")
         self.assertIn("No comparisons or performance claims", s)
         self.assertIn("unless a FACT states it exactly", s)
+
+
+# ---------- 26 Nov round 3: why 0 articles were ever published, and the fixes ----------
+def hk(text, stop="end_turn", out=80):
+    return {"content": [{"type": "thinking", "thinking": "", "signature": "x"}, {"type": "text", "text": text}], "stop_reason": stop,
+            "usage": {"input_tokens": 3000, "output_tokens": out}}
+
+
+class Round3(unittest.TestCase):
+    def setUp(self):
+        for f in (P.STATE_PATH, P.LOG_PATH):
+            if os.path.exists(f):
+                os.remove(f)
+        P.DRY = False
+        P.DAY_CAP = 0.90
+        os.environ["PLATFORM_STATE_OK"] = "true"
+        os.environ["PLATFORM_FIRST_RUN"] = "true"
+        os.environ["PLATFORM_POSTER_LIVE"] = "true"
+
+    # the 25 Nov wordpress draft: the model wrote the article, then a second delimiter and an 'Oops' note; the old parser kept the note as the body
+    def test_parse_writer_keeps_the_article_not_the_trailing_note(self):
+        art_body = body_for("wordpress", T)
+        raw = ("Let us write it.\nTITLE: Sudden view drop? A calm check\nSOURCES: none\n===BODY===\n" + art_body +
+               "\n===BODY===\nOops, I accidentally included an extra delimiter at the end of that. Here is the clean version of the output above.")
+        a = P.parse_writer(raw)
+        self.assertEqual(a["title"], "Sudden view drop? A calm check")
+        self.assertEqual(a["body"].strip(), art_body.strip())
+        self.assertEqual(a["sources"], [])
+        b = P.parse_writer("**TITLE:** T2\nSOURCES: https://a.example.org/x | https://b.example.org/y\n=== BODY ===\nShort body here.")
+        self.assertEqual((b["title"], b["sources"], b["body"]), ("T2", ["https://a.example.org/x", "https://b.example.org/y"], "Short body here."))
+        self.assertIsNone(P.parse_writer("no format at all"))
+
+    def test_ask_json_reads_a_schema_reply_after_thinking_and_retries_a_cut_reply_with_more_room(self):
+        seen = []
+        replies = [hk("", stop="max_tokens", out=4000), hk('{"facts":["One fact here in words.","Two fact here in words.","Three fact here in words."]}')]
+
+        def post(url, b, h):
+            seen.append(b)
+            return replies[len(seen) - 1]
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            val, _ = P.ask_json(P.FACTS_SYSTEM, "PAGE", P.FACTS_SCHEMA, D.Meter(cap=0.9), P._fact_candidates, post=post, label="facts")
+        self.assertEqual(len(val), 3)
+        self.assertEqual(len(seen), 2)
+        self.assertEqual(seen[1]["max_tokens"], 2 * seen[0]["max_tokens"])
+        self.assertIn("stop=max_tokens", out.getvalue())
+        self.assertEqual(seen[0]["output_config"]["format"]["schema"], P.FACTS_SCHEMA)
+
+    def test_ask_json_falls_back_to_plain_json_when_the_schema_is_refused(self):
+        seen = []
+
+        def post(url, b, h):
+            seen.append(b)
+            if "format" in b.get("output_config", {}):
+                raise urllib.error.HTTPError(url, 400, "bad", {}, None)
+            return hk('{"verdict":"PASS","problems":[]}')
+        with contextlib.redirect_stdout(io.StringIO()):
+            ok, reasons = P.qa_check(art(), T, {}, "page", D.Meter(cap=0.9), post=post)
+        self.assertEqual((ok, reasons), (True, []))
+        self.assertEqual(len(seen), 2)
+
+    def test_qa_json_forms_strict(self):
+        self.assertEqual(P.parse_qa('{"verdict":"PASS","problems":[]}'), ("PASS", []))
+        v, r = P.parse_qa('{"verdict":"FAIL","problems":[{"quote":"Starter Mode applies.","why":"not on our page"}]}')
+        self.assertEqual((v, r), ("FAIL", ['"Starter Mode applies." | not on our page']))
+        self.assertEqual(P.parse_qa('{"verdict":"PASS","problems":[{"quote":"x y z","why":"odd"}]}')[0], "FAIL")      # a PASS that lists a problem is a FAIL
+        self.assertEqual(P.parse_qa('{"verdict":"FAIL","problems":[]}'), ("FAIL", ["QA said FAIL without a reason"]))
+        self.assertIsNone(P.parse_qa('{"verdict":"MAYBE","problems":[]}')[0])
+
+    def test_facts_keep_numbers_only_when_printed_on_the_page(self):
+        page = "The checker reads the last 3 videos of a public account and answers in about 30 seconds without a login."
+        got = P.fact_bullets(["It looks at the most recent 3 videos.", "It answers within 45 seconds.", "No login is needed to use it."], page)
+        self.assertEqual(got, ["It looks at the most recent 3 videos.", "No login is needed to use it."])
+
+    def test_number_from_the_facts_needs_no_other_source_but_other_numbers_do(self):
+        facts = "- The report arrives in about 30 seconds.\n- It needs at least 3 videos."
+        ok = art(body=body_for("wordpress", T, extra=" A report takes about 30 seconds to arrive."))
+        self.assertEqual(probs(ok, T, facts=facts), [])
+        bad = art(body=body_for("wordpress", T, extra=" A report takes about 45 seconds to arrive."))
+        self.assertTrue(any("45 seconds" in x for x in probs(bad, T, facts=facts)))
+        unit = art(body=body_for("wordpress", T, extra=" Expect 30% more reach."))            # same number, different unit: not from the facts
+        self.assertTrue(any("30%" in x for x in probs(unit, T, facts=facts)))
+
+    def test_invented_mode_name_is_flagged_and_repaired(self):
+        a = art(body=body_for("wordpress", T, extra=" With fewer, the free Starter Mode applies instead."))
+        pr = probs(a, T)
+        self.assertTrue(any("Starter Mode" in x for x in pr))
+        self.assertTrue(P.repairable(pr))
+        bad = P.offending_sentences(a["body"], "", [], pr)
+        self.assertEqual(len(bad), 1)
+        self.assertIn("drop the name", bad[0][1])
+        self.assertFalse(any("Starter Mode" in x for x in probs(a, T, page_full=SITE_TEXT + " Starter Mode is our free mode.")))
+
+    def test_unsourced_number_sentence_is_rewritten_without_the_figure(self):
+        a = art(body=body_for("wordpress", T, extra="\n\nCreators see 47.4% growth with tags."))
+        pr = probs(a, T)
+        bad = P.offending_sentences(a["body"], "", [], pr)
+        self.assertEqual(len(bad), 1)
+        self.assertIn("drop the figure", bad[0][1])
+
+        def post(url, b, h):
+            return hk(json.dumps({"rewrites": [{"n": 1, "text": "Creators often see tags help when they match the video."}]}))
+        fixed = P.repair_article(a, "", [], D.Meter(cap=0.9), post=post, problems=pr)
+        self.assertEqual(probs(fixed, T), [])
+
+    def test_normalize_keeps_one_target_link_in_a_middle_paragraph_and_unlinks_the_rest(self):
+        body = ("## H\n\nFirst [InayaFlow](%s) para %s.\n\nMiddle [the tool](%s) and [a study](https://x.example.org/s) and [home](https://inayaflow.ai/) %s.\n\n"
+                "Third [inayaflow.ai/x](%s) %s.\n\nLast %s." % (T, filler("aa", 30), T, filler("bb", 30), T, filler("cc", 30), filler("dd", 30)))
+        n = P.normalize_links({"title": "t", "body": body, "sources": []}, T, web=False)["body"]
+        self.assertEqual(n.count("](" + T + ")"), 1)
+        self.assertIn("[the tool](%s)" % T, n)
+        self.assertNotIn("x.example.org", n)
+        self.assertNotIn("](https://inayaflow.ai/)", n)
+        self.assertIn("Third the same free tool", n)
+        self.assertFalse(any("first or last" in x or "exactly one" in x or "bare" in x for x in probs({"title": "t", "body": n, "sources": []}, T)))
+        same = {"title": "t", "body": body_for("wordpress", T), "sources": []}
+        self.assertIs(P.normalize_links(same, T, web=False), same)
+
+    def test_qa_repair_changes_only_the_quoted_sentence(self):
+        A = "Check the area beneath your display name for a notice."
+        a = art(body=body_for("wordpress", T, extra="\n\n" + A + " Keep this line as it is."))
+        reasons = ['"%s" | our page says below the username' % A]
+        seen = []
+
+        def post(url, b, h):
+            u = b["messages"][0]["content"]
+            seen.append(u)
+            nums = re.findall(r"^(\d+)\. (.*)$", u, re.M)
+            target = [k for k, l in nums if l.startswith("Check the area")][0]
+            other = [k for k, l in nums if l.startswith("Keep this line")][0]
+            return hk(json.dumps({"rewrites": [{"n": int(target), "text": "Open your profile and look for a notice."}, {"n": int(other), "text": "CHANGED"}]}))
+        fixed = P.qa_repair_article(a, reasons, D.Meter(cap=0.9), post=post)
+        self.assertIn("Open your profile and look for a notice.", fixed["body"])
+        self.assertIn("Keep this line as it is.", fixed["body"])              # the checker did not quote it: it stays
+        self.assertNotIn("CHANGED", fixed["body"])
+        self.assertIn("THE CHECKER QUOTED THESE SENTENCES", seen[0])
+
+    def test_a_rewrite_that_drops_the_link_is_not_applied(self):
+        body = "## H\n\nOne plain line. See [the tool](%s) for it.\n\nTwo plain line." % T
+        spans = P.sentence_spans(body)
+        i = [k for k, (a, b) in enumerate(spans) if "the tool" in body[a:b]][0]
+        self.assertEqual(P._splice(body, spans, {i: "See it for yourself."}), body)                 # link lost: the sentence stays as it was
+        self.assertEqual(P._splice(body, spans, {i: ""}), body)                                      # a sentence with a link is never deleted
+        self.assertIn("Look at [the tool](%s) now." % T, P._splice(body, spans, {i: "Look at [the tool](%s) now." % T}))
+
+    def test_a_repair_that_trades_a_problem_for_a_lost_link_is_not_kept(self):
+        """The overlap sits in the sentence with our link; the editor rewrites it WITHOUT the link: the rewrite is refused, the draft fails honestly."""
+        calls, sent = [], []
+        base = smart_ai(calls)
+
+        def post(url, b, h):
+            if b["model"] == D.WRITER:
+                r = base(url, b, h)
+                tgt = re.search(r"TARGET PAGE: (\S+)", b["messages"][0]["content"]).group(1)
+                t = r["content"][0]["text"].replace("[InayaFlow's free checker](%s)" % tgt,
+                                                    "[InayaFlow's free checker](%s) plain explanations of how the checker works and what it needs" % tgt)
+                return dict(r, content=[{"type": "text", "text": t}])
+            if "copy editor" in b["system"] and "fact-checker found" not in b["system"]:
+                calls.append("repair")
+                items = re.findall(r"^(\d+)\. \[[^\]]*\] (.*)$", b["messages"][0]["content"], re.M)
+                return hk(json.dumps({"rewrites": [{"n": int(k), "text": "%s we cover it." % filler("lk" + chr(97 + len(calls) % 26), 8)} for k, _ in items]}))
+            return base(url, b, h)
+        res, _ = quiet(post_ai=post, publishers=fake_publishers(sent), getter=get2)
+        self.assertGreater(calls.count("repair"), 0)
+        self.assertEqual(sent, [])
+        self.assertEqual(set(res.values()), {"FAIL"})
+
+    def test_writer_prompt_lists_every_code_banned_phrase_and_the_banned_claims(self):
+        s = P.writer_system("wordpress")
+        for b in P.BANNED:
+            self.assertIn('"%s"' % b, s)
+        self.assertIn("BANNED CLAIMS", s)
+        self.assertIn("Starter Mode", s)
+        self.assertIn("SOURCES: none", s)
+
+    def test_writer_gets_facts_with_their_source(self):
+        seen = []
+        base = smart_ai([])
+
+        def spy(url, b, h):
+            if b["model"] == D.WRITER:
+                seen.append(b["messages"][0]["content"])
+            return base(url, b, h)
+        quiet(post_ai=spy, publishers=fake_publishers([]), getter=get2)
+        self.assertRegex(seen[0], r"FACTS ABOUT OUR PAGE \(source: https://inayaflow\.ai/")
+
+    def test_end_to_end_the_four_25nov_failures_are_fixed_or_failed_honestly(self):
+        """Writer drafts carry an 'I', a banned phrase, an unsourced 47.4% and an invented 'Starter Mode': one repair fixes all four, QA (JSON) passes."""
+        extra = "\n\nI think tags matter. Take your time with them.\n\nCreators see 47.4% growth with tags.\n\nWith fewer, the free Starter Mode applies instead."
+        calls = []
+        base = smart_ai(calls, extra=extra)
+
+        def post(url, b, h):
+            if b["model"] == D.QA_MODEL and "copy editor" in b["system"] and "fact-checker found" not in b["system"]:
+                calls.append("repair")
+                items = re.findall(r"^(\d+)\. \[[^\]]*\] (.*)$", b["messages"][0]["content"], re.M)
+                return hk(json.dumps({"rewrites": [{"n": int(k), "text": "%s we cover it." % filler("zq" + chr(97 + len(calls) % 26) + chr(97 + int(k) % 26), 9)}
+                                                   for k, _ in items]}))
+            if b["model"] == D.QA_MODEL and "fact-check editor" in b["system"]:
+                calls.append("qa")
+                return hk('{"verdict":"PASS","problems":[]}')
+            return base(url, b, h)
+        sent = []
+        res, out = quiet(post_ai=post, publishers=fake_publishers(sent), getter=get2)
+        self.assertEqual(set(res.values()), {"PUBLISHED"})
+        self.assertEqual(calls.count(D.WRITER), 3)                    # no second writer call needed
+        self.assertLessEqual(json.load(open(P.STATE_PATH))["spent"][D.utc_today()], 0.90 + 1e-9)
 
 
 if __name__ == "__main__":

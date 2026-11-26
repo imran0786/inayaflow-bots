@@ -2,7 +2,11 @@
 """PLATFORM POSTER (24 Nov 2026): ONE short, unique article a day to EACH of WordPress.com, Blogger and Notion, each linking (plain <a href>, no rel)
 to ONE inayaflow.ai page, rotating over the 9 tool pages, the hub guides and the homepage.
 
-Modelled on scripts/dev_poster/poster.py and REUSES its writer (Claude Sonnet + web search/fetch), cost meter, QA (Haiku), 7-word overlap and link_rel code.
+Modelled on scripts/dev_poster/poster.py and REUSES its cost meter, model call, 7-word overlap and link_rel code.
+26 Nov (r3, 0 articles had ever passed): Haiku now gets an explicit effort and room to think (its thinking had eaten max_tokens 600-900, so facts came back
+empty and QA "not understood"); facts, QA and rewrites answer a JSON schema parsed strictly; the writer (Sonnet) has NO web tools by default and may state
+only the FACTS of our page (numbers only from them) plus a banned-claims list; links are normalised in code (one target link); banned phrases, unsourced
+figures and invented mode/plan names are fixed by a sentence rewrite; the QA's quoted sentences are rewritten one by one. PLATFORM_WRITER_WEB=true = old research writer.
 HARD LIMITS: daily USD cap over ALL runs (PLATFORM_DAY_USD_CAP, checked before each model call, kept in the state file); at most 2 dry runs a day;
 one article per platform per day; nothing runs unless the private state was restored (PLATFORM_STATE_OK); NOTHING is published unless the run is not
 dry AND the repository switch PLATFORM_POSTER_LIVE is "true". Public log = platform, page slug, status words, cost. Never keys, never article text.
@@ -100,11 +104,18 @@ def pick_targets(state, today, platforms=PLATFORMS, targets=TARGETS):
 
 
 # ---------- offline gate ----------
-BANNED = D.BANNED + ["genie"]
+BANNED = D.BANNED + ["genie", "a handful of"]
+NUM_RE = re.compile(r"\d[\d,\.]*\d|\d")
+NAME_RE = re.compile(r"\b(?:[A-Z][\w'-]*\s){1,2}(?:Mode|Plan|Tier)\b")      # "Starter Mode", "Pro Plan": product names we never invent
 
 
-def check_post(art, target_url, platform, page_full, source_texts, site_corpus="", others=(), past_shingles=None, anchor=None):
-    """-> list of problems (empty = passes). art = dict(title, tags, body, sources). others = [(platform, plain body)] already written today."""
+def nums_in(text):
+    return {D.norm_num(m) for m in NUM_RE.findall(text or "")} - {""}
+
+
+def check_post(art, target_url, platform, page_full, source_texts, site_corpus="", others=(), past_shingles=None, anchor=None, facts=""):
+    """-> list of problems (empty = passes). art = dict(title, tags, body, sources). others = [(platform, plain body)] already written today.
+    facts = the FACTS text the writer was given (taken from our target page): a number printed there may be used without another source link."""
     p = []
     body, title = art.get("body", ""), art.get("title", "")
     lo, hi = SPECS[platform]["words"]
@@ -143,18 +154,25 @@ def check_post(art, target_url, platform, page_full, source_texts, site_corpus="
     if re.search(r"\b(I|I'm|I've|I'll|I'd|my|me|mine|myself)\b", unquoted):
         p.append("first person singular (use 'we')")
     corpus = " ".join(list(source_texts.values()) + [page_full])
-    nums = {D.norm_num(m) for m in re.findall(r"\d[\d,\.]*\d|\d", corpus)}
+    nums = nums_in(corpus)
+    fact_lines = [l.lower() for l in (facts or "").split("\n") if l.strip()]
     for para in re.split(r"\n\s*\n", body):
         if para.lstrip().startswith("#"):
             continue
         for m in D.STAT_RE.finditer(para):
             n = D.norm_num(m.group(0))
-            if not n:
+            unit = (m.group(1) or m.group(2) or "").lower()[:4]
+            if not n or any(n in nums_in(l) and unit in l for l in fact_lines):     # number AND unit printed in one FACT (from our target page, which the article links)
                 continue
             if not [u for _, u in LINK_RE.findall(para) if "inayaflow.ai" not in u]:
                 p.append("number '%s' in a paragraph with no source link" % m.group(0).strip()[:30])
             elif n not in nums:
                 p.append("number '%s' not found in the fetched sources" % m.group(0).strip()[:30])
+    page_low = (page_full or "").lower() + " " + (facts or "").lower()
+    for m in NAME_RE.finditer(re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", body)):
+        if m.group(0).lower() not in page_low:
+            p.append("names a mode/plan/tier that is not on our page: '%s'" % m.group(0))
+            break
     plain = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", body)
     ov = D.seven_word_overlap(plain, site_corpus or page_full, SITE_OVERLAP_WORDS)
     if ov:
@@ -178,17 +196,138 @@ def check_post(art, target_url, platform, page_full, source_texts, site_corpus="
     return p[:12]
 
 
-# ---------- repair (24 Nov): fix ONLY the offending sentences instead of throwing the draft away ----------
-REPAIRABLE = ("-word overlap with our site", "-word overlap with today's", "first person singular")
+# ---------- link normalising in code BEFORE the gate (26 Nov): one target link, no stray links ----------
+def _paragraph_spans(body):
+    out, pos = [], 0
+    for chunk in re.split(r"(\n\s*\n)", body):
+        if chunk.strip() and not re.fullmatch(r"\n\s*\n", chunk) and not chunk.lstrip().startswith("#"):
+            out.append((pos, pos + len(chunk)))
+        pos += len(chunk)
+    return out
+
+
+def normalize_links(art, target_url, web=None):
+    """Keeps exactly ONE link to the target (the first one that is not in the first or last paragraph, else the first) and turns every other
+    inayaflow.ai link, and every external link the writer could not have opened (no web research, or not in its source list), into plain text.
+    Only ever REMOVES links: it never adds a claim, a number or a link. A body with no target link is left as it is (the gate then fails it)."""
+    web = WRITER_WEB if web is None else web
+    body = art.get("body", "")
+    paras = _paragraph_spans(body)
+    srcs = {u.rstrip("/") for u in (art.get("sources") or [])}
+
+    def para_of(i):
+        return next((k for k, (a, b) in enumerate(paras) if a <= i < b), -1)
+    ms = list(LINK_RE.finditer(body))
+    tgt = [m for m in ms if m.group(2).rstrip("/") == target_url.rstrip("/")]
+    keep = None
+    if tgt:
+        inner = [m for m in tgt if 0 < para_of(m.start()) < len(paras) - 1] if len(paras) > 3 else tgt
+        keep = (inner or tgt)[0]
+    out, pos = [], 0
+    for m in ms:
+        u = m.group(2)
+        drop = (m is not keep and u in [t.group(2) for t in tgt]) or ("inayaflow.ai" in u and m is not keep) or \
+               ("inayaflow.ai" not in u and (not web or u.rstrip("/") not in srcs))
+        if drop:
+            text = m.group(1)
+            if "inayaflow.ai" in text.lower() or re.match(r"https?://", text):
+                text = "the same free tool" if "inayaflow.ai" in text.lower() else "that page"
+            out.append(body[pos:m.start()] + text)
+            pos = m.end()
+    out.append(body[pos:])
+    new = "".join(out)
+    return art if new == body else dict(art, body=new)
+
+
+# ---------- model calls that must answer JSON (26 Nov) ----------
+# WHY every 24-25 Nov draft died: claude-haiku-5-5 THINKS by default and its thinking counts toward max_tokens. With max_tokens 600-900 the reply often
+# stopped (stop_reason max_tokens) before any text: "facts round 1 kept 0 dropped 0", "QA answer not understood", reasons cut mid-word.
+# Now: effort is set explicitly (low), max_tokens leaves room for thinking, the reply is constrained by a JSON schema (output_config.format),
+# parsed strictly (json.loads), and an unreadable reply is asked ONCE more with a stricter prompt and twice the room.
+HAIKU_OUT = int(os.environ.get("PLATFORM_HAIKU_MAX_TOKENS", "4000"))     # Haiku: 4000 out x $0.50/M = $0.002, far inside QA_RESERVE
+HAIKU_EFFORT = os.environ.get("PLATFORM_HAIKU_EFFORT", "low")
+QA_EFFORT = os.environ.get("PLATFORM_QA_EFFORT", "medium")
+JSON_ONLY = "\nAnswer with the JSON object only: no words before or after it, no code fence."
+
+
+def _text(data):
+    return "".join(b.get("text", "") for b in (data.get("content") or []) if b.get("type") == "text")
+
+
+def strict_json(raw):
+    """The reply as a JSON object: the whole reply (or the whole fenced block) must parse. None otherwise."""
+    t = (raw or "").strip()
+    m = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", t, re.S)
+    if m:
+        t = m.group(1)
+    try:
+        d = json.loads(t)
+    except ValueError:
+        return None
+    return d if isinstance(d, dict) else None
+
+
+def ask_json(system, user, schema, meter, parse, post=None, max_tokens=None, effort=None, retry_system=None, label="json"):
+    """-> (parsed value or None, raw text). parse(raw) returns the value or None (unreadable). Two asks at most."""
+    max_tokens = max_tokens or HAIKU_OUT
+    use_format, raw = True, ""
+    for attempt in (1, 2):
+        oc = {"effort": effort or HAIKU_EFFORT}
+        if use_format:
+            oc["format"] = {"type": "json_schema", "schema": schema}
+        sysm = system if attempt == 1 else (retry_system or system + JSON_ONLY)
+        try:
+            data = D.anthropic(D.QA_MODEL, sysm, user, meter, post=post, max_tokens=max_tokens * attempt, extra={"output_config": oc})
+        except urllib.error.HTTPError as e:
+            if e.code == 400 and use_format and attempt == 1:     # the API refused the schema: ask once more for plain JSON, still parsed strictly
+                print("platform_poster: %s schema refused (HTTP 400), asking for plain JSON" % label)
+                use_format = False
+                continue
+            raise
+        raw = _text(data)
+        val = parse(raw)
+        if val is not None:
+            return val, raw
+        print("platform_poster: %s reply unreadable (stop=%s, %s output tokens), %s" % (
+            label, data.get("stop_reason"), (data.get("usage") or {}).get("output_tokens"), "asking once more" if attempt == 1 else "giving up"))
+    return None, raw
+
+
+def _rewrites(raw):
+    """{sentence number: new text} from {"rewrites":[{"n":4,"text":"..."}]} (or the older {"4":"..."} form). None = unreadable."""
+    j = strict_json(raw) or D.qa_json(raw)
+    if not isinstance(j, dict):
+        return None
+    out = {}
+    if isinstance(j.get("rewrites"), list):
+        for r in j["rewrites"]:
+            if not (isinstance(r, dict) and isinstance(r.get("text"), str) and str(r.get("n", "")).strip().isdigit()):
+                return None
+            out[int(str(r["n"]).strip())] = r["text"]
+        return out
+    for k, v in j.items():
+        if not (str(k).isdigit() and isinstance(v, str)):
+            return None
+        out[int(k)] = v
+    return out
+
+
+REWRITE_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["rewrites"], "properties": {
+    "rewrites": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["n", "text"],
+                                            "properties": {"n": {"type": "integer"}, "text": {"type": "string"}}}}}}
+
+
+# ---------- repair (24 Nov, widened 26 Nov): fix ONLY the offending sentences instead of throwing the draft away ----------
+REPAIRABLE = ("-word overlap with our site", "-word overlap with today's", "first person singular", "banned phrase", "number '", "names a mode/plan/tier")
 FIRST_PERSON_RE = re.compile(r"\b(I|I'm|I've|I'll|I'd|my|me|mine|myself)\b")
 QUOTE_RE = re.compile(r'"[^"\n]*"|“[^”\n]*”')
 MAX_REPAIR_SENTENCES = 12
-REPAIR_ROUNDS = 2          # sentence-level rewrites (overlap / I-me-my) per platform per day
+REPAIR_ROUNDS = 2          # sentence-level rewrites (overlap / I-me-my / banned words / unsourced figures / invented names) per platform per day
 QA_REPAIR_ROUNDS = 2       # rewrites of sentences the fact-check named as unsupported
 
 
 def repairable(problems):
-    """True when EVERY problem is a copy-overlap or an 'I/me/my' problem (the only kinds a sentence rewrite can fix)."""
+    """True when EVERY problem is one a sentence rewrite can fix: a copy-overlap, 'I/me/my', a banned phrase, an unsourced figure or an invented name."""
     return bool(problems) and all(any(k in x for k in REPAIRABLE) for x in problems)
 
 
@@ -220,8 +359,9 @@ def overlap_grams(text, reference, n):
     return {" ".join(a[i:i + n]) for i in range(len(a) - n + 1)} & grams
 
 
-def offending_sentences(body, site_corpus, others):
-    """-> [(span_index, reason)]: sentences that carry a site / other-article overlap run or a first-person word."""
+def offending_sentences(body, site_corpus, others, problems=()):
+    """-> [(span_index, reason)]: sentences that carry a site / other-article overlap run, a first-person word, a banned phrase,
+    a figure the gate named as unsourced, or a mode/plan name the gate named as not on our page."""
     spans = sentence_spans(body)
     sents = [body[a:b] for a, b in spans]
     plain = [re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", x) for x in sents]
@@ -244,61 +384,108 @@ def offending_sentences(body, site_corpus, others):
     for i, x in enumerate(sents):
         if FIRST_PERSON_RE.search(QUOTE_RE.sub(" ", x)):
             bad.setdefault(i, "uses I / me / my (must speak as 'we' / 'our')")
+        low = x.lower()
+        bb = [b for b in BANNED if b in low]
+        if bb:
+            bad.setdefault(i, "uses the banned phrase '%s': say it without those words" % bb[0])
+    for pr in problems or ():
+        m = re.match(r"number '([^']+)'", pr)
+        if m:
+            for i, x in enumerate(plain):
+                if m.group(1) in x:
+                    bad.setdefault(i, "contains the figure '%s' that has no source: drop the figure and make the point without any number" % m.group(1))
+        m = re.match(r"names a mode/plan/tier that is not on our page: '([^']+)'", pr)
+        if m:
+            for i, x in enumerate(plain):
+                if m.group(1) in x:
+                    bad.setdefault(i, "names '%s', which is not on our page: drop the name and describe it in general words" % m.group(1))
     return sorted(bad.items())
 
 
-def repair_article(art, site_corpus, others, meter, post=None):
+REPAIR_SYSTEM = ("You are a copy editor. Rewrite ONLY the numbered sentences. Each line says in [brackets] what is wrong with that sentence; fix exactly that:\n"
+                 "- a shared run of words: change the structure and vocabulary so that run (and any 4 or more of its words in a row) no longer appears; keep the meaning;\n"
+                 "- I / me / my: speak as 'we' / 'our' for the company;\n- a banned phrase: say the same thing without those words;\n"
+                 "- a figure with no source: drop the figure and make the point without any number;\n- a name not on our page: drop it and use general words.\n"
+                 "Never add a number, a name, a feature or a claim. Keep every other number as it is. Keep every Markdown link [text](url) EXACTLY as it is "
+                 "(same text, same url); a list item keeps its '- ' or '1. ' start; one sentence stays one sentence. "
+                 'Answer ONLY the JSON object {"rewrites":[{"n":1,"text":"new sentence"}]} with one entry per numbered line.')
+
+
+def _keeps_links(old, new):
+    """A rewrite must carry every Markdown link of the sentence it replaces, unchanged (a deleted sentence carries none: only allowed without links)."""
+    return all(("[%s](%s)" % (t, u)) in new for t, u in LINK_RE.findall(old))
+
+
+def _splice(body, spans, picks):
+    """picks = {span_index: new text}. A list item keeps its marker; an empty text deletes the sentence.
+    A rewrite that would drop or change a link of its sentence is NOT applied (that sentence stays as it was)."""
+    new = body
+    for i in sorted(picks, reverse=True):
+        a, b = spans[i]
+        rep, old = picks[i].strip(), body[a:b]
+        if not _keeps_links(old, rep):
+            continue
+        m = re.match(r"\s*([-*]|\d+[.)])\s", old)
+        if rep and m and not re.match(r"([-*]|\d+[.)])\s", rep):
+            rep = m.group(0) + rep
+        new = new[:a] + rep + new[b:]
+    return new
+
+
+def repair_article(art, site_corpus, others, meter, post=None, problems=()):
     """ONE cheap rewrite (Haiku, no tools) of ONLY the offending sentences. -> repaired art dict, or None when nothing could be repaired."""
     body = art["body"]
     spans = sentence_spans(body)
-    bad = offending_sentences(body, site_corpus, others)
+    bad = offending_sentences(body, site_corpus, others, problems)
     if not bad or len(bad) > MAX_REPAIR_SENTENCES:
         return None
     lines = "\n".join("%d. [%s] %s" % (n + 1, why, body[spans[i][0]:spans[i][1]]) for n, (i, why) in enumerate(bad))
-    system = ("You are a copy editor. Rewrite ONLY the numbered sentences. Each line names the exact shared phrase that must disappear: change the sentence's structure and vocabulary "
-              "so that phrase (and any run of 4 or more of its words) no longer appears. Keep the exact meaning and every number, but use completely different wording so no run of 5 or more "
-              "words is shared with the original sentence. Speak as 'we' / 'our' for the company (never I, me, my, mine, myself). Keep every Markdown link [text](url) EXACTLY as it is "
-              "(same text, same url), a list item keeps its '- ' or '1. ' start, and one sentence stays one sentence. "
-              'Answer ONLY a JSON object {"1":"new sentence","2":"new sentence"} with one entry per number.')
-    data = D.anthropic(D.QA_MODEL, system, "SENTENCES TO REWRITE:\n" + lines, meter, post=post, max_tokens=900)
-    raw = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-    j = D.qa_json(raw)
-    if not isinstance(j, dict):
+    rw, _ = ask_json(REPAIR_SYSTEM, "SENTENCES TO REWRITE:\n" + lines, REWRITE_SCHEMA, meter, _rewrites, post=post, label="repair")
+    if not rw:
         return None
-    new = body
-    for n, (i, _) in reversed(list(enumerate(bad))):
-        rep = j.get(str(n + 1))
-        old = body[spans[i][0]:spans[i][1]]
+    picks = {}
+    for n, (i, _) in enumerate(bad):
+        rep = rw.get(n + 1)
         if not isinstance(rep, str) or not rep.strip() or "\n" in rep.strip():
             return None
-        rep = rep.strip()
-        m = re.match(r"\s*([-*]|\d+[.)])\s", old)
-        if m and not re.match(r"([-*]|\d+[.)])\s", rep):
-            rep = m.group(0) + rep
-        new = new[:spans[i][0]] + rep + new[spans[i][1]:]
-    return dict(art, body=new)
+        picks[i] = rep
+    return dict(art, body=_splice(body, spans, picks))
 
 
-# ---------- facts for the writer (25 Nov): short bullets in other words, so the writer has nothing to copy ----------
-FACTS_SYSTEM = ("You make short notes for a writer from the text of a web page. Write 6 to 10 bullets, one per line, each starting with '- ' and under 16 words. "
-                "State only what the page says (what the tool or guide is for, what it needs, what it shows, limits and numbers exactly as printed). "
-                "Use YOUR OWN words: never reuse a run of 4 or more consecutive words from the page, and never copy its headings or list items. "
-                "Add nothing the page does not say. Plain text, nothing before or after the bullets.")
-FACT_GRAM = 7              # a bullet may share short phrases with the page (the article gate is 10 words); only a 7-word run is a copy
+# ---------- facts for the writer (25 Nov, JSON 26 Nov): short notes in other words, so the writer has nothing to copy ----------
+FACTS_SYSTEM = ("You make short notes for a writer from the text of one web page (our own page). Write 6 to 10 facts, each one plain sentence under 20 words. "
+                "State only what the page says: what the tool or guide is for, what it needs, what it shows, its limits, and numbers exactly as printed. "
+                "Use YOUR OWN words: never reuse a run of 5 or more consecutive words from the page, and never copy its headings or list items. "
+                "Add nothing the page does not say; no advice, no opinions. "
+                'Answer ONLY the JSON object {"facts":["...","..."]}.')
+FACTS_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["facts"],
+                "properties": {"facts": {"type": "array", "items": {"type": "string"}}}}
+FACT_GRAM = 7              # a fact may share short phrases with the page (the article gate is 10 words); only a 7-word run is a copy
 MIN_FACTS = 3
 
 
+def _fact_candidates(raw):
+    """Candidate fact strings from the reply: the JSON list, or (older/plain replies) the bullet lines. None when there is nothing."""
+    j = strict_json(raw) or D.qa_json(raw)
+    if isinstance(j, dict) and isinstance(j.get("facts"), list):
+        c = [x for x in j["facts"] if isinstance(x, str)]
+        return c or None
+    c = [m.group(1) for m in (re.match(r"\s*(?:[-*\u2022]|\d+[.)])\s+(.+)", l) for l in (raw or "").split("\n")) if m]
+    return c or None
+
+
 def fact_bullets(raw, page_full, rejected=None):
-    """Valid bullets from the model reply: list lines of 3+ words that share no 7-word run with the page itself. Rejected bullets are appended to `rejected`."""
+    """Valid facts: 3-30 words, no 7-word run shared with the page, and every number in them printed on the page. Rejected ones go to `rejected`.
+    raw = a model reply (JSON or bullet lines) or a list of candidate strings."""
+    cands = raw if isinstance(raw, list) else (_fact_candidates(raw) or [])
+    page_nums = nums_in(page_full)
     out = []
-    for l in (raw or "").split("\n"):
-        m = re.match(r"\s*(?:[-*\u2022]|\d+[.)])\s+(.+)", l)
-        if not m:
+    for t in cands:
+        t = re.sub(r"\*\*|__", "", t).strip()
+        n = len(_toks(t))
+        if n < 3 or n > 30:
             continue
-        t = re.sub(r"\*\*|__", "", m.group(1)).strip()
-        if len(_toks(t)) < 3:
-            continue
-        if overlap_grams(t, page_full, FACT_GRAM):
+        if overlap_grams(t, page_full, FACT_GRAM) or not nums_in(t) <= page_nums:
             if rejected is not None:
                 rejected.append(t)
         else:
@@ -307,49 +494,66 @@ def fact_bullets(raw, page_full, rejected=None):
 
 
 def distill_facts(page_full, meter, post=None):
-    """-> bullet text for the writer, or '' when it could not be made (the caller then falls back to a SHORT slice of the page text).
-    One retry when too few bullets survive the copy filter: the rejected bullets are named so the model words them differently."""
-    user = "PAGE TEXT:\n" + page_full[:6000]
+    """-> fact lines for the writer, or '' when they could not be made (the caller then falls back to a SHORT slice of the page text).
+    One retry when too few facts survive the copy / number filter: the rejected ones are named so the model words them differently."""
+    user = "PAGE TEXT:\n" + page_full[:8000]
     good = []
     for rnd in (1, 2):
-        data = D.anthropic(D.QA_MODEL, FACTS_SYSTEM, user, meter, post=post, max_tokens=600)
-        raw = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+        cands, _ = ask_json(FACTS_SYSTEM, user, FACTS_SCHEMA, meter, _fact_candidates, post=post, label="facts")
         rejected = []
-        for b in fact_bullets(raw, page_full, rejected):
+        for b in fact_bullets(cands or [], page_full, rejected):
             if b not in good:
                 good.append(b)
-        print("platform_poster: facts round %d kept %d dropped %d" % (rnd, len(good), len(rejected)))
+        print("platform_poster: facts round %d got %d kept %d dropped %d" % (rnd, len(cands or []), len(good), len(rejected)))
         if len(good) >= MIN_FACTS or not rejected:
             break
-        user = ("PAGE TEXT:\n" + page_full[:6000] + "\n\nThese earlier bullets were too close to the page. Write 6 to 10 NEW bullets about the same things with completely different "
-                "wording and sentence shapes:\n" + "\n".join("- " + x for x in rejected[:8]))
+        user = ("PAGE TEXT:\n" + page_full[:8000] + "\n\nThese earlier facts were too close to the page wording or used a number the page does not print. "
+                "Write 6 to 10 NEW facts about the same things with completely different wording and sentence shapes:\n" + "\n".join("- " + x for x in rejected[:8]))
     return "\n".join("- " + x for x in good[:10]) if len(good) >= MIN_FACTS else ""
 
 
-# ---------- fact-check (25 Nov): verdict FIRST, tolerant parse, strict retry, never 'not understood' on the first try ----------
-PQA_SYSTEM = """You are a strict fact-check editor. You get an article, our own page text and the text of the pages the article links to.
-Reply in EXACTLY this format and nothing else (no preamble, no JSON, no markdown):
-VERDICT: PASS
-or
-VERDICT: FAIL
-REASON: "<the exact sentence or phrase from the article, 25 words at most>" | <why, 15 words at most>
-(one REASON line per problem, at most 4)
-FAIL if ANY of: a number, percent, date or factual claim is not supported by the linked page text given; a claim about what OUR tool shows, does, needs or limits is not in our page text; a claim sounds invented or is attributed to a source that does not say it;
-it names another creator, brand-new product claim or @handle; it promises results the tool cannot give; the InayaFlow link is pushy or off-topic; it reads as an advert instead of a useful article; it makes a legal, medical or financial claim without a source.
-PASS only when every checkable claim is supported."""
-PQA_STRICT = ("Your reply must start with the exact line 'VERDICT: PASS' or 'VERDICT: FAIL'. For FAIL add up to 4 lines 'REASON: \"<exact article sentence>\" | <why>'. "
+# ---------- fact-check (25 Nov, JSON 26 Nov): schema reply, strict parse, strict retry; the older VERDICT form is still read ----------
+PQA_SYSTEM = """You are a strict fact-check editor. You get our FACTS list, our own page text, the text of any pages the article links to, and the article.
+Check every claim in the article. FAIL a sentence when ANY of these is true:
+- it gives a number, percent, date, study result or statistic that is not in the FACTS, our page text or a linked page;
+- it says what OUR tool shows, does, needs, costs or limits, or names a mode, plan, tier, button or feature of it, and the FACTS / our page text do not say that;
+- it says where something appears in the TikTok app, what TikTok does or decides, or what another app or tool does, and neither the FACTS, our page text nor a linked page says it;
+- it compares things or promises a result as fact ("beats", "works better", "more reach", "guarantees") without a linked page that says so;
+- it names another creator, an @handle or a brand-new product claim; it gives legal, medical or financial claims without a source;
+- the InayaFlow link is pushy or off-topic, or the article reads as an advert instead of a useful article.
+Do NOT fail plain how-to advice and reasoning that makes no factual claim (for example how a median works, or "compare a video with your usual result").
+PASS only when every checkable claim is supported.
+Reply with ONLY the JSON object {"verdict":"PASS" or "FAIL","problems":[{"quote":"<the exact sentence from the article>","why":"<15 words at most>"}]}
+(problems is empty for PASS; at most 5 problems for FAIL, one per sentence)."""
+PQA_STRICT = ("Your reply must start with { and be ONLY the JSON object {\"verdict\":\"PASS\"|\"FAIL\",\"problems\":[{\"quote\":\"...\",\"why\":\"...\"}]}. "
               "Nothing else.\n\n" + PQA_SYSTEM)
+QA_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["verdict", "problems"], "properties": {
+    "verdict": {"type": "string", "enum": ["PASS", "FAIL"]},
+    "problems": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["quote", "why"],
+                                            "properties": {"quote": {"type": "string"}, "why": {"type": "string"}}}}}}
 VERDICT_RE = re.compile(r"VERDICT\W{0,6}(PASS|FAIL)", re.I)
 
 
 def parse_qa(raw):
-    """-> (verdict 'PASS'|'FAIL'|None, [reasons]). FAIL wins: the word FAIL anywhere in the reply, or a FAIL verdict anywhere, makes it FAIL."""
+    """-> (verdict 'PASS'|'FAIL'|None, [reasons]). JSON first ({"verdict","problems":[{"quote","why"}]}); a PASS that still lists problems is a FAIL.
+    Older forms still read (VERDICT lines, {"verdict","reasons"}); there FAIL wins: the word FAIL anywhere makes it FAIL."""
     raw = raw or ""
+    j = strict_json(raw)
+    if isinstance(j, dict) and str(j.get("verdict", "")).upper() in ("PASS", "FAIL") and isinstance(j.get("problems"), list):
+        reasons = []
+        for pr in j.get("problems") or []:
+            if isinstance(pr, dict) and (pr.get("quote") or pr.get("why")):
+                reasons.append(('"%s" | %s' % (str(pr.get("quote", "")).strip(), str(pr.get("why", "")).strip()))[:600])
+            elif isinstance(pr, str) and pr.strip():
+                reasons.append(pr.strip()[:600])
+        if str(j["verdict"]).upper() == "PASS" and not reasons:
+            return "PASS", []
+        return "FAIL", (reasons or ["QA said FAIL without a reason"])[:6]
     reasons = [re.sub(r"\s+", " ", m).strip()[:600] for m in re.findall(r"(?ims)^\W*REASON\W*[:\-]\s*(.+?)(?=^\W*(?:REASON|VERDICT)\b|\Z)", raw)]
     j = D.qa_json(raw)
     jv = j.get("verdict") if isinstance(j, dict) else None
     if isinstance(j, dict) and not reasons:
-        reasons = [str(x)[:300] for x in (j.get("reasons") or [])]
+        reasons = [str(x)[:300] for x in (j.get("reasons") or j.get("problems") or [])]
     verdicts = {v.upper() for v in VERDICT_RE.findall(raw)} | ({jv.upper()} if isinstance(jv, str) else set())
     if "FAIL" in verdicts or re.search(r"\bFAIL\b", raw):
         if not reasons:
@@ -360,52 +564,100 @@ def parse_qa(raw):
     return None, []
 
 
-def qa_check(art, target_url, source_texts, page_text, meter, post=None):
+def qa_check(art, target_url, source_texts, page_text, meter, post=None, facts=""):
     """-> (ok, reasons). Two asks at most: the normal prompt, then a strict short one. Both unreadable -> 'QA answer not understood'."""
     srcs = "\n\n".join("SOURCE %s:\n%s" % (u, (t or "")[:3500]) for u, t in source_texts.items())
-    user = "OUR PAGE %s (our own page text):\n%s\n\n%s\n\nARTICLE TITLE: %s\n\n%s" % (target_url, page_text[:2500], srcs, art["title"], art["body"])
-    for system, mt in ((PQA_SYSTEM, 900), (PQA_STRICT, 400)):
-        data = D.anthropic(D.QA_MODEL, system, user[:60000], meter, post=post, max_tokens=mt)
-        raw = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-        verdict, reasons = parse_qa(raw)
-        if verdict:
-            return verdict == "PASS", reasons
-    return False, ["QA answer not understood"]
+    user = "FACTS (from our page %s):\n%s\n\nOUR PAGE %s (our own page text):\n%s\n\n%s\n\nARTICLE TITLE: %s\n\n%s" % (
+        target_url, facts or "(none)", target_url, page_text[:4000], srcs, art["title"], art["body"])
+
+    def parse(raw):
+        v, r = parse_qa(raw)
+        return (v, r) if v else None
+    val, _ = ask_json(PQA_SYSTEM, user[:60000], QA_SCHEMA, meter, parse, post=post, max_tokens=max(HAIKU_OUT, 6000), effort=QA_EFFORT,
+                      retry_system=PQA_STRICT, label="QA")
+    if not val:
+        return False, ["QA answer not understood"]
+    return val[0] == "PASS", val[1]
+
+
+def _quoted(reason):
+    m = re.match(r'\s*["\u201c](.+?)["\u201d]\s*\|', reason or "")
+    return m.group(1) if m else ""
+
+
+def quote_to_sentence(quote, sents):
+    """Index of the sentence the checker quoted (most of the quote's words appear in it), or None."""
+    q = set(_toks(quote))
+    if len(q) < 3:
+        return None
+    best, bi = 0.0, None
+    for i, s in enumerate(sents):
+        sc = len(q & set(_toks(s))) / len(q)
+        if sc > best:
+            best, bi = sc, i
+    return bi if best >= 0.6 else None
+
+
+QA_REPAIR_SYSTEM = ("You are a copy editor. A fact-checker found unsupported claims in an article; each is listed with the checker's exact quote and reason. "
+                    "For each sentence that carries such a claim give a replacement that drops the unsupported claim and says something general and true that needs no source, "
+                    "or an empty string to delete the sentence. Never add numbers, names, statistics or claims about what our tool does. "
+                    "Keep every Markdown link [text](url) that sits in a sentence you keep or replace EXACTLY as it is. "
+                    'Answer ONLY the JSON object {"rewrites":[{"n":4,"text":"new sentence"},{"n":9,"text":""}]} with at most 6 entries.')
 
 
 def qa_repair_article(art, reasons, meter, post=None):
-    """ONE cheap rewrite (Haiku, no tools) of ONLY the sentences the fact-check named as unsupported: reword to a general, true statement or delete. -> art dict or None."""
+    """ONE cheap rewrite (Haiku, no tools) of ONLY the sentences the fact-check QUOTED: reword to a general, true statement or delete. -> art dict or None.
+    When the quotes can be matched to sentences, only those sentences may change; otherwise the editor picks them from the full numbered list."""
     body = art["body"]
     spans = sentence_spans(body)
     if not spans or not reasons:
         return None
-    numbered = "\n".join("%d. %s" % (i + 1, body[a:b]) for i, (a, b) in enumerate(spans))
-    system = ("You are a copy editor. A fact-checker found unsupported claims in an article. From the numbered sentences pick ONLY the ones that carry those claims. "
-              "For each, give a replacement that drops the unsupported claim and says something general and true that needs no source, or an empty string to delete the sentence. "
-              "Never add numbers, names, statistics or claims about what our tool does. Keep every Markdown link [text](url) that sits in a sentence you keep or replace EXACTLY as it is. "
-              'Answer ONLY a JSON object like {"4":"new sentence","9":""} with at most 6 entries.')
-    data = D.anthropic(D.QA_MODEL, system, "FACT-CHECKER REASONS:\n- " + "\n- ".join(reasons[:6]) + "\n\nSENTENCES:\n" + numbered[:12000], meter, post=post, max_tokens=700)
-    j = D.qa_json("".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"))
-    if not isinstance(j, dict) or not j or len(j) > 6:
+    sents = [body[a:b] for a, b in spans]
+    flagged = {}
+    for r in reasons[:6]:
+        i = quote_to_sentence(_quoted(r), sents)
+        if i is not None:
+            flagged.setdefault(i, r)
+    numbered = "\n".join("%d. %s" % (i + 1, s) for i, s in enumerate(sents))
+    hint = ("\n\nTHE CHECKER QUOTED THESE SENTENCES (change only these): " + ", ".join(str(i + 1) for i in sorted(flagged))) if flagged else ""
+    rw, _ = ask_json(QA_REPAIR_SYSTEM, "FACT-CHECKER REASONS:\n- " + "\n- ".join(reasons[:6]) + hint + "\n\nSENTENCES:\n" + numbered[:12000],
+                     REWRITE_SCHEMA, meter, _rewrites, post=post, label="QA repair")
+    if not rw or len(rw) > 6:
         return None
-    new = body
-    for k in sorted(j, key=lambda x: -int(x) if str(x).isdigit() else 0):
-        if not str(k).isdigit() or not (1 <= int(k) <= len(spans)) or not isinstance(j[k], str) or "\n" in j[k].strip():
+    picks = {}
+    for k, v in rw.items():
+        if not (1 <= k <= len(spans)) or "\n" in v.strip():
             return None
-        a, b = spans[int(k) - 1]
-        rep = j[k].strip()
-        old = body[a:b]
-        m = re.match(r"\s*([-*]|\d+[.)])\s", old)
-        if rep and m and not re.match(r"([-*]|\d+[.)])\s", rep):
-            rep = m.group(0) + rep
-        new = new[:a] + rep + new[b:]
+        if flagged and (k - 1) not in flagged:
+            continue                                  # a sentence the checker did not quote stays exactly as it is
+        picks[k - 1] = v
+    if not picks:
+        return None
+    new = _splice(body, spans, picks)
     new = re.sub(r"(?m)^[ \t]*([-*]|\d+[.)])[ \t]*$\n?", "", new)          # a deleted list item leaves no empty bullet
     new = re.sub(r"[ \t]{2,}", " ", new)
     new = re.sub(r"\n{3,}", "\n\n", new).strip()
     return dict(art, body=new) if new != body else None
 
 
-# ---------- reviser (25 Nov r2): attempt 2 fixes the draft it already has, without web tools (a second research run cost up to $0.38) ----------
+# ---------- writer (26 Nov): by default NO web research; the writer gets ONLY our page's FACTS and a banned-claims list ----------
+WRITER_WEB = os.environ.get("PLATFORM_WRITER_WEB", "false").strip().lower() == "true"    # "true" = the older research writer (web search + fetch)
+WRITER_OUT = int(os.environ.get("PLATFORM_WRITER_MAX_TOKENS", "8000"))                   # Sonnet thinks too: leave room (8000 x $10/M = $0.08 < WRITER_RESERVE)
+WRITER_EFFORT = os.environ.get("PLATFORM_WRITER_EFFORT", "medium")
+D.WRITER_MAX_TOKENS = max(D.WRITER_MAX_TOKENS, 6000)       # the research writer (PLATFORM_WRITER_WEB=true) also thinks: 2500 could cut the article off
+
+
+def write_draft(platform, user, meter, post=None, fetched=None):
+    if WRITER_WEB:
+        return D.run_writer(writer_system(platform), user, meter, post=post, fetched=fetched)
+    data = D.anthropic(D.WRITER, writer_system(platform), user, meter, post=post, max_tokens=WRITER_OUT, extra={"output_config": {"effort": WRITER_EFFORT}})
+    if data.get("stop_reason") == "refusal":
+        raise RuntimeError("refusal")
+    if data.get("stop_reason") == "max_tokens":
+        print("platform_poster: writer reply cut at max_tokens")
+    return _text(data)
+
+
 def revise_system(platform):
     return writer_system(platform) + "\nYou are now REVISING your own earlier draft. Do NOT search or fetch anything. Keep the same sources and links, change only what the failed checks name, and answer in the same OUTPUT FORMAT with the full article."
 
@@ -413,38 +665,72 @@ def revise_system(platform):
 def run_reviser(platform, user, art, problems, meter, post=None):
     draft = "TITLE: %s\nSOURCES: %s\n===BODY===\n%s" % (art["title"], " | ".join(art.get("sources") or []) or "none", art["body"])
     msg = user + "\n\nYOUR DRAFT:\n" + draft + "\n\nIT FAILED THESE CHECKS, fix them (quoted phrases must not appear again; remove or neutralise any unsupported claim): " + "; ".join(problems)
-    data = D.anthropic(D.WRITER, revise_system(platform), msg, meter, post=post, max_tokens=D.WRITER_MAX_TOKENS)
-    return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    data = D.anthropic(D.WRITER, revise_system(platform), msg, meter, post=post, max_tokens=WRITER_OUT, extra={"output_config": {"effort": WRITER_EFFORT}})
+    return _text(data)
 
 
-# ---------- writer ----------
+BANNED_CLAIMS = """BANNED CLAIMS (a fact-checker and code reject them; when in doubt leave the sentence out):
+- any name of a mode, plan, tier, button, screen or feature of our tool that is not written in the FACTS (for example "Starter Mode", "Pro plan");
+- vague amounts about our tool ("a handful of", "a few videos", "several", "enough") when a FACT gives the exact number: use the FACT's number, or say nothing;
+- any comparison or promise stated as fact: "beats", "works better", "more reach", "boosts", "outperforms", "guarantees", "always", "never fails";
+- where something appears in the TikTok app (menus, notices, "below your display name"), what TikTok's system does or decides, or what another app or tool
+  (TikTok Studio and others) does, unless a FACT says exactly that;
+- statistics, percentages, study results, prices or dates that are not in the FACTS;
+- what our tool "tells", "shows", "recommends" or "detects" unless a FACT says so."""
+
+
 def writer_system(platform):
     s = SPECS[platform]
+    if WRITER_WEB:
+        sources = ("- Real numbers only: a number from the FACTS may be used as it is; any other number must be found with web_search / web_fetch in an official or primary page "
+                   "you OPENED, and its paragraph needs a Markdown link to that page where the number is printed exactly. If you cannot source a number leave it out.")
+        out_sources = "SOURCES: <url1> | <url2>   (or the word none)"
+    else:
+        sources = ("- You have NO web access and no outside sources: do not link any page except the one target link, and use NO number, percent, price, date or "
+                   "statistic unless it is printed in the FACTS. Write useful, general how-to advice and reasoning instead.")
+        out_sources = "SOURCES: none"
     return ("""You write one short article for the company InayaFlow, to be posted on %s. Voice: "we" (never I, me, my, mine, myself). Plain, friendly, specific English. The product is called InayaFlow (never "Genie").
 FORMAT OF THE ARTICLE: %s
 RULES (all checked by code afterwards; a break means nothing is published):
-- %d to %d words of Markdown (## headings, short paragraphs, "- " lists, [text](url) links, **bold**). Your OWN angle and wording: do not copy the InayaFlow page; add examples and reasoning of your own.
-- Real numbers only, found with web_search / web_fetch in official or primary pages you OPENED. Every paragraph with a number, percent or amount needs a Markdown link to that page, and the number must be printed there exactly as you write it. If you cannot source a number leave it out (an article with no numbers and no external link is fine). Pages on tiktok.com/support or creator-academy usually come back empty: do not cite them.
+- %d to %d words of Markdown (## headings, short paragraphs, "- " lists, [text](url) links, **bold**). Your OWN angle and wording: add examples and reasoning of your own.
+- Short, original sentences (mostly under 20 words). Never copy wording from our site: code rejects any run of 10 words shared with an InayaFlow page.
+%s
 - Facts about our own page and tool may come ONLY from the FACTS list in the user message (short notes in other words). Do not add features, limits, outputs or numbers of our tool that are not in it; for anything else about the tool stay general or say nothing. Never write that the tool "tells", "shows" or "recommends" something unless a FACT says so.
-- Exactly ONE link to the target InayaFlow page, as [LINK TEXT](URL), placed where it truly helps (not in the first or last paragraph); the type of LINK TEXT is set per article in the user message and checked by code. Never write the web address inayaflow.ai as plain text outside that link (as the link text itself it is allowed when the type says so).
-- Say everything in your own words: never copy 10 or more words in a row from any InayaFlow page (code rejects a shared 10-word run; avoid stock lists like 'followers, following, total likes and video count': give your own example instead). Write as 'we' for InayaFlow; never 'I', 'me' or 'my'.
+- Exactly ONE link to the target InayaFlow page, as [LINK TEXT](URL), placed where it truly helps (in a middle paragraph, never the first or last paragraph); the type of LINK TEXT is set per article in the user message and checked by code. Never write the web address inayaflow.ai as plain text outside that link (as the link text itself it is allowed when the type says so). Name InayaFlow at most twice.
 - Write plain how-to advice. No comparisons or performance claims ("X beats Y", "works better", "more reach") unless a source you opened says so and you link it. Never name a mode, plan, tier, limit or quantity of our tool unless a FACT states it exactly (no "a handful of", no invented product names). When unsure, leave the sentence out.
+%s
 - No @usernames, no other creators' names, no hype, no "sign up now". Be honest: our tools are free helpers, not magic.
-- Banned: delve, game-changer, landscape, tapestry, dive into, unlock, elevate, supercharge, revolutionize, seamlessly, cutting-edge, in conclusion, it's important to note, ever-evolving, look no further, to the next level, harness, embark, realm of, testament, leverage, must-have.
+- Never use these words or phrases (code rejects them, also inside other words): %s.
 - Title: 80 characters or fewer, no clickbait.
-OUTPUT FORMAT, exactly, nothing before or after:
+OUTPUT FORMAT, exactly, ONCE, nothing before or after (no notes, no corrections, no second copy):
 TITLE: <title>
-SOURCES: <url1> | <url2>   (or the word none)
+%s
 ===BODY===
-<markdown body, no title line>""") % (platform.capitalize(), s["style"], s["words"][0], s["words"][1])
+<markdown body, no title line>""") % (platform.capitalize(), s["style"], s["words"][0], s["words"][1], sources, BANNED_CLAIMS,
+                                       ", ".join('"%s"' % b for b in BANNED), out_sources)
 
 
 def parse_writer(text):
-    m = re.search(r"TITLE:\s*(.+)\nSOURCES:\s*(.*)\n===BODY===\n(.*)", text or "", re.S)
-    if not m:
+    """TITLE / SOURCES / ===BODY=== read line by line from the FIRST block. When the model wrote a second copy or a note after another delimiter
+    (25 Nov: the body became a 34-word 'Oops, here is the clean version' note), the LONGEST body segment is the article."""
+    text = (text or "").replace("\r\n", "\n")
+    mt = re.search(r"(?m)^\W{0,4}TITLE:[ \t]*(.+)$", text)
+    if not mt:
         return None
-    return {"title": m.group(1).strip(), "tags": [],
-            "sources": [u.strip() for u in re.split(r"\s*\|\s*", m.group(2)) if u.strip().startswith("http")], "body": m.group(3).strip()}
+    ms = re.search(r"(?m)^\W{0,4}SOURCES:[ \t]*(.*)$", text[mt.end():])
+    mb = re.search(r"(?m)^[ \t]*={3,}\s*BODY\s*={3,}[ \t]*$", text[mt.end():])
+    if not mb or (ms and ms.start() > mb.start()):
+        return None
+    src_line = ms.group(1) if ms else ""
+    rest = text[mt.end() + mb.end():]
+    segs = re.split(r"(?m)^[ \t]*={3,}\s*[A-Z ]*={3,}[ \t]*$", rest)
+    cleaned = []
+    for sgm in segs:
+        sgm = re.sub(r"(?m)^\W{0,4}(TITLE|SOURCES):.*$", "", sgm).strip()
+        cleaned.append(sgm)
+    body = max(cleaned, key=lambda x: len(D.words(x))) if cleaned else ""
+    title = mt.group(1).strip().strip("*").strip()
+    return {"title": title, "tags": [], "sources": [u.strip() for u in re.split(r"\s*\|\s*", src_line) if u.strip().startswith("http")], "body": body}
 
 
 # ---------- markdown -> HTML / Notion blocks ----------
@@ -695,9 +981,11 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
                 print("platform_poster: facts skipped (%s)" % type(e).__name__)
         if not facts:
             print("platform_poster: %s using the raw page text (no clean facts)" % pl)
-        user = ("TARGET PAGE: %s\nIT IS: %s (%s)\nTOPIC AREA: %s\nFACTS ABOUT OUR PAGE (the only things you may say about it or its tool; use your own wording):\n%s\n\n"
+        fact_text = facts or page_text[:2500]          # what the writer may say about our page; numbers printed here need no other source (the article links this page)
+        user = ("TARGET PAGE: %s\nIT IS: %s (%s)\nTOPIC AREA: %s\nFACTS ABOUT OUR PAGE (source: %s; the only things you may say about it or its tool, and the only numbers "
+                "you may use; use your own wording):\n%s\n\n"
                 "ARTICLES WE ALREADY PUBLISHED ON OUR OWN BLOGS (do not repeat these angles):\n%s\n\n%s\n\nWrite today's %s article now.") % (
-            url, what, kind, topic, facts or page_text[:2500], "\n".join("- " + t for t in past_titles[-25:]) or "(none yet)", D.anchor_prompt(anchor), pl.capitalize())
+            url, what, kind, topic, url, fact_text, "\n".join("- " + t for t in past_titles[-25:]) or "(none yet)", D.anchor_prompt(anchor), pl.capitalize())
         if not dry:
             state.setdefault("attempts", {})[today + pl] = state.get("attempts", {}).get(today + pl, 0) + 1
         save()
@@ -707,16 +995,18 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
         fetched = {}
 
         def evaluate(a):
+            """-> (article after link normalising, problems, source texts)."""
+            a = normalize_links(a, url)
             st = {}
             for u in sorted({u for _, u in LINK_RE.findall(a["body"]) if "inayaflow.ai" not in u})[:6]:
                 s2, _, h2 = getter(u)
                 ours = c.html_text(h2, 20000) if s2 == 200 else ""
                 theirs = fetched.get(u, "")[:20000]
                 st[u] = theirs if len(theirs) > len(ours) else ours
-            pr = check_post(a, url, pl, page_full, st, site_corpus, todays, past_sh, anchor=anchor)
+            pr = check_post(a, url, pl, page_full, st, site_corpus, todays, past_sh, anchor=anchor, facts=fact_text)
             if any(len(t) < D.MIN_SOURCE_CHARS for t in st.values()):
                 pr.append("a cited source page is unreadable")
-            return pr, st
+            return a, pr, st
         for attempt in (1, 2):
             repair_room = D.QA_RESERVE if repairs_left > 0 else 0.0      # a possible repair call is reserved too, so it can never push the run over the cap
             if attempt == 2 and meter.cost + repair_room + (left_after + 1) * (D.WRITER_RESERVE + D.QA_RESERVE) > meter.cap + 1e-9:
@@ -729,21 +1019,21 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
                 if prev:
                     art = parse_writer(run_reviser(pl, user, prev, problems, meter, post=post_ai))
                 else:
-                    art = parse_writer(D.run_writer(writer_system(pl), user + extra, meter, post=post_ai, fetched=fetched))
+                    art = parse_writer(write_draft(pl, user + extra, meter, post=post_ai, fetched=fetched))
             except Exception as e:
                 problems = ["writer error %s" % type(e).__name__]
                 break
             if not art:
                 problems = ["writer output not in the required format"]
                 continue
-            problems, source_texts = evaluate(art)
+            art, problems, source_texts = evaluate(art)
             while problems and repairable(problems) and repairs_left > 0:
                 repairs_left -= 1                     # up to REPAIR_ROUNDS targeted rewrites per platform per day; each result is checked again from scratch
                 fixed = None
                 # the repair must leave room for the QA gate after it and for the platforms still to come
                 if meter.cost + 2 * D.QA_RESERVE + left_after * (D.WRITER_RESERVE + D.QA_RESERVE) <= meter.cap + 1e-9:
                     try:
-                        fixed = repair_article(art, site_corpus, todays, meter, post=post_ai)
+                        fixed = repair_article(art, site_corpus, todays, meter, post=post_ai, problems=problems)
                     except D.CapReached:
                         problems = problems + ["daily cost cap reached during repair"]
                         repairs_left = -1
@@ -752,9 +1042,10 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
                         print("platform_poster: repair skipped (%s)" % type(e).__name__)
                 if not fixed:
                     break
-                p2, st2 = evaluate(fixed)
+                fixed, p2, st2 = evaluate(fixed)
                 print("platform_poster: repair %s problems %d -> %d" % (pl, len(problems), len(p2)))
-                if len(p2) <= len(problems):
+                new_kinds = [x for x in p2 if x not in problems and not repairable([x])]      # a rewrite may not swap a problem for a worse one (e.g. a lost link)
+                if len(p2) <= len(problems) and not new_kinds:
                     art, problems, source_texts = fixed, p2, st2
                 else:
                     break
@@ -767,7 +1058,7 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
             qa_rounds = 0
             while True:
                 try:
-                    ok, reasons = qa_check(art, url, source_texts, page_text, meter, post=post_ai)
+                    ok, reasons = qa_check(art, url, source_texts, page_text, meter, post=post_ai, facts=fact_text)
                 except Exception as e:
                     ok, reasons = False, ["QA error %s" % type(e).__name__]
                     break
@@ -783,7 +1074,7 @@ def run(post_ai=None, publishers=None, getter=None, sleeper=time.sleep):
                     break
                 if not fixed:
                     break
-                p2, st2 = evaluate(fixed)
+                fixed, p2, st2 = evaluate(fixed)
                 print("platform_poster: QA repair %s problems 0 -> %d" % (pl, len(p2)))
                 if p2:
                     break                              # the rewrite broke another gate: keep the original FAIL reasons
