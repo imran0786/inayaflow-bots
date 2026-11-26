@@ -4,6 +4,13 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| InnovationQuarter | https://innovationquarter.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
+| PressPage | https://www.presspage.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-26 |
+| Newswise | https://www.newswise.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-26 |
+| The Hustle | https://thehustle.co/ | resource_pages | deepseek | UNKNOWN | 2026-11-26 |
+| awesome-devtools | https://github.com/moimikey/awesome-devtools | github_awesome_lists | deepseek | FOLLOWED | 2026-11-26 |
+| awesome-saas | https://github.com/awesome-saas/awesome-saas | github_awesome_lists | deepseek | FOLLOWED | 2026-11-26 |
+| AI Collection | https://aicollection.io/ | ai_saas_directories | deepseek | UNKNOWN | 2026-11-26 |
 | Yelp Espana | https://www.yelp.es/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
 | Wikimedia Commons | https://commons.wikimedia.org/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-26 |
 | The Strategy Hour Podcast (Think Creative Collective) | https://thinkcreativecollective.com/podcast/ | podcasts_creators | deepseek | UNKNOWN | 2026-11-26 |
