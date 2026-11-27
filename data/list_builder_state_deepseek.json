@@ -1,9 +1,10 @@
 {
- "cursor": 120,
+ "cursor": 132,
  "spent": {
   "2026-11-24": 0.0586,
   "2026-11-25": 0.1457,
-  "2026-11-26": 0.0952
+  "2026-11-26": 0.0952,
+  "2026-11-27": 0.0205
  },
  "days": {
   "2026-11-24": {
@@ -106,6 +107,40 @@
    "category_summary": "list-builder: +151 new (total 2630; by category startup_directories_by_country 37, podcasts_creators 30, guest_post_pages 22, edu_library_guides 21, resource_pages 11, ai_saas_directories 7, journalist_platforms 7, tool_roundups 6, communities_profiles 3, github_awesome_lists 3, saas_review_platforms 3, launch_sites 1)",
    "summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +151 new (22 followed, $0.10)",
    "total": 2630
+  },
+  "2026-11-27": {
+   "added": 28,
+   "by_category": {
+    "ai_saas_directories": 2,
+    "tool_roundups": 2,
+    "github_awesome_lists": 1,
+    "guest_post_pages": 1,
+    "resource_pages": 2,
+    "podcasts_creators": 5,
+    "edu_library_guides": 5,
+    "startup_directories_by_country": 10
+   },
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "deepseek": {
+     "calls": 12,
+     "cost": 0.0205,
+     "proposed": 303,
+     "spam": 1,
+     "dup": 257,
+     "dead": 17,
+     "added": 28,
+     "followed": 4,
+     "nofollow": 0,
+     "noindex": 0,
+     "unknown": 24,
+     "needs_signup": 7
+    }
+   },
+   "category_summary": "list-builder: +28 new (total 2741; by category startup_directories_by_country 10, edu_library_guides 5, podcasts_creators 5, ai_saas_directories 2, resource_pages 2, tool_roundups 2, github_awesome_lists 1, guest_post_pages 1)",
+   "summary": "list-builder: sonnet +83 new (29 followed, $1.53) | deepseek +28 new (4 followed, $0.02)",
+   "total": 2741
   }
  },
  "rejected": [
@@ -503,7 +538,25 @@
   "tisg.com.sg",
   "yellowpages.sg",
   "org.sg",
-  "foundr.sg"
+  "foundr.sg",
+  "aivideo.tools",
+  "saastools.com",
+  "creatorsoftheinternet.com",
+  "github.com/hymhub/awesome-ai-tools",
+  "github.com/awesome-social-media/awesome-social-media-tools",
+  "github.com/marketerg/awesome-content-marketing",
+  "github.com/clemensschneider/awesome-productivity",
+  "boredhackers.com",
+  "weekendfund.co",
+  "indiemaker.org",
+  "bootstrappedgiants.com",
+  "groundupshow.com",
+  "nugget.fm",
+  "open.ac.uk",
+  "poynter.org",
+  "sme.ae",
+  "dubaiinternetcity.com",
+  "in5.ae"
  ],
- "last_summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +151 new (22 followed, $0.10)"
+ "last_summary": "list-builder: sonnet +83 new (29 followed, $1.53) | deepseek +28 new (4 followed, $0.02)"
 }

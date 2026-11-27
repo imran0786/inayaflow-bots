@@ -4,6 +4,13 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| Wamda | https://www.wamda.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-27 |
+| Arabnet | https://www.arabnet.me/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-27 |
+| UAE Government Portal | https://u.ae/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-27 |
+| Nieman Lab | https://www.niemanlab.org/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-27 |
+| Wikiversity | https://en.wikiversity.org/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-27 |
+| AgencyAnalytics Blog | https://agencyanalytics.com/blog | resource_pages | deepseek | FOLLOWED | 2026-11-27 |
+| Awesome Machine Learning | https://github.com/josephmisiti/awesome-machine-learning | github_awesome_lists | deepseek | FOLLOWED | 2026-11-27 |
 | SGInnovate | https://www.sginnovate.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
 | Singapore Business Directory | https://www.singaporebusinessdirectory.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-26 |
 | The Prompt Warrior | https://thepromptwarrior.com/ | podcasts_creators | deepseek | FOLLOWED | 2026-11-26 |
