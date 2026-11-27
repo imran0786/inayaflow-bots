@@ -1,4 +1,4 @@
-import os, shutil, sys, tempfile, unittest
+import json, os, shutil, sys, tempfile, unittest
 
 TMP = tempfile.mkdtemp(prefix="jobs_test_")
 os.environ["JOBS_WORK"] = os.path.join(TMP, "work")
@@ -184,6 +184,22 @@ class Loop(unittest.TestCase):
                     "content": [{"type": "tool_use", "id": "s%d" % len(n), "name": "submit_result", "input": {"result": ""}}]}
         status, text, _m = r.run_claude(j, post)
         self.assertEqual((status, len(n)), ("NO_RESULT", 3))
+
+    def test_budget_nearly_used_gets_one_hand_in_turn(self):
+        # 27 Nov: a finder stopped at $3.29 of $4 with nothing handed in; now the job is told to hand in what it has
+        j = r.parse_brief(BRIEF.replace("max_cost: 0.15", "max_cost: 0.05"))   # web job: the web reserve is what blocks a normal turn
+        seen = []
+
+        def post(url, body, headers, timeout=0):
+            seen.append(json.dumps(body["messages"]))
+            if len(seen) == 1:
+                return {"stop_reason": "tool_use", "usage": {"input_tokens": 80000, "output_tokens": 300},
+                        "content": [{"type": "tool_use", "id": "t1", "name": "list_files", "input": {"repo": "docs", "path": "docs"}}]}
+            return {"stop_reason": "tool_use", "usage": {"input_tokens": 100, "cache_read_input_tokens": 60000, "output_tokens": 300},
+                    "content": [{"type": "tool_use", "id": "t2", "name": "submit_result", "input": {"result": "PARTIAL LIST"}}]}
+        status, text, _m = r.run_claude(j, post)
+        self.assertEqual((status, text, len(seen)), ("DONE", "PARTIAL LIST", 2))
+        self.assertIn("BUDGET NEARLY USED", seen[1])
 
     def test_long_prompt_price_and_sonnet(self):
         m = r.Meter("haiku")

@@ -475,7 +475,19 @@ def run_claude(job, post=post_json, clock=time.time, meter=None):
         want = 16000 if (job["role"] == "code" or job["model"] in ("opus", "fable")) else 8000   # 5.5 models think first: room for the answer too
         can = affordable_tokens(job, meter, len(system) + len(json.dumps(messages)) + len(json.dumps(tools)), meter.last_in)
         if can < 1500:
-            return "COST_CAP", last_text, meter
+            # 27 Nov: a finder job stopped at $3.29 of $4 with NOTHING handed in. Before giving up, one last turn: research
+            # stops and the job hands in what it has (no web reserve needed any more, so the money left can pay for it).
+            note = ("BUDGET NEARLY USED: stop researching now, open nothing more. Call submit_result at once with everything you "
+                    "have found so far, in the asked format, and say it is partial.")
+            final = any(note in json.dumps(m.get("content")) for m in messages)
+            room = int((job["max_cost"] - meter.cost - (meter.last_in * meter.m.get("cache_read", meter.m["in"] * 0.1)
+                                                        + 30000 * meter.m["in"] * 1.25) / 1e6) / meter.m["out"] * 1e6) if meter.m["out"] else 0
+            if final or meter.calls == 0 or not meter.last_in or room < 1500 or messages[-1].get("role") != "user":
+                return "COST_CAP", last_text, meter
+            c = messages[-1]["content"]
+            messages[-1] = {"role": "user", "content": (c + [{"type": "text", "text": note}]) if isinstance(c, list)
+                            else [{"type": "text", "text": str(c)}, {"type": "text", "text": note}]}
+            can = min(room, 16000)
         # top-level cache_control = automatic prompt caching: each turn re-reads the earlier turns at the cache price
         body = {"model": meter.m["id"], "max_tokens": min(want, can), "cache_control": {"type": "ephemeral"},
                 "output_config": {"effort": "low" if job["model"] == "haiku" else "medium"},
