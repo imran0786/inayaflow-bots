@@ -103,7 +103,7 @@ class CodeRole(unittest.TestCase):
         self.assertEqual(r.MODELS["sonnet"]["id"], "claude-sonnet-5-5")
         self.assertEqual(r.validate(r.parse_brief(BRIEF.replace("model: haiku", "branch: main"))), "code jobs work only on a new branch named robot/<name>")
         self.assertEqual(r.validate(r.parse_brief(BRIEF.replace("model: haiku", "branch: feat/x"))), "code jobs work only on a new branch named robot/<name>")
-        self.assertEqual(r.validate(r.parse_brief(BRIEF.replace("model: haiku", "max_cost: 9"))), "max_cost is above the daily cap")
+        self.assertEqual(r.validate(r.parse_brief(BRIEF.replace("model: haiku", "max_cost: 9"))), "max_cost is above the code job cap")
 
     def test_no_web_for_code_roles(self):
         for role in ("code", "code-read"):

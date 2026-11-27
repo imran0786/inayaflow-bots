@@ -53,7 +53,7 @@ class Brief(unittest.TestCase):
         j = r.parse_brief("---\nid: a\nmax_cost: 99\n---\nDo this job please, thank you.")
         self.assertEqual(j["allowed"], ["read", "write_result"])   # default: no web
         self.assertEqual(j["max_cost"], r.HARD_JOB_CAP)
-        self.assertEqual(j["model"], "haiku")
+        self.assertEqual(j["model"], "opus")
         self.assertEqual(r.parse_brief("---\nid: a\n---\nDo this job please, thank you.")["max_cost"], 0.20)
 
     def test_validate(self):
@@ -179,6 +179,42 @@ class Loop(unittest.TestCase):
         self.assertIn("nothing was sent, posted or changed", d)
         self.assertIn("CHECK BEFORE USE", r.result_doc(j, "DONE", "x", m, "DeepSeek"))
         self.assertEqual(r.clean('says (cite index="1-1">five per post</cite> (https://a.com) <cite index="2">x</cite>'), "says five per post (https://a.com) x")
+
+
+class ModelsAndCaps(unittest.TestCase):
+    @staticmethod
+    def brief(**kw):
+        nl = chr(10)
+        head = nl.join("%s: %s" % kv for kv in kw.items())
+        return nl.join(["---", "id: a", head, "---", "x" * 30])
+
+    def test_new_models_valid_and_priced(self):
+        for name, mid, pin, pout in (("opus", "claude-opus-5-5", 4.0, 20.0), ("fable", "claude-fable-5-2", 8.0, 40.0)):
+            j = r.parse_brief(self.brief(model=name, max_cost=3))
+            self.assertEqual(j["model"], name)
+            self.assertIsNone(r.validate(j))
+            self.assertEqual((r.MODELS[name]["id"], r.MODELS[name]["in"], r.MODELS[name]["out"]), (mid, pin, pout))
+        m = r.Meter("fable")
+        m.add({"input_tokens": 1000000, "output_tokens": 1000000})
+        self.assertAlmostEqual(m.cost, 48.0, 4)
+        m = r.Meter("opus")
+        m.add({"cache_read_input_tokens": 1000000})
+        self.assertAlmostEqual(m.cost, 0.20, 4)
+
+    def test_default_model_is_opus(self):
+        j = r.parse_brief(self.brief(role="research"))
+        self.assertEqual(j["model"], "opus")
+
+    def test_job_ceiling_and_search_ceiling(self):
+        j = r.parse_brief(self.brief(model="opus", max_cost=9, max_searches=40))
+        self.assertEqual((j["max_cost"], j["max_searches"]), (5.0, 15))
+
+    def test_total_cap(self):
+        spend = {"2026-11-26": 50.0, "2026-11-27": 60.0, "2026-11-28": 39.99}
+        self.assertAlmostEqual(r.total_spent(spend), 99.99, 4)      # 26 Nov is before the start day: not counted
+        self.assertLess(r.total_spent(spend), r.TOTAL_CAP)
+        spend["2026-11-29"] = 0.02
+        self.assertGreaterEqual(r.total_spent(spend), r.TOTAL_CAP)
 
 
 if __name__ == "__main__":

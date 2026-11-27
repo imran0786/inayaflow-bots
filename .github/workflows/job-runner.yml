@@ -6,7 +6,7 @@ name: Job runner (helper jobs on the Claude API)
 # Code jobs (Sonnet): ON since 19 Nov evening (code QA round 2 passed; Imran: yes). Switch off = set CODE_ROLE_ON to "false"
 # in the env of the last step (a code brief is then refused as BAD_BRIEF). Design: the agent edits a fresh copy of the app
 # (git data kept outside it), npm test runs in a container (no secrets, no network), ONE NEW branch robot/<name> is pushed.
-# No job can send mail, post, pay or sign in. Caps: $0.20 per job ($2 per code job), $3 a day, 3 jobs per run.
+# No job can send mail, post, pay or sign in. Caps: $1 default per job (ceiling $5; code $2 default, ceiling $5; $1 default now), $20 a day, $100 total from 27 Nov, 3 jobs per run.
 # Public output: job counts, status codes and cost only.
 # DeepSeek backup: switched OFF. To switch on later: add the secret DEEPSEEK_API_KEY and set JOB_DEEPSEEK_FALLBACK to "true".
 on:
@@ -42,8 +42,15 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           JOB_DEEPSEEK_FALLBACK: "false"
           # NOTE: this $15/day cap is the runner's OWN cap (Director-submitted helper jobs + the hunter jobs); it is separate from, and not part of, the $16.98 hard cap of the listed robots (README).
-          DAILY_COST_CAP: "15.00"   # Imran 22 Nov 2026: "Spend 14, maybe $15 a day ... I don't want a single penny to be wasted" (raise $10 -> $15; promo API credit expires 4 Dec)
-          DEFAULT_JOB_COST_CAP: "0.20"
+          # 27 Nov 2026, Imran: "we only have say 6 to 7 days and we have at least $100 credit ... So 7 days, $100." / "Why are you doing everything so miserly"
+          DAILY_COST_CAP: "20.00"
+          TOTAL_COST_CAP: "100.00"      # no new job starts once spend since TOTAL_CAP_FROM reaches this (Imran's own purchased credit is not touched)
+          TOTAL_CAP_FROM: "2026-11-27"
+          HARD_JOB_COST_CAP: "5.00"
+          CODE_HARD_COST_CAP: "5.00"
+          MAX_SEARCHES_CEILING: "15"
+          DEFAULT_JOB_MODEL: "opus"     # Imran 27 Nov: "I don't trust Haiku or Sonnet. I think we should put Opus for that."
+          DEFAULT_JOB_COST_CAP: "1.00"   # Opus default: 0.20 would stop most jobs
           CODE_JOB_COST_CAP: "2.00"
           CODE_ROLE_ON: "true"
           MAX_JOBS_PER_RUN: "3"

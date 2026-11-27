@@ -12,6 +12,7 @@ import runner as r
 BRIEF = """---
 id: 2026-11-19-qa-1
 role: research
+model: haiku
 max_cost: 0.20
 ---
 ## Job

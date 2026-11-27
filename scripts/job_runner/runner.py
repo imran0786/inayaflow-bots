@@ -33,12 +33,17 @@ FORBIDDEN_PATHS = (r"^(\.env|\.git($|/)|\.gitmodules$|\.gitattributes$|\.github/
                    r"|eslint\.config\.|babel\.config\.|\.babelrc|instrumentation\.|.*\.(pem|key)$)")
 PLUGIN_PATHS = r"^(lib/plugin|lib/chatgptPlugin|app/api/mcp/|chatgpt-plugin/)"
 MAX_JOBS = int(os.environ.get("MAX_JOBS_PER_RUN", "3"))
-DAILY_CAP = float(os.environ.get("DAILY_COST_CAP", "3.00"))
+DAILY_CAP = float(os.environ.get("DAILY_COST_CAP", "20.00"))
+TOTAL_CAP = float(os.environ.get("TOTAL_COST_CAP", "100.00"))            # stop starting jobs once spend since TOTAL_CAP_FROM reaches this
+TOTAL_CAP_FROM = os.environ.get("TOTAL_CAP_FROM", "2026-11-27")          # first day counted (YYYY-MM-DD)
+DEFAULT_MODEL = os.environ.get("DEFAULT_JOB_MODEL", "opus")   # Imran 27 Nov: "I don't trust Haiku or Sonnet. I think we should put Opus"
+CODE_HARD_CAP = float(os.environ.get("CODE_HARD_COST_CAP", "5.00"))
 DEFAULT_JOB_CAP = float(os.environ.get("DEFAULT_JOB_COST_CAP", "0.20"))
-HARD_JOB_CAP = float(os.environ.get("HARD_JOB_COST_CAP", "1.00"))
+HARD_JOB_CAP = float(os.environ.get("HARD_JOB_COST_CAP", "5.00"))
 MAX_TURNS = int(os.environ.get("MAX_TURNS", "30"))
 JOB_SECONDS = int(os.environ.get("JOB_SECONDS", "540"))
 MAX_SEARCHES = int(os.environ.get("MAX_SEARCHES_PER_JOB", "5"))
+MAX_SEARCHES_CEILING = int(os.environ.get("MAX_SEARCHES_CEILING", "15"))
 READ_CHARS = 24000
 # DeepSeek backup: SWITCHED OFF (Imran 19 Nov: "They should only be using the Anthropics API"). To turn it on later:
 # add the secret DEEPSEEK_API_KEY and set JOB_DEEPSEEK_FALLBACK to "true" in job-runner.yml. Not tested yet.
@@ -47,6 +52,9 @@ DEEPSEEK_ON = os.environ.get("JOB_DEEPSEEK_FALLBACK", "false").strip().lower() =
 MODELS = {  # USD per million tokens, official pricing page read 19 Nov 2026. (in, out); long = Haiku prompts over 100K tokens
     "haiku": {"id": "claude-haiku-5-5", "in": 0.10, "out": 0.50, "long_in": 0.50, "long_out": 2.50, "cache_read": 0.01},
     "sonnet": {"id": "claude-sonnet-5-5", "in": 2.00, "out": 10.00, "long_in": 2.00, "long_out": 10.00, "cache_read": 0.10},
+    # added 27 Nov 2026, platform.claude.com/docs/en/about-claude/pricing (read 27 Nov): flat price over the whole 1M context
+    "opus": {"id": "claude-opus-5-5", "in": 4.00, "out": 20.00, "long_in": 4.00, "long_out": 20.00, "cache_read": 0.20},
+    "fable": {"id": "claude-fable-5-2", "in": 8.00, "out": 40.00, "long_in": 8.00, "long_out": 40.00, "cache_read": 0.20},
 }
 SEARCH_PRICE = 0.01  # $10 per 1,000 web searches; web fetch has no extra charge
 ROLES = {
@@ -131,7 +139,7 @@ def parse_brief(text, fallback_id=""):
     jid = meta.get("id") or fallback_id
     role = meta.get("role", "research").lower()
     is_code = role == "code"
-    model = "sonnet" if is_code else meta.get("model", "haiku").lower()   # code is always written by Sonnet
+    model = "sonnet" if is_code else meta.get("model", DEFAULT_MODEL).lower()   # code is always written by Sonnet
     default_cap = CODE_JOB_CAP if is_code else DEFAULT_JOB_CAP
     try:
         cap = float(meta.get("max_cost", default_cap))
@@ -146,7 +154,7 @@ def parse_brief(text, fallback_id=""):
     if no_web:
         asked.discard("web")
     return {"id": jid, "role": role, "model": model, "asked_cost": cap, "branch": meta.get("branch", "robot/" + jid) if is_code else "",
-            "max_cost": max(0.01, min(cap, DAILY_CAP if is_code else HARD_JOB_CAP)), "max_searches": max(0, min(searches, 10)),
+            "max_cost": max(0.01, min(cap, CODE_HARD_CAP if is_code else HARD_JOB_CAP)), "max_searches": max(0, min(searches, MAX_SEARCHES_CEILING)),
             "allowed": sorted(asked & ALLOWED_ACTIONS), "refused_actions": sorted(asked - ALLOWED_ACTIONS) + (["web (never for code roles)"] if no_web else []),
             "output": re.sub(r"[^A-Za-z0-9._-]", "-", meta.get("output", ""))[:80], "body": body.strip()}
 
@@ -165,8 +173,8 @@ def validate(job):
             return "the code role is switched off"
         if not re.fullmatch(r"robot/[A-Za-z0-9._-]{1,70}", job["branch"]):
             return "code jobs work only on a new branch named robot/<name>"
-        if job["asked_cost"] > DAILY_CAP:
-            return "max_cost is above the daily cap"
+        if job["asked_cost"] > CODE_HARD_CAP:
+            return "max_cost is above the code job cap"
     return None
 
 # ---------- file tools (read-only, inside the two roots) ----------
@@ -706,6 +714,11 @@ def now():
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def total_spent(spend):
+    """Dollars spent on all days from TOTAL_CAP_FROM on (the promo-credit budget; Imran's own purchased credit is never touched)."""
+    return sum(v for k, v in spend.items() if k >= TOTAL_CAP_FROM)
+
+
 def load_spend():
     try:
         return json.load(open(os.path.join(WORK, "jobs", "spend.json"), encoding="utf-8"))
@@ -773,7 +786,7 @@ def process(name, spend, today):
     else:
         if job["role"] == "code-read":
             clone_genie_main()
-        left = max(0.0, DAILY_CAP - spend.get(today, 0.0))
+        left = max(0.0, min(DAILY_CAP - spend.get(today, 0.0), TOTAL_CAP - total_spent(spend)))
         if job["role"] == "code" and left < job["max_cost"]:
             return "WAIT", 0.0     # stays in pending: a code job never runs on a shrunken budget
         job["max_cost"] = min(job["max_cost"], left)
@@ -831,6 +844,9 @@ def main():
     spend, today = load_spend(), now().strftime("%Y-%m-%d")
     ran = []
     for name in names[:MAX_JOBS]:
+        if total_spent(spend) >= TOTAL_CAP:
+            print("jobs: total cap reached ($%.2f since %s), %d job(s) wait" % (total_spent(spend), TOTAL_CAP_FROM, len(names) - len(ran)))
+            break
         if spend.get(today, 0.0) >= DAILY_CAP:
             print("jobs: daily cap reached, %d job(s) wait" % (len(names) - len(ran)))
             break
