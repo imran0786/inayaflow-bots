@@ -1,10 +1,10 @@
 {
- "cursor": 73,
+ "cursor": 84,
  "spent": {
   "2026-11-24": 2.9261,
   "2026-11-25": 2.9326,
   "2026-11-26": 2.8165,
-  "2026-11-27": 1.5342
+  "2026-11-27": 2.8843
  },
  "days": {
   "2026-11-24": {
@@ -105,42 +105,42 @@
    "total": 2601
   },
   "2026-11-27": {
-   "added": 83,
+   "added": 137,
    "by_category": {
-    "launch_sites": 7,
-    "tool_roundups": 7,
-    "github_awesome_lists": 17,
-    "saas_review_platforms": 3,
-    "guest_post_pages": 9,
-    "resource_pages": 7,
-    "communities_profiles": 5,
-    "podcasts_creators": 10,
-    "journalist_platforms": 7,
-    "edu_library_guides": 1,
-    "startup_directories_by_country": 8,
+    "launch_sites": 8,
+    "tool_roundups": 11,
+    "github_awesome_lists": 29,
+    "saas_review_platforms": 7,
+    "guest_post_pages": 16,
+    "resource_pages": 12,
+    "communities_profiles": 9,
+    "podcasts_creators": 11,
+    "journalist_platforms": 9,
+    "edu_library_guides": 5,
+    "startup_directories_by_country": 18,
     "ai_saas_directories": 2
    },
-   "runs": 1,
-   "calls": 12,
+   "runs": 2,
+   "calls": 23,
    "providers": {
     "claude": {
-     "calls": 12,
-     "cost": 1.5342,
-     "proposed": 209,
-     "spam": 10,
-     "dup": 105,
-     "dead": 11,
-     "added": 83,
-     "followed": 29,
-     "nofollow": 2,
+     "calls": 23,
+     "cost": 2.8843,
+     "proposed": 382,
+     "spam": 14,
+     "dup": 213,
+     "dead": 18,
+     "added": 137,
+     "followed": 48,
+     "nofollow": 3,
      "noindex": 0,
-     "unknown": 52,
-     "needs_signup": 38
+     "unknown": 86,
+     "needs_signup": 63
     }
    },
-   "category_summary": "list-builder: +83 new (total 2713; by category github_awesome_lists 17, podcasts_creators 10, guest_post_pages 9, startup_directories_by_country 8, journalist_platforms 7, launch_sites 7, resource_pages 7, tool_roundups 7, communities_profiles 5, saas_review_platforms 3, ai_saas_directories 2, edu_library_guides 1)",
-   "summary": "list-builder: sonnet +83 new (29 followed, $1.53)",
-   "total": 2713
+   "category_summary": "list-builder: +137 new (total 2795; by category github_awesome_lists 29, startup_directories_by_country 18, guest_post_pages 16, resource_pages 12, podcasts_creators 11, tool_roundups 11, communities_profiles 9, journalist_platforms 9, launch_sites 8, saas_review_platforms 7, edu_library_guides 5, ai_saas_directories 2)",
+   "summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +28 new (4 followed, $0.02)",
+   "total": 2795
   }
  },
  "rejected": [
@@ -251,7 +251,17 @@
   "mbj.com",
   "bentley.edu",
   "startuplove.de",
-  "webstoreextensions.com"
+  "webstoreextensions.com",
+  "techyorker.com",
+  "github.com/zjch022/awesome-startup-tools-list",
+  "aiunleash.ca",
+  "therizwankhan.com",
+  "tikvidz.pro",
+  "reddit.com/r/tiktokcreators",
+  "reddit.com/r/tiktokmarketing",
+  "reddit.com/r/tiktokrise",
+  "lespepitestech.com",
+  "extrag.one"
  ],
- "last_summary": "list-builder: sonnet +83 new (29 followed, $1.53)"
+ "last_summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +28 new (4 followed, $0.02)"
 }

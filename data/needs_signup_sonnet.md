@@ -4,6 +4,30 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| Appvizer | https://www.appvizer.fr/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-27 |
+| AstraMedia Press Opportunity Matching | https://astramedia.app/media-opportunities | journalist_platforms | sonnet | UNKNOWN | 2026-11-27 |
+| JournoFinder | https://journofinder.com/ | journalist_platforms | sonnet | UNKNOWN | 2026-11-27 |
+| TikTalk | https://tiktalktok.com/ | communities_profiles | sonnet | UNKNOWN | 2026-11-27 |
+| CreatorNetworking | https://creatornetworking.com/ | communities_profiles | sonnet | UNKNOWN | 2026-11-27 |
+| Attention Economy Club creators | https://www.attentioneconomyclub.com/creators | communities_profiles | sonnet | UNKNOWN | 2026-11-27 |
+| Creator Camp Community | https://joincreatorcamp.com/community | communities_profiles | sonnet | UNKNOWN | 2026-11-27 |
+| EmbedSocial Blog | https://embedsocial.com/blog/social-media-content-creator-tools/ | resource_pages | sonnet | FOLLOWED | 2026-11-27 |
+| BusinessFirms | https://businessfirms.co/write-for-us-influencer-marketing | guest_post_pages | sonnet | UNKNOWN | 2026-11-27 |
+| Agentic.ai | https://agentic.ai/submit | saas_review_platforms | sonnet | UNKNOWN | 2026-11-27 |
+| RightAIChoice | https://rightaichoice.com/pricing | saas_review_platforms | sonnet | FOLLOWED | 2026-11-27 |
+| growth-hacking-guide | https://github.com/squareboat/growth-hacking-guide | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| growth-hacking-resources | https://github.com/eyedea-io/growth-hacking-resources | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-claude-skills | https://github.com/ComposioHQ/awesome-claude-skills | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| Best-Micro-SaaS-Tools | https://github.com/Micro-SaaS-Examples/Best-Micro-SaaS-Tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| startup-tools (BrightCanopy) | https://github.com/BrightCanopy/startup-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-startup-tools (andromedarabbit) | https://github.com/andromedarabbit/awesome-startup-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| Awesome-Conversion-Rate-Optimization-Cro | https://github.com/ishandutta2007/Awesome-Conversion-Rate-Optimization-Cro | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-x-twitter-growth-tools | https://github.com/cybercryptone/awesome-x-twitter-growth-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| Awesome-Bootstrapper-Roadmap | https://github.com/pierpaolo28/Awesome-Bootstrapper-Roadmap | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-reddit-lead-gen | https://github.com/jeeiee/awesome-reddit-lead-gen | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| Awesome-Growth-hacking (rafaecheve) | https://github.com/rafaecheve/Awesome-Growth-hacking | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-growth-hacking (arseneHuot) | https://github.com/arseneHuot/awesome-growth-hacking | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| Maybe Labs Launch Directory | https://maybelabs.ai/blog/startup-directories | launch_sites | sonnet | UNKNOWN | 2026-11-27 |
 | startup.eu | https://www.startup.eu/add-your-startup | startup_directories_by_country | sonnet | FOLLOWED | 2026-11-27 |
 | ITSBETTER Firmenverzeichnis | https://itsbetter.com/firma-eintragen/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-27 |
 | Startbase | https://launchrepo.dev/best/european-startup-directories/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-27 |
