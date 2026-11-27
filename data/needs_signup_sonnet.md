@@ -4,6 +4,43 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| startup.eu | https://www.startup.eu/add-your-startup | startup_directories_by_country | sonnet | FOLLOWED | 2026-11-27 |
+| ITSBETTER Firmenverzeichnis | https://itsbetter.com/firma-eintragen/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-27 |
+| Startbase | https://launchrepo.dev/best/european-startup-directories/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-27 |
+| Projektify Startup Verzeichnis | https://projektify.de/startup-verzeichnis/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-27 |
+| Gründerküche Startup-Guide | https://www.gruenderkueche.de/startup-guide-eintrag/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-27 |
+| The OpEd Project submissions list | https://www.theopedproject.org/submissions | journalist_platforms | sonnet | UNKNOWN | 2026-11-27 |
+| Keep Optimising Podcast | https://keepoptimising.com/guest/ | podcasts_creators | sonnet | UNKNOWN | 2026-11-27 |
+| Unscripted Small Business Podcast | https://unscriptedsmallbusiness.com/be-a-guest-on-the-unscripted-small-business-podcast/ | podcasts_creators | sonnet | UNKNOWN | 2026-11-27 |
+| DesignWanted | https://app.designwanted.com/register | communities_profiles | sonnet | UNKNOWN | 2026-11-27 |
+| Spline Community | https://community.spline.design/ | communities_profiles | sonnet | UNKNOWN | 2026-11-27 |
+| DevLink | https://devlink.cc/ | communities_profiles | sonnet | UNKNOWN | 2026-11-27 |
+| CodeTree | https://code-tree.dev/ | communities_profiles | sonnet | UNKNOWN | 2026-11-27 |
+| OkayDev | https://okaydev.co/ | communities_profiles | sonnet | UNKNOWN | 2026-11-27 |
+| Small Business Expo Blog | https://www.thesmallbusinessexpo.com/blog/social-media-marketing-tools-for-small-business/ | resource_pages | sonnet | UNKNOWN | 2026-11-27 |
+| Symmetrical Media Marketing Resources | https://www.symmetricalmm.com/resources | resource_pages | sonnet | UNKNOWN | 2026-11-27 |
+| Creators Magazine | https://creatorsmag.com/pages/write-for-us | guest_post_pages | sonnet | FOLLOWED | 2026-11-27 |
+| Who's Mailing What! Newsletter | https://blog.whosmailingwhat.com/write-for-us/ | guest_post_pages | sonnet | UNKNOWN | 2026-11-27 |
+| Find Your SaaS | https://find-your-saas.com/ | saas_review_platforms | sonnet | UNKNOWN | 2026-11-27 |
+| Blastra free B2B SaaS directories | https://blastra.io/directories/free-b2b-saas-directories/ | saas_review_platforms | sonnet | UNKNOWN | 2026-11-27 |
+| curatedseotools (sneg55) | https://github.com/sneg55/curatedseotools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-seo-tools (serpapi) | https://github.com/serpapi/awesome-seo-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| TopAutomationTools (iamramanarora) | https://github.com/iamramanarora/TopAutomationTools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-ai-marketing (alternbits) | https://github.com/alternbits/awesome-ai-marketing | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-ai-marketing (jmedia65) | https://github.com/jmedia65/awesome-ai-marketing | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-marketing (MrZone) | https://github.com/MrZone/awesome-marketing | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| best-of-ai | https://github.com/best-of-ai/best-of-ai | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| free-ai-tools (ShaikhWarsi) | https://github.com/ShaikhWarsi/free-ai-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-ai (openbestof) | https://github.com/openbestof/awesome-ai | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-ai-tools (JMcrafter26) | https://github.com/JMcrafter26/awesome-ai-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-content-creation (sampositif) | https://github.com/sampositif/awesome-content-creation | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-free-tools-for-creators | https://github.com/kbwzy/awesome-free-tools-for-creators-mrrandom-0 | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-lowcode (antdimot) | https://github.com/antdimot/awesome-lowcode | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-nocode (pashkatrick) | https://github.com/pashkatrick/awesome-nocode | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| Awesome-no-code-tools (ElijT) | https://github.com/ElijT/Awesome-no-code-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-nocode-tools (Stevemillerai5) | https://github.com/Stevemillerai5/awesome-nocode-tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| awesome-nocode-lowcode (kairichard) | https://github.com/kairichard/awesome-nocode-lowcode | github_awesome_lists | sonnet | FOLLOWED | 2026-11-27 |
+| InstantDM Blog – Best Free Influencer Tools | https://instantdm.com/blog/best-free-influencer-marketing-platforms-2026 | tool_roundups | sonnet | UNKNOWN | 2026-11-27 |
 | AI Tool Curator | https://www.aitoolcurator.com/submit-a-tool/ | ai_saas_directories | sonnet | UNKNOWN | 2026-11-26 |
 | AiToolsObserver | https://aitoolsobserver.com/ | ai_saas_directories | sonnet | UNKNOWN | 2026-11-26 |
 | Guest Post India | https://guestpostindia.com/write-for-us/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-26 |

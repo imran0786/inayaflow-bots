@@ -1,9 +1,10 @@
 {
- "cursor": 61,
+ "cursor": 73,
  "spent": {
   "2026-11-24": 2.9261,
   "2026-11-25": 2.9326,
-  "2026-11-26": 2.8165
+  "2026-11-26": 2.8165,
+  "2026-11-27": 1.5342
  },
  "days": {
   "2026-11-24": {
@@ -102,6 +103,44 @@
    "category_summary": "list-builder: +141 new (total 2601; by category startup_directories_by_country 24, github_awesome_lists 20, guest_post_pages 17, edu_library_guides 15, journalist_platforms 10, resource_pages 10, communities_profiles 8, launch_sites 8, podcasts_creators 8, saas_review_platforms 8, ai_saas_directories 7, tool_roundups 6)",
    "summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +122 new (15 followed, $0.07)",
    "total": 2601
+  },
+  "2026-11-27": {
+   "added": 83,
+   "by_category": {
+    "launch_sites": 7,
+    "tool_roundups": 7,
+    "github_awesome_lists": 17,
+    "saas_review_platforms": 3,
+    "guest_post_pages": 9,
+    "resource_pages": 7,
+    "communities_profiles": 5,
+    "podcasts_creators": 10,
+    "journalist_platforms": 7,
+    "edu_library_guides": 1,
+    "startup_directories_by_country": 8,
+    "ai_saas_directories": 2
+   },
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "claude": {
+     "calls": 12,
+     "cost": 1.5342,
+     "proposed": 209,
+     "spam": 10,
+     "dup": 105,
+     "dead": 11,
+     "added": 83,
+     "followed": 29,
+     "nofollow": 2,
+     "noindex": 0,
+     "unknown": 52,
+     "needs_signup": 38
+    }
+   },
+   "category_summary": "list-builder: +83 new (total 2713; by category github_awesome_lists 17, podcasts_creators 10, guest_post_pages 9, startup_directories_by_country 8, journalist_platforms 7, launch_sites 7, resource_pages 7, tool_roundups 7, communities_profiles 5, saas_review_platforms 3, ai_saas_directories 2, edu_library_guides 1)",
+   "summary": "list-builder: sonnet +83 new (29 followed, $1.53)",
+   "total": 2713
   }
  },
  "rejected": [
@@ -195,7 +234,24 @@
   "prfree.org",
   "kent.edu",
   "daytonastate.edu",
-  "quickstartupindia.com"
+  "quickstartupindia.com",
+  "dustinhowes.com",
+  "manychat.com",
+  "bestcompany.com",
+  "comparedge.com",
+  "rankexdigital.com",
+  "advantagebizmarketing.com",
+  "creatortoolkit.org",
+  "upmarketry.com",
+  "merj.io",
+  "bigvu.tv",
+  "mckeecreative.store",
+  "thebusinessgrowthfactor.com",
+  "buildingyourbrand.net",
+  "mbj.com",
+  "bentley.edu",
+  "startuplove.de",
+  "webstoreextensions.com"
  ],
- "last_summary": "list-builder: sonnet +141 new (44 followed, $2.82) | deepseek +122 new (15 followed, $0.07)"
+ "last_summary": "list-builder: sonnet +83 new (29 followed, $1.53)"
 }
