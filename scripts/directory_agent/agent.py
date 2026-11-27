@@ -225,8 +225,11 @@ def badge_added(dom, path=None):
 
 
 def _iso(d):
+    # only a real "YYYY-MM-DD" string counts (27 Nov: Python also reads the number 20261127 as a date, which is today's date)
+    if not isinstance(d, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
+        return None
     try:
-        return datetime.date.fromisoformat(str(d))
+        return datetime.date.fromisoformat(d)
     except Exception:
         return None
 
