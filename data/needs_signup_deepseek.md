@@ -4,6 +4,11 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| LessWrong | https://www.lesswrong.com/ | communities_profiles | deepseek | UNKNOWN | 2026-11-27 |
+| Chief Marketer | https://www.chiefmarketer.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-27 |
+| Constant Content Blog | https://www.constant-content.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-27 |
+| awesome-marketing-tools | https://github.com/awesome-marketing/awesome-marketing | github_awesome_lists | deepseek | FOLLOWED | 2026-11-27 |
+| awesome-lowcode | https://github.com/taowen/awesome-lowcode | github_awesome_lists | deepseek | FOLLOWED | 2026-11-27 |
 | Saudi YP | https://www.saudiyp.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-27 |
 | First Draft News | https://firstdraftnews.org/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-27 |
 | PRX Podcast Garage Resources | https://www.prx.org/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-27 |
