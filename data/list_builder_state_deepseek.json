@@ -1,10 +1,10 @@
 {
- "cursor": 132,
+ "cursor": 144,
  "spent": {
   "2026-11-24": 0.0586,
   "2026-11-25": 0.1457,
   "2026-11-26": 0.0952,
-  "2026-11-27": 0.0205
+  "2026-11-27": 0.0436
  },
  "days": {
   "2026-11-24": {
@@ -109,38 +109,39 @@
    "total": 2630
   },
   "2026-11-27": {
-   "added": 28,
+   "added": 72,
    "by_category": {
-    "ai_saas_directories": 2,
-    "tool_roundups": 2,
+    "ai_saas_directories": 3,
+    "tool_roundups": 4,
     "github_awesome_lists": 1,
-    "guest_post_pages": 1,
-    "resource_pages": 2,
-    "podcasts_creators": 5,
-    "edu_library_guides": 5,
-    "startup_directories_by_country": 10
+    "guest_post_pages": 7,
+    "resource_pages": 7,
+    "podcasts_creators": 11,
+    "edu_library_guides": 11,
+    "startup_directories_by_country": 17,
+    "journalist_platforms": 11
    },
-   "runs": 1,
-   "calls": 12,
+   "runs": 2,
+   "calls": 24,
    "providers": {
     "deepseek": {
-     "calls": 12,
-     "cost": 0.0205,
-     "proposed": 303,
-     "spam": 1,
-     "dup": 257,
-     "dead": 17,
-     "added": 28,
-     "followed": 4,
+     "calls": 24,
+     "cost": 0.0436,
+     "proposed": 647,
+     "spam": 4,
+     "dup": 517,
+     "dead": 54,
+     "added": 72,
+     "followed": 8,
      "nofollow": 0,
      "noindex": 0,
-     "unknown": 24,
-     "needs_signup": 7
+     "unknown": 64,
+     "needs_signup": 24
     }
    },
-   "category_summary": "list-builder: +28 new (total 2741; by category startup_directories_by_country 10, edu_library_guides 5, podcasts_creators 5, ai_saas_directories 2, resource_pages 2, tool_roundups 2, github_awesome_lists 1, guest_post_pages 1)",
-   "summary": "list-builder: sonnet +83 new (29 followed, $1.53) | deepseek +28 new (4 followed, $0.02)",
-   "total": 2741
+   "category_summary": "list-builder: +72 new (total 2839; by category startup_directories_by_country 17, edu_library_guides 11, journalist_platforms 11, podcasts_creators 11, guest_post_pages 7, resource_pages 7, tool_roundups 4, ai_saas_directories 3, github_awesome_lists 1)",
+   "summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +72 new (8 followed, $0.04)",
+   "total": 2839
   }
  },
  "rejected": [
@@ -556,7 +557,50 @@
   "poynter.org",
   "sme.ae",
   "dubaiinternetcity.com",
-  "in5.ae"
+  "in5.ae",
+  "aicollection.dev",
+  "promptbase.com",
+  "socialbakers.com",
+  "toolsprince.com",
+  "github.com/alinemati-uwb/awesome-marketing",
+  "github.com/incog gecko/awesome-social-media-marketing",
+  "github.com/creatorhub/awesome-creator-economy",
+  "github.com/kelvins/awesome-ml",
+  "github.com/so�undarya/awesome-productivity",
+  "github.com/ryurina/awesome-growth-marketing",
+  "github.com/wwyazid/awesome-startups",
+  "videomarketingworld.com",
+  "reddit.com/r/growthhacking",
+  "betali.st",
+  "themarketingcompanion.com",
+  "andrelatimm.com",
+  "smallbusinessmarketingminute.com",
+  "thedigitalmarketingpodcast.com",
+  "socialmediagrowthshow.com",
+  "marketingtrendspodcast.com",
+  "socialmediashow.co",
+  "digitalmarketingpodcastnetwork.com",
+  "thesocialmediamarketingshow.com",
+  "themarketingweekly.com",
+  "onepitch.co",
+  "quoteshunter.com",
+  "press.org",
+  "daybook.com",
+  "globenewswire.com",
+  "sourcesleuth.com",
+  "journalism.co.uk",
+  "tinynews.org",
+  "gijn.org",
+  "medium.com/@knightfdn",
+  "saudistartups.net",
+  "gov.sa",
+  "arabianbusiness.com",
+  "connect.ae",
+  "yellowpages.ae",
+  "saudibusinessdirectory.com",
+  "dubaistartuphub.com",
+  "thedraft.co",
+  "sharq.sa"
  ],
- "last_summary": "list-builder: sonnet +83 new (29 followed, $1.53) | deepseek +28 new (4 followed, $0.02)"
+ "last_summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +72 new (8 followed, $0.04)"
 }

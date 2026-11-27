@@ -4,6 +4,23 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| Saudi YP | https://www.saudiyp.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-27 |
+| First Draft News | https://firstdraftnews.org/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-27 |
+| PRX Podcast Garage Resources | https://www.prx.org/ | edu_library_guides | deepseek | UNKNOWN | 2026-11-27 |
+| Pressat | https://pressat.co.uk/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| Vocus / Cision | https://www.cision.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| Gorkana | https://www.gorkana.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| NASW (science writers) | https://www.nasw.org/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| Education Writers Association | https://www.ewa.org/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| SEJournal (SEJ) | https://www.sej.org/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| Covering Health (AHCJ) | https://healthjournalism.org/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| IRE Resources | https://www.ire.org/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| EIN Presswire | https://www.einpresswire.com/ | journalist_platforms | deepseek | FOLLOWED | 2026-11-27 |
+| Press Hook | https://www.presshook.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| The Marketing Book Podcast | https://themarketingbookpodcast.com/ | podcasts_creators | deepseek | UNKNOWN | 2026-11-27 |
+| Awario Blog | https://awario.com/blog | resource_pages | deepseek | UNKNOWN | 2026-11-27 |
+| Vidpros Blog | https://vidpros.com/blog/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-27 |
+| Practical Ecommerce | https://www.practicalecommerce.com/ | tool_roundups | deepseek | UNKNOWN | 2026-11-27 |
 | Wamda | https://www.wamda.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-27 |
 | Arabnet | https://www.arabnet.me/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-27 |
 | UAE Government Portal | https://u.ae/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-27 |
