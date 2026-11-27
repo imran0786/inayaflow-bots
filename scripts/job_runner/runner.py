@@ -437,7 +437,16 @@ def affordable_tokens(job, meter, prompt_chars, last_in):
     reserve = 0.0
     if "web" in job["allowed"]:
         reserve = max(0, job["max_searches"] - meter.searches) * SEARCH_PRICE + 8 * 12000 * pin / 1e6     # searches still possible + pages fetched inside the turn
-    left = job["max_cost"] - meter.cost - reserve - est_in * pin / 1e6
+    if last_in:
+        # 27 Nov: after the first turn the earlier prompt is read from the cache (automatic caching), so only the new part
+        # costs the full price (+25% cache write). Counting the whole prompt at full price stopped an Opus guide job at
+        # $1.65 of $5 (COST_CAP). Still rounded UP: new part = at least 15% of the last prompt or 30K tokens.
+        new_tok = max(int(last_in * 0.15), 30000)
+        pcr = m.get("cache_read", pin * 0.1)
+        in_cost = (last_in * pcr + new_tok * pin * 1.25) / 1e6
+    else:
+        in_cost = est_in * pin / 1e6
+    left = job["max_cost"] - meter.cost - reserve - in_cost
     return int(left / pout * 1e6) if pout and left > 0 else 0
 
 
