@@ -43,8 +43,9 @@ jobs:
           JOB_DEEPSEEK_FALLBACK: "false"
           # NOTE: this $15/day cap is the runner's OWN cap (Director-submitted helper jobs + the hunter jobs); it is separate from, and not part of, the $16.98 hard cap of the listed robots (README).
           # 27 Nov 2026, Imran: "we only have say 6 to 7 days and we have at least $100 credit ... So 7 days, $100." / "Why are you doing everything so miserly"
-          DAILY_COST_CAP: "45.00"         # 27 Nov ~02:50 UK: 500-directory finders tonight; the $100 total cap (from 27 Nov) still holds
-          TOTAL_COST_CAP: "100.00"      # no new job starts once spend since TOTAL_CAP_FROM reaches this (Imran's own purchased credit is not touched)
+          # 27 Nov ~18:00 UK, Imran: "we need to now be a little bit more careful with the number of amount that we spend every day. It has come down to 66."
+          DAILY_COST_CAP: "6.00"          # was 45.00 (27 Nov finders day); API credit $66 left on 27 Nov
+          TOTAL_COST_CAP: "70.00"      # no new job starts once spend since TOTAL_CAP_FROM reaches this (Imran's own purchased credit is not touched)
           TOTAL_CAP_FROM: "2026-11-27"
           HARD_JOB_COST_CAP: "5.00"
           CODE_HARD_COST_CAP: "5.00"
