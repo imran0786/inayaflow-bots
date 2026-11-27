@@ -120,7 +120,7 @@
     "startup_directories_by_country": 18,
     "ai_saas_directories": 2
    },
-   "runs": 2,
+   "runs": 3,
    "calls": 23,
    "providers": {
     "claude": {
@@ -138,9 +138,9 @@
      "needs_signup": 63
     }
    },
-   "category_summary": "list-builder: +137 new (total 2795; by category github_awesome_lists 29, startup_directories_by_country 18, guest_post_pages 16, resource_pages 12, podcasts_creators 11, tool_roundups 11, communities_profiles 9, journalist_platforms 9, launch_sites 8, saas_review_platforms 7, edu_library_guides 5, ai_saas_directories 2)",
-   "summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +28 new (4 followed, $0.02)",
-   "total": 2795
+   "category_summary": "list-builder: +137 new (total 2839; by category github_awesome_lists 29, startup_directories_by_country 18, guest_post_pages 16, resource_pages 12, podcasts_creators 11, tool_roundups 11, communities_profiles 9, journalist_platforms 9, launch_sites 8, saas_review_platforms 7, edu_library_guides 5, ai_saas_directories 2)",
+   "summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +72 new (8 followed, $0.04)",
+   "total": 2839
   }
  },
  "rejected": [
@@ -263,5 +263,5 @@
   "lespepitestech.com",
   "extrag.one"
  ],
- "last_summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +28 new (4 followed, $0.02)"
+ "last_summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +72 new (8 followed, $0.04)"
 }
