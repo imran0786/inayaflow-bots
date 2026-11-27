@@ -463,7 +463,7 @@ def run_claude(job, post=post_json, clock=time.time, meter=None):
         if clock() - t0 > seconds:
             return "TIME_CAP", last_text, meter
         # before the turn: only ask for as many output tokens as the rest of the budget can pay for
-        want = 16000 if job["role"] == "code" else 8000
+        want = 16000 if (job["role"] == "code" or job["model"] in ("opus", "fable")) else 8000   # 5.5 models think first: room for the answer too
         can = affordable_tokens(job, meter, len(system) + len(json.dumps(messages)) + len(json.dumps(tools)), meter.last_in)
         if can < 1500:
             return "COST_CAP", last_text, meter
@@ -485,7 +485,20 @@ def run_claude(job, post=post_json, clock=time.time, meter=None):
         uses = [b for b in content if b.get("type") == "tool_use"]
         done = next((b for b in uses if b.get("name") == "submit_result"), None)
         if done:
-            return "DONE", str((done.get("input") or {}).get("result", "")).strip() or last_text, meter
+            result = str((done.get("input") or {}).get("result", "")).strip()
+            # 27 Nov: a submit_result cut off by max_tokens (or handed in empty) is NOT a result: 3 Opus jobs came back
+            # "(no result text)" after $4.40. Ask again with room; accept old text only if the job already wrote some.
+            if result and stop != "max_tokens":
+                return "DONE", result, meter
+            retries = sum(1 for m in messages if isinstance(m.get("content"), list) and any(
+                isinstance(c, dict) and str(c.get("content", "")).startswith("EMPTY_RESULT") for c in m["content"]))
+            if retries >= 2:
+                return ("DONE" if (result or last_text) else "NO_RESULT"), result or last_text, meter
+            messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": b["id"],
+                             "content": ("EMPTY_RESULT: your submit_result arrived empty or cut off. Call submit_result again with the "
+                                         "complete result in markdown, shorter if needed, and keep thinking brief.")
+                             if b is done else "skipped"} for b in uses]})
+            continue
         if uses:
             messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": b["id"],
                                                           "content": run_tool(job, b.get("name"), b.get("input") or {})} for b in uses]})

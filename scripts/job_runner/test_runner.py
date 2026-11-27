@@ -158,6 +158,33 @@ class Loop(unittest.TestCase):
         status, text, _m = r.run_claude(j, post)
         self.assertEqual((status, text, len(n)), ("DONE", "plain answer", 2))   # asked once to hand in, then accepted
 
+    def test_cut_off_submit_is_asked_again(self):
+        # 27 Nov: a submit_result cut off by max_tokens came back as DONE with no text; now it is asked again
+        j = r.parse_brief(BRIEF)
+        seen = []
+
+        def post(url, body, headers, timeout=0):
+            seen.append(body)
+            if len(seen) == 1:
+                return {"stop_reason": "max_tokens", "usage": {"input_tokens": 10, "output_tokens": 10},
+                        "content": [{"type": "tool_use", "id": "s1", "name": "submit_result", "input": {}}]}
+            return {"stop_reason": "tool_use", "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "tool_use", "id": "s2", "name": "submit_result", "input": {"result": "FULL REPORT"}}]}
+        status, text, _m = r.run_claude(j, post)
+        self.assertEqual((status, text, len(seen)), ("DONE", "FULL REPORT", 2))
+        self.assertTrue(seen[1]["messages"][2]["content"][0]["content"].startswith("EMPTY_RESULT"))
+
+    def test_always_empty_submit_gives_no_result(self):
+        j = r.parse_brief(BRIEF)
+        n = []
+
+        def post(url, body, headers, timeout=0):
+            n.append(1)
+            return {"stop_reason": "tool_use", "usage": {"input_tokens": 10, "output_tokens": 10},
+                    "content": [{"type": "tool_use", "id": "s%d" % len(n), "name": "submit_result", "input": {"result": ""}}]}
+        status, text, _m = r.run_claude(j, post)
+        self.assertEqual((status, len(n)), ("NO_RESULT", 3))
+
     def test_long_prompt_price_and_sonnet(self):
         m = r.Meter("haiku")
         m.add({"input_tokens": 150000, "output_tokens": 1000})
