@@ -53,7 +53,7 @@ jobs:
           DEFAULT_JOB_COST_CAP: "1.00"   # Opus default: 0.20 would stop most jobs
           CODE_JOB_COST_CAP: "2.00"
           CODE_ROLE_ON: "true"
-          MAX_JOBS_PER_RUN: "3"
+          MAX_JOBS_PER_RUN: "6"
         run: |
           echo "::add-mask::$GENIE_LOGS_TOKEN"
           python3 scripts/job_runner/runner.py 2>/dev/null
