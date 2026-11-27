@@ -4,6 +4,18 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| TechCabal | https://techcabal.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-27 |
+| Journo Requests (Twitter/X) | https://twitter.com/journorequest | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| Source of Sources (SOS) | https://www.publicityhound.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
+| Social Media Escapes (a.k.a. Social Media Marketing Podcast) | https://www.socialsecrets.co/ | podcasts_creators | deepseek | UNKNOWN | 2026-11-27 |
+| MicroStartup | https://microstartup.com/ | communities_profiles | deepseek | UNKNOWN | 2026-11-27 |
+| Startup Mindset | https://startupmindset.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-27 |
+| awesome-analytics | https://github.com/onurakpolat/awesome-analytics | github_awesome_lists | deepseek | FOLLOWED | 2026-11-27 |
+| awesome-gpt4 | https://github.com/radi-cho/awesome-gpt4 | github_awesome_lists | deepseek | FOLLOWED | 2026-11-27 |
+| awesome-github-profile-readme | https://github.com/abhisheknaiidu/awesome-github-profile-readme | github_awesome_lists | deepseek | FOLLOWED | 2026-11-27 |
+| Launchvault | https://launchvault.co/ | launch_sites | deepseek | FOLLOWED | 2026-11-27 |
+| LaunchList | https://launchlist.net/ | launch_sites | deepseek | UNKNOWN | 2026-11-27 |
+| Awesome AI Tools | https://github.com/awesome-ai-tools | ai_saas_directories | deepseek | FOLLOWED | 2026-11-27 |
 | LessWrong | https://www.lesswrong.com/ | communities_profiles | deepseek | UNKNOWN | 2026-11-27 |
 | Chief Marketer | https://www.chiefmarketer.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-27 |
 | Constant Content Blog | https://www.constant-content.com/ | guest_post_pages | deepseek | UNKNOWN | 2026-11-27 |
