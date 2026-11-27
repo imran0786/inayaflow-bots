@@ -2149,7 +2149,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "checked": "2026-11-23"
   },
   {
@@ -3424,7 +3424,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "checked": "2026-11-23"
   },
   {
@@ -3516,7 +3516,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "checked": "2026-11-23"
   },
   {
@@ -3900,7 +3900,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "checked": "2026-11-23"
   },
   {
@@ -3956,7 +3956,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "checked": "2026-11-23"
   },
   {
@@ -3993,7 +3993,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "checked": "2026-11-23"
   },
   {
@@ -4231,7 +4231,7 @@
    "has_form_on_page": true,
    "quality": "relevant",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "checked": "2026-11-23"
   },
   {
@@ -4947,7 +4947,7 @@
    "followed": "unknown",
    "checked": "2026-11-19",
    "judge_reason": "AI tools directory, but no submit or pricing page text to confirm listing terms.",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -9715,7 +9715,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Directory of marketing tools; submission requires registration. Free listing not stated; listing appears under paid ad o",
-   "status": "TRIED OTHER 2026-11-26",
+   "status": "TRIED OTHER 2026-11-27",
    "followed_sample": "31 followed / 0 not",
    "needs": [
     "account"
@@ -12773,7 +12773,7 @@
    "followed": "unknown",
    "checked": "2026-11-20",
    "judge_reason": "",
-   "status": "TRIED OTHER 2026-11-24"
+   "status": "TRIED OTHER 2026-11-27"
   },
   {
    "name": "aitoppicks.com",
@@ -14199,7 +14199,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Product Hunt-style launch directory for indie makers; no submit or pricing page found.",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED DEAD 2026-11-27",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -18313,7 +18313,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "AI agent directory with a submit form; no stated free listing terms or pricing page.",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "followed_sample": "0 followed / 0 not",
    "needs": [
     "account"
@@ -24971,7 +24971,7 @@
    "followed": "mixed",
    "checked": "2026-11-23",
    "judge_reason": "Software directory with AI, marketing, and video categories; submit requires login, free listing not stated.",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED SOCIAL_LOGIN_ONLY 2026-11-27",
    "followed_sample": "6 followed / 24 not",
    "needs": [
     "account"
@@ -26428,7 +26428,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Launch directory; paid 14-day upgrade implies free basic listing; no submit page found.",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "followed_sample": "423 followed / 0 not",
    "needs": []
   },
@@ -26560,7 +26560,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Lists AI software and takes submissions; no listing price or free option stated.",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -26900,7 +26900,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-23",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "needs": []
   },
   {
@@ -26921,7 +26921,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-23",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "needs": []
   },
   {
@@ -27518,7 +27518,7 @@
    "followed": "followed",
    "checked": "2026-11-23",
    "judge_reason": "Free queue launch for indie makers; AI, developer and design tools listed in English.",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "followed_sample": "2 followed / 0 not",
    "needs": [
     "account"
@@ -28750,7 +28750,7 @@
    "followed": "unknown",
    "checked": "2026-11-23",
    "judge_reason": "Indie hacker startup directory advertising a free product launchpad; no submit page found to confirm requirements.",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "followed_sample": "0 followed / 0 not",
    "needs": []
   },
@@ -29484,7 +29484,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "directory"
   },
   {
@@ -29508,7 +29508,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "type": "directory"
   },
   {
@@ -29604,7 +29604,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "launch_site"
   },
   {
@@ -29628,7 +29628,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "country_directory"
   },
   {
@@ -29652,7 +29652,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "directory"
   },
   {
@@ -29796,7 +29796,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "directory"
   },
   {
@@ -29844,7 +29844,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "directory"
   },
   {
@@ -29892,7 +29892,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "directory"
   },
   {
@@ -30060,7 +30060,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "launch_site"
   },
   {
@@ -31188,7 +31188,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "review_platform"
   },
   {
@@ -31260,7 +31260,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "directory"
   },
   {
@@ -31908,7 +31908,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "community"
   },
   {
@@ -31956,7 +31956,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "community"
   },
   {
@@ -32298,7 +32298,7 @@
    "free_check": "free",
    "quality": "DR 65",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32312,7 +32312,7 @@
    "free_check": "free",
    "quality": "DR 65",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32354,7 +32354,7 @@
    "free_check": "free",
    "quality": "DR 56",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32368,7 +32368,7 @@
    "free_check": "free",
    "quality": "DR 55",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32452,7 +32452,7 @@
    "free_check": "free",
    "quality": "DR 38",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32466,7 +32466,7 @@
    "free_check": "free",
    "quality": "DR 37",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32508,7 +32508,7 @@
    "free_check": "free",
    "quality": "DR 33",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32550,7 +32550,7 @@
    "free_check": "free",
    "quality": "DR 31",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": "link reported: unknown"
   },
   {
@@ -32620,7 +32620,7 @@
    "free_check": "free",
    "quality": "DR 91",
    "usable": true,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": "link reported: unknown"
   },
   {
@@ -33474,7 +33474,7 @@
    "free_check": "free",
    "quality": "",
    "usable": false,
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36666,7 +36666,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36694,7 +36694,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36708,7 +36708,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36722,7 +36722,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36736,7 +36736,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36750,7 +36750,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36764,7 +36764,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36778,7 +36778,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36792,7 +36792,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36820,7 +36820,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36834,7 +36834,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36848,7 +36848,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36918,7 +36918,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36946,7 +36946,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36960,7 +36960,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-27",
    "their_notes": ""
   },
   {
@@ -36974,7 +36974,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37002,7 +37002,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37016,7 +37016,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37030,7 +37030,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37044,7 +37044,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37072,7 +37072,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37086,7 +37086,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37114,7 +37114,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37142,7 +37142,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": ""
   },
   {
@@ -38682,7 +38682,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "launch_site"
   },
   {
@@ -38826,7 +38826,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "type": "directory"
   },
   {
@@ -39138,7 +39138,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TRIED OTHER 2026-11-24",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "launch_site"
   },
   {
@@ -47518,7 +47518,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -47626,7 +47626,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -47977,7 +47977,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -48409,7 +48409,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -48436,7 +48436,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -48463,7 +48463,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -48490,7 +48490,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -48544,7 +48544,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -48571,7 +48571,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED DEAD 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -48598,7 +48598,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -48625,7 +48625,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-26",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -48787,7 +48787,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -48814,7 +48814,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-27",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -48895,7 +48895,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "launch_site",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -48922,7 +48922,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "launch_site",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -48949,7 +48949,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "launch_site",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -50137,7 +50137,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -50164,7 +50164,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -50191,7 +50191,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -50245,7 +50245,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -50758,7 +50758,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -50785,7 +50785,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -50812,7 +50812,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -50839,7 +50839,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -50866,7 +50866,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "roundup",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -50893,7 +50893,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -51001,7 +51001,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
