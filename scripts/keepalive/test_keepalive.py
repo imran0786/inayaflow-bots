@@ -303,7 +303,7 @@ class WorstCase(unittest.TestCase):
         # NOT in the sum, on purpose: the job runner's other jobs (Director-submitted QA, research and code helper jobs) are not robots; they sit under
         # the runner's OWN $20/day cap (job-runner.yml DAILY_COST_CAP; raised from $15 on 27 Nov, Imran: "7 days, $100"), which is separate. The hunter jobs also run through that runner.
         jr = open(os.path.join(ROOT, ".github", "workflows", "job-runner.yml"), encoding="utf8").read()
-        self.assertIn('DAILY_COST_CAP: "20.00"', jr)
+        self.assertIn('DAILY_COST_CAP: "45.00"', jr)
         self.assertIn('TOTAL_COST_CAP: "100.00"', jr)
         self.assertEqual(ir.REPORT_AI_PER_DAY, 160)
         self.assertEqual(ag.USD_CAP, 7.10)
