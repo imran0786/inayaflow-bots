@@ -2131,7 +2131,7 @@
    "has_form_on_page": false,
    "quality": "relevant",
    "usable": false,
-   "status": "HOLD"
+   "status": "TRIED CAPTCHA 2026-11-27"
   },
   {
    "name": "AI Tools Up",
@@ -33726,7 +33726,7 @@
    "free_check": "free",
    "quality": "",
    "usable": false,
-   "status": "HOLD dead or unreachable",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37156,7 +37156,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37198,7 +37198,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37226,7 +37226,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37240,7 +37240,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37254,7 +37254,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37282,7 +37282,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37296,7 +37296,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37422,7 +37422,7 @@
    "free_check": "free",
    "quality": "DR 14",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37464,7 +37464,7 @@
    "free_check": "free",
    "quality": "DR 21",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED PAID 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37520,7 +37520,7 @@
    "free_check": "unknown",
    "quality": "DR 27",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37534,7 +37534,7 @@
    "free_check": "unknown",
    "quality": "DR 26",
    "usable": true,
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-27",
    "their_notes": ""
   },
   {
@@ -37590,7 +37590,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37618,7 +37618,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37702,7 +37702,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37758,7 +37758,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED DEAD 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37842,7 +37842,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37884,7 +37884,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37898,7 +37898,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED OTHER 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37912,7 +37912,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37954,7 +37954,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37968,7 +37968,7 @@
    "free_check": "free",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -37996,7 +37996,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38220,7 +38220,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38234,7 +38234,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38248,7 +38248,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38262,7 +38262,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38276,7 +38276,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38290,7 +38290,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38304,7 +38304,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38318,7 +38318,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38332,7 +38332,7 @@
    "free_check": "unknown",
    "quality": "",
    "usable": true,
-   "status": "TODO outreach",
+   "status": "TRIED NO_FORM 2026-11-27",
    "their_notes": "traffic source: newsletter/podcast audience (TARGETS 2g)"
   },
   {
@@ -38802,7 +38802,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "type": "awesome_list"
   },
   {
@@ -39186,7 +39186,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "roundup"
   },
   {
@@ -39618,7 +39618,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "directory"
   },
   {
@@ -40074,7 +40074,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "community"
   },
   {
@@ -40098,7 +40098,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "type": "community"
   },
   {
@@ -40194,7 +40194,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "type": "roundup"
   },
   {
@@ -40218,7 +40218,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-24",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "roundup"
   },
   {
@@ -51514,7 +51514,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED CAPTCHA 2026-11-27",
    "type": "directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -51541,7 +51541,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-27",
    "type": "review_platform",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -51919,7 +51919,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -51946,7 +51946,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -51973,7 +51973,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -52000,7 +52000,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED NO_FORM 2026-11-27",
    "type": "community",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -52216,7 +52216,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -52243,7 +52243,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED PHONE_REQUIRED 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -52270,7 +52270,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -52297,7 +52297,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED PHONE_REQUIRED 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -52324,7 +52324,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED OTHER 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
@@ -52378,7 +52378,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED WRONG_KIND 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "UNKNOWN",
@@ -52432,7 +52432,7 @@
    "usable": true,
    "followed": "unknown",
    "checked": "2026-11-27",
-   "status": "TODO",
+   "status": "TRIED SUBMITTED 2026-11-27",
    "type": "country_directory",
    "found_by": "sonnet",
    "proof": "FOLLOWED",
