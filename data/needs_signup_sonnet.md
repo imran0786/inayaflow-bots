@@ -4,6 +4,26 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| Pymeactual | https://www.pymeactual.es/registro | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-28 |
+| MyDirectory.es | https://mydirectory.es/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-28 |
+| UMBC Dresher Center Digital Tools | https://dreshercenter.umbc.edu/htlabs/resources/digital-tools/ | edu_library_guides | sonnet | UNKNOWN | 2026-11-28 |
+| Pressflow | https://www.pressflow.io/for-media | journalist_platforms | sonnet | UNKNOWN | 2026-11-28 |
+| Whop TikTok Creator Community | https://whop.com/joined/tiktok-content-creator-e826/products/tiktok-creator-community/ | communities_profiles | sonnet | UNKNOWN | 2026-11-28 |
+| Open Community Directory | https://www.opencommunity.directory/ | communities_profiles | sonnet | UNKNOWN | 2026-11-28 |
+| SocialChamps Social Media Forum | https://socialchamps.com/forum/social-media-forum/ | communities_profiles | sonnet | UNKNOWN | 2026-11-28 |
+| Navid.me Contribute | https://navid.me/contribute | resource_pages | sonnet | UNKNOWN | 2026-11-28 |
+| Awesome Creator Economy (GitHub) | https://github.com/arseneHuot/awesome-creator-economy | resource_pages | sonnet | FOLLOWED | 2026-11-28 |
+| Awesome TikTok Tools (GitHub) | https://github.com/michael0127/awesome-tiktok-tools | resource_pages | sonnet | FOLLOWED | 2026-11-28 |
+| Influencer Hero Blog | https://www.influencer-hero.com/influencer-page/write-for-us | guest_post_pages | sonnet | UNKNOWN | 2026-11-28 |
+| awesome-ai-agents (NipunaRanasinghe) | https://github.com/NipunaRanasinghe/awesome-ai-agents | github_awesome_lists | sonnet | FOLLOWED | 2026-11-28 |
+| Startup-Tools (Mentors4EDU) | https://github.com/Mentors4EDU/Startup-Tools | github_awesome_lists | sonnet | FOLLOWED | 2026-11-28 |
+| awesome-ai-tool-list (aitoollist) | https://github.com/aitoollist/awesome-ai-tool-list | github_awesome_lists | sonnet | FOLLOWED | 2026-11-28 |
+| Awesome-Social-Media-Management | https://github.com/thinkpad2050/Awesome-Social-Media-Management | github_awesome_lists | sonnet | FOLLOWED | 2026-11-28 |
+| Blotato Blog | https://www.blotato.com/blog/best-tiktok-scheduling-tools | tool_roundups | sonnet | UNKNOWN | 2026-11-28 |
+| productdirs | https://productdirs.com/ | launch_sites | sonnet | FOLLOWED | 2026-11-28 |
+| AgentHiveX | https://agenthivex.com/submit | ai_saas_directories | sonnet | UNKNOWN | 2026-11-28 |
+| BotDir | https://botdir.dev/ | ai_saas_directories | sonnet | UNKNOWN | 2026-11-28 |
+| Chatbot Gallery | https://chatbot.gallery/submit | ai_saas_directories | sonnet | UNKNOWN | 2026-11-28 |
 | Appvizer | https://www.appvizer.fr/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-27 |
 | AstraMedia Press Opportunity Matching | https://astramedia.app/media-opportunities | journalist_platforms | sonnet | UNKNOWN | 2026-11-27 |
 | JournoFinder | https://journofinder.com/ | journalist_platforms | sonnet | UNKNOWN | 2026-11-27 |

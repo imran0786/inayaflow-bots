@@ -1,10 +1,11 @@
 {
- "cursor": 84,
+ "cursor": 96,
  "spent": {
   "2026-11-24": 2.9261,
   "2026-11-25": 2.9326,
   "2026-11-26": 2.8165,
-  "2026-11-27": 2.8843
+  "2026-11-27": 2.8843,
+  "2026-11-28": 1.357
  },
  "days": {
   "2026-11-24": {
@@ -141,6 +142,44 @@
    "category_summary": "list-builder: +137 new (total 2869; by category github_awesome_lists 29, startup_directories_by_country 18, guest_post_pages 16, resource_pages 12, podcasts_creators 11, tool_roundups 11, communities_profiles 9, journalist_platforms 9, launch_sites 8, saas_review_platforms 7, edu_library_guides 5, ai_saas_directories 2)",
    "summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +102 new (13 followed, $0.07)",
    "total": 2869
+  },
+  "2026-11-28": {
+   "added": 41,
+   "by_category": {
+    "ai_saas_directories": 5,
+    "launch_sites": 2,
+    "tool_roundups": 3,
+    "github_awesome_lists": 4,
+    "saas_review_platforms": 1,
+    "guest_post_pages": 5,
+    "resource_pages": 4,
+    "communities_profiles": 6,
+    "podcasts_creators": 1,
+    "journalist_platforms": 1,
+    "edu_library_guides": 3,
+    "startup_directories_by_country": 6
+   },
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "claude": {
+     "calls": 12,
+     "cost": 1.357,
+     "proposed": 190,
+     "spam": 5,
+     "dup": 138,
+     "dead": 6,
+     "added": 41,
+     "followed": 9,
+     "nofollow": 0,
+     "noindex": 1,
+     "unknown": 31,
+     "needs_signup": 21
+    }
+   },
+   "category_summary": "list-builder: +41 new (total 2933; by category communities_profiles 6, startup_directories_by_country 6, ai_saas_directories 5, guest_post_pages 5, github_awesome_lists 4, resource_pages 4, edu_library_guides 3, tool_roundups 3, launch_sites 2, journalist_platforms 1, podcasts_creators 1, saas_review_platforms 1)",
+   "summary": "list-builder: sonnet +41 new (9 followed, $1.36)",
+   "total": 2933
   }
  },
  "rejected": [
@@ -261,7 +300,18 @@
   "reddit.com/r/tiktokmarketing",
   "reddit.com/r/tiktokrise",
   "lespepitestech.com",
-  "extrag.one"
+  "extrag.one",
+  "registry.chat",
+  "aiagentportal.io",
+  "thewebhospitality.com",
+  "attentionalways.com",
+  "creatorresourcehub.substack.com",
+  "socialmediapro.com",
+  "uconn.edu",
+  "rochester.edu",
+  "uchicago.edu",
+  "barcelonastartups.com",
+  "startupsoasis.substack.com"
  ],
- "last_summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +102 new (13 followed, $0.07)"
+ "last_summary": "list-builder: sonnet +41 new (9 followed, $1.36)"
 }
