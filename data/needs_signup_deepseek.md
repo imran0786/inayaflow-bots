@@ -4,6 +4,16 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| Weetracker | https://weetracker.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-28 |
+| TechCentral | https://techcentral.co.za/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-28 |
+| Snupit | https://www.snupit.co.za/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-28 |
+| Newsbox | https://newsbox.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-28 |
+| Asource | https://www.asource.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-28 |
+| PitchRate | https://pitchrate.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-28 |
+| Notified (formerly Notified PR) | https://www.notified.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-28 |
+| AWeber Blog | https://blog.aweber.com/ | resource_pages | deepseek | UNKNOWN | 2026-11-28 |
+| awesome-ai-tools (alt) | https://github.com/awesome-ai-tools/awesome-ai-tools | github_awesome_lists | deepseek | FOLLOWED | 2026-11-28 |
+| Made with Vue.js | https://madewithvuejs.com/ | launch_sites | deepseek | UNKNOWN | 2026-11-28 |
 | TechCabal | https://techcabal.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-27 |
 | Journo Requests (Twitter/X) | https://twitter.com/journorequest | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |
 | Source of Sources (SOS) | https://www.publicityhound.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-27 |

@@ -1,10 +1,11 @@
 {
- "cursor": 168,
+ "cursor": 180,
  "spent": {
   "2026-11-24": 0.0586,
   "2026-11-25": 0.1457,
   "2026-11-26": 0.0952,
-  "2026-11-27": 0.0926
+  "2026-11-27": 0.0926,
+  "2026-11-28": 0.0206
  },
  "days": {
   "2026-11-24": {
@@ -144,6 +145,39 @@
    "category_summary": "list-builder: +125 new (total 2892; by category startup_directories_by_country 27, guest_post_pages 17, journalist_platforms 15, podcasts_creators 15, edu_library_guides 14, tool_roundups 13, resource_pages 8, github_awesome_lists 7, ai_saas_directories 5, communities_profiles 2, launch_sites 2)",
    "summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +125 new (19 followed, $0.09)",
    "total": 2892
+  },
+  "2026-11-28": {
+   "added": 21,
+   "by_category": {
+    "launch_sites": 2,
+    "github_awesome_lists": 1,
+    "resource_pages": 1,
+    "podcasts_creators": 1,
+    "journalist_platforms": 4,
+    "edu_library_guides": 2,
+    "startup_directories_by_country": 10
+   },
+   "runs": 1,
+   "calls": 12,
+   "providers": {
+    "deepseek": {
+     "calls": 12,
+     "cost": 0.0206,
+     "proposed": 301,
+     "spam": 1,
+     "dup": 242,
+     "dead": 37,
+     "added": 21,
+     "followed": 2,
+     "nofollow": 0,
+     "noindex": 0,
+     "unknown": 19,
+     "needs_signup": 10
+    }
+   },
+   "category_summary": "list-builder: +21 new (total 2954; by category startup_directories_by_country 10, journalist_platforms 4, edu_library_guides 2, launch_sites 2, github_awesome_lists 1, podcasts_creators 1, resource_pages 1)",
+   "summary": "list-builder: sonnet +41 new (9 followed, $1.36) | deepseek +21 new (2 followed, $0.02)",
+   "total": 2954
   }
  },
  "rejected": [
@@ -683,7 +717,45 @@
   "techpoint.africa",
   "disrupt-africa.com",
   "venturesafrica.com",
-  "fintechnews.africa"
+  "fintechnews.africa",
+  "github.com/learn-anything/awesome-chrome-extensions",
+  "noissue.co",
+  "github.com/jmedia65/awesome-social-media-tools",
+  "github.com/cybergeekgyan/awesome-content-marketing",
+  "github.com/tiktok-awesome/awesome-tiktok",
+  "github.com/futurist/awesome-social-media",
+  "github.com/awesome-startup/awesome-startup-tools",
+  "github.com/hexops/awesome-saas",
+  "github.com/paulca/awesome-productivity",
+  "github.com/kelseyhightower/awesome-nocode",
+  "github.com/marketingawesome/awesome-marketing",
+  "github.com/digitalmarketingpro/awesome-digital-marketing",
+  "github.com/influencermarketing/awesome-influencer-marketing",
+  "github.com/awesome-no-code/awesome-no-code-tools",
+  "github.com/growthmarketing/awesome-growth-marketing",
+  "github.com/awesome-social/awesome-social",
+  "github.com/makertools/awesome-maker-tools",
+  "github.com/aimarketing/awesome-ai-marketing-tools",
+  "github.com/contentcreation/awesome-content-creation",
+  "github.com/smmtools/awesome-social-media-marketing",
+  "bloggersidea.com",
+  "drip.com",
+  "dev.to/discuss",
+  "blogger-genius.com",
+  "miami.edu",
+  "sastartupnews.co.za",
+  "brabys.com",
+  "cylex.co.za",
+  "sabusinessdirectory.co.za",
+  "anzi.co.za",
+  "thesouthafrican.com",
+  "moneyweb.co.za",
+  "innovationsummit.co.za",
+  "entrepreneurmag.co.za",
+  "htxt.co.za",
+  "afrikanheroes.com",
+  "startupnamegenerator.co.za",
+  "smallbusinessconnect.co.za"
  ],
- "last_summary": "list-builder: sonnet +137 new (48 followed, $2.88) | deepseek +125 new (19 followed, $0.09)"
+ "last_summary": "list-builder: sonnet +41 new (9 followed, $1.36) | deepseek +21 new (2 followed, $0.02)"
 }
