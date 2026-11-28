@@ -1,0 +1,42 @@
+name: DataForSEO keywords (one-shot, spend cap $0.35)
+
+# Pulls real US search volumes, then keyword difficulty, for our keyword list (data/dfs-input-2026-11-28.txt).
+# Imran (28 Nov 2026): "We only have $1 ... use it very wisely because we won't be topping it up."
+# Prices read on dataforseo.com on 28 Nov 2026: search volume (standard queue) $0.06 per task of up to 1,000 keywords;
+# Labs bulk keyword difficulty $0.012 per task + $0.00012 per keyword. Hard cap for this robot: $0.35 in total.
+# Run order (manual only, never scheduled): step=dry -> step=volume -> step=dry -> step=difficulty.
+# Results: PRIVATE repo imran0786/genie, branch ops-dataforseo (CSV + SPEND.md). This log prints counts and costs only.
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "dry | volume | difficulty"
+        default: "dry"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dataforseo-keywords
+  cancel-in-progress: false
+
+jobs:
+  keywords:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run (spend-guarded)
+        env:
+          GENIE_LOGS_TOKEN: ${{ secrets.GENIE_LOGS_TOKEN }}
+          DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
+          DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
+          STEP: ${{ github.event.inputs.step }}
+          DRY_RUN: "false"
+        run: |
+          echo "::add-mask::$GENIE_LOGS_TOKEN"
+          echo "::add-mask::$DATAFORSEO_PASSWORD"
+          python3 scripts/reports/dataforseo_keywords.py
