@@ -1,11 +1,11 @@
 {
- "cursor": 180,
+ "cursor": 192,
  "spent": {
   "2026-11-24": 0.0586,
   "2026-11-25": 0.1457,
   "2026-11-26": 0.0952,
   "2026-11-27": 0.0926,
-  "2026-11-28": 0.0206
+  "2026-11-28": 0.0425
  },
  "days": {
   "2026-11-24": {
@@ -147,37 +147,39 @@
    "total": 2892
   },
   "2026-11-28": {
-   "added": 21,
+   "added": 52,
    "by_category": {
     "launch_sites": 2,
     "github_awesome_lists": 1,
     "resource_pages": 1,
-    "podcasts_creators": 1,
-    "journalist_platforms": 4,
-    "edu_library_guides": 2,
-    "startup_directories_by_country": 10
+    "podcasts_creators": 4,
+    "journalist_platforms": 15,
+    "edu_library_guides": 4,
+    "startup_directories_by_country": 21,
+    "guest_post_pages": 3,
+    "communities_profiles": 1
    },
-   "runs": 1,
-   "calls": 12,
+   "runs": 2,
+   "calls": 24,
    "providers": {
     "deepseek": {
-     "calls": 12,
-     "cost": 0.0206,
-     "proposed": 301,
-     "spam": 1,
-     "dup": 242,
-     "dead": 37,
-     "added": 21,
-     "followed": 2,
+     "calls": 24,
+     "cost": 0.0425,
+     "proposed": 623,
+     "spam": 4,
+     "dup": 502,
+     "dead": 65,
+     "added": 52,
+     "followed": 3,
      "nofollow": 0,
      "noindex": 0,
-     "unknown": 19,
-     "needs_signup": 10
+     "unknown": 49,
+     "needs_signup": 24
     }
    },
-   "category_summary": "list-builder: +21 new (total 2954; by category startup_directories_by_country 10, journalist_platforms 4, edu_library_guides 2, launch_sites 2, github_awesome_lists 1, podcasts_creators 1, resource_pages 1)",
-   "summary": "list-builder: sonnet +41 new (9 followed, $1.36) | deepseek +21 new (2 followed, $0.02)",
-   "total": 2954
+   "category_summary": "list-builder: +52 new (total 3026; by category startup_directories_by_country 21, journalist_platforms 15, edu_library_guides 4, podcasts_creators 4, guest_post_pages 3, launch_sites 2, communities_profiles 1, github_awesome_lists 1, resource_pages 1)",
+   "summary": "list-builder: sonnet +82 new (14 followed, $2.82) | deepseek +52 new (3 followed, $0.04)",
+   "total": 3026
   }
  },
  "rejected": [
@@ -755,7 +757,38 @@
   "htxt.co.za",
   "afrikanheroes.com",
   "startupnamegenerator.co.za",
-  "smallbusinessconnect.co.za"
+  "smallbusinessconnect.co.za",
+  "github.com/toolsandtoys/awesome-social-media-tools",
+  "github.com/awesome-startup/awesome-startup",
+  "github.com/digital-marketing-tools/awesome-digital-marketing",
+  "github.com/contentmarketing/awesome-content-marketing",
+  "github.com/ai-marketing/awesome-ai-marketing-tools",
+  "vanillaheartmedia.com",
+  "microstartup.co",
+  "reddit.com/r/tiktok",
+  "reddit.com/r/artificialinteligence",
+  "polywork.com",
+  "niche.com",
+  "jamesaltucher.com",
+  "crestingwave.com",
+  "podcastguestmachine.com",
+  "feedspot.com",
+  "player.fm",
+  "goodpods.com",
+  "bklynlibrary.org",
+  "freelibrary.org",
+  "hclib.org",
+  "austintexas.gov",
+  "localenterprise.ie",
+  "ics.ie",
+  "irishtechnews.ie",
+  "startups.ie",
+  "bordbia.ie",
+  "ecairland.ie",
+  "digitalbusiness.ie",
+  "thestartupmagazine.com",
+  "irishdev.com",
+  "aibf.ie"
  ],
- "last_summary": "list-builder: sonnet +41 new (9 followed, $1.36) | deepseek +21 new (2 followed, $0.02)"
+ "last_summary": "list-builder: sonnet +82 new (14 followed, $2.82) | deepseek +52 new (3 followed, $0.04)"
 }

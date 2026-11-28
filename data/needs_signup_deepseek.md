@@ -4,6 +4,20 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| Fáilte Ireland | https://www.failteireland.ie/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-28 |
+| The Currency | https://thecurrency.news/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-28 |
+| Enterprise Ireland | https://www.enterprise-ireland.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-28 |
+| PodcastAlley | https://www.podcastalley.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-28 |
+| iHeart Podcasts | https://www.iheart.com/podcast/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-28 |
+| Deezer Podcasts | https://www.deezer.com/ | journalist_platforms | deepseek | FOLLOWED | 2026-11-28 |
+| Castbox | https://castbox.fm/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-28 |
+| Great Pods | https://greatpods.co/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-28 |
+| The Podcast Exchange | https://www.thepodcastexchange.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-28 |
+| Podbean Podcast Directory | https://www.podbean.com/ | journalist_platforms | deepseek | UNKNOWN | 2026-11-28 |
+| Podnews | https://podnews.net/ | podcasts_creators | deepseek | UNKNOWN | 2026-11-28 |
+| Superpath | https://www.superpath.co/ | podcasts_creators | deepseek | UNKNOWN | 2026-11-28 |
+| The Knowledge Project | https://fs.blog/knowledge-project-podcast/ | podcasts_creators | deepseek | UNKNOWN | 2026-11-28 |
+| Minds | https://www.minds.com/ | communities_profiles | deepseek | UNKNOWN | 2026-11-28 |
 | Weetracker | https://weetracker.com/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-28 |
 | TechCentral | https://techcentral.co.za/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-28 |
 | Snupit | https://www.snupit.co.za/ | startup_directories_by_country | deepseek | UNKNOWN | 2026-11-28 |
