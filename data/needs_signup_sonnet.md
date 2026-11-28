@@ -4,6 +4,28 @@ Places that need an account to list or post, with a followed link (FOLLOWED), no
 
 | Site | URL | Category | Found by | Proof | Added |
 |---|---|---|---|---|---|
+| Hotfrog Netherlands | https://hotfrog.nl/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-28 |
+| Vinderr | https://vinderr.nl/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-28 |
+| SamenZakelijk | https://samenzakelijk.nl/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-28 |
+| AdministratieX Bedrijvengids | https://administratiex.nl/bedrijvengids | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-28 |
+| Sources (Canada) | https://www.sources.com/ | journalist_platforms | sonnet | UNKNOWN | 2026-11-28 |
+| SciLine | https://sciline.org/ | journalist_platforms | sonnet | UNKNOWN | 2026-11-28 |
+| Aspire Inside Influence | https://www.aspire.io/inside-influence | communities_profiles | sonnet | UNKNOWN | 2026-11-28 |
+| Awesome Free Tools for Creators | https://github.com/nar-vardanyan/mrrandom-awesome-free-tools-for-creators | resource_pages | sonnet | FOLLOWED | 2026-11-28 |
+| SWOTC social media tools | https://www.swotc.ca/marketing-resources/social-media-tools | resource_pages | sonnet | UNKNOWN | 2026-11-28 |
+| SocialSingam | https://socialsingam.com/write-for-us/ | guest_post_pages | sonnet | UNKNOWN | 2026-11-28 |
+| OrbitArticles | https://orbitarticles.com/write-for-us-on-digital-marketing/ | guest_post_pages | sonnet | UNKNOWN | 2026-11-28 |
+| Best Digital Marketing Trends | https://bestdigitalmarketingtrends.com/write-for-us/ | guest_post_pages | sonnet | UNKNOWN | 2026-11-28 |
+| CompareTiers | https://comparetiers.com/for-vendors | saas_review_platforms | sonnet | UNKNOWN | 2026-11-28 |
+| Curated Awesome Lists | https://github.com/Curated-Awesome-Lists | github_awesome_lists | sonnet | FOLLOWED | 2026-11-28 |
+| Awesome Lists (addohm) | https://github.com/addohm/awesome-lists | github_awesome_lists | sonnet | FOLLOWED | 2026-11-28 |
+| Deviantly – Best TikTok Analytics Tools | https://deviantly.ai/blog/best-tiktok-analytics-tools-70224 | tool_roundups | sonnet | UNKNOWN | 2026-11-28 |
+| OpenClip – Social Video Analytics Guide | https://openclip.app/blog/ultimate-guide-video-analytics-social-media | tool_roundups | sonnet | FOLLOWED | 2026-11-28 |
+| Delulu Social – Free Social Media Analytics Tools | https://www.delulu.social/blog/best-free-social-media-analytics-tools | tool_roundups | sonnet | UNKNOWN | 2026-11-28 |
+| Wideframe – Top AI Video Analytics Tools | https://try.wideframe.com/blog/top-ai-video-analytics-tools/ | tool_roundups | sonnet | UNKNOWN | 2026-11-28 |
+| Vellum – Short-Form Video Intelligence Tools | https://www.vellum.ai/blog/best-short-form-video-intelligence-tools | tool_roundups | sonnet | UNKNOWN | 2026-11-28 |
+| Justbidder | https://www.justbidder.com/blog/best-product-launch-platforms-indie-hackers | launch_sites | sonnet | UNKNOWN | 2026-11-28 |
+| Hauntboard | https://hauntboard.com/guides/product-hunt-alternatives | launch_sites | sonnet | FOLLOWED | 2026-11-28 |
 | Pymeactual | https://www.pymeactual.es/registro | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-28 |
 | MyDirectory.es | https://mydirectory.es/ | startup_directories_by_country | sonnet | UNKNOWN | 2026-11-28 |
 | UMBC Dresher Center Digital Tools | https://dreshercenter.umbc.edu/htlabs/resources/digital-tools/ | edu_library_guides | sonnet | UNKNOWN | 2026-11-28 |
